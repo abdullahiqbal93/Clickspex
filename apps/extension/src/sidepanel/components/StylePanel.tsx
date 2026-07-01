@@ -1,4 +1,4 @@
-import { RotateCcw, SlidersHorizontal } from "lucide-react";
+import { Redo2, RotateCcw, SlidersHorizontal, Undo2 } from "lucide-react";
 
 import { sendMessageToActiveTab } from "../../chrome/messaging";
 import { getCurrentStyleRecord, usePanelStore } from "../store";
@@ -104,11 +104,16 @@ const cssColorToHex = (value: string): string | null => {
 
 export const StylePanel = () => {
   const changes = usePanelStore((state) => state.changes);
+  const redoStack = usePanelStore((state) => state.redoStack);
   const selectedElement = usePanelStore((state) => state.selectedElement);
   const styles = usePanelStore((state) => getCurrentStyleRecord(state));
   const prepareStyleChange = usePanelStore((state) => state.prepareStyleChange);
+  const prepareUndoChange = usePanelStore((state) => state.prepareUndoChange);
+  const prepareRedoChange = usePanelStore((state) => state.prepareRedoChange);
   const applyLocalStyleChange = usePanelStore((state) => state.applyLocalStyleChange);
   const resetElementChanges = usePanelStore((state) => state.resetElementChanges);
+  const undoLocalChange = usePanelStore((state) => state.undoLocalChange);
+  const redoLocalChange = usePanelStore((state) => state.redoLocalChange);
   const setError = usePanelStore((state) => state.setError);
 
   const commitChange = async (property: SupportedStyleProperty, afterValue: string) => {
@@ -129,6 +134,43 @@ export const StylePanel = () => {
     }
   };
 
+  const undoChange = async () => {
+    setError(null);
+    const change = prepareUndoChange();
+
+    if (change === null) {
+      return;
+    }
+
+    try {
+      await sendMessageToActiveTab({ type: "APPLY_STYLE_CHANGE", payload: change });
+      await sendMessageToActiveTab({ type: "UNDO_CHANGE" });
+      undoLocalChange();
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof Error ? caughtError.message : "Unable to undo visual change.",
+      );
+    }
+  };
+
+  const redoChange = async () => {
+    setError(null);
+    const change = prepareRedoChange();
+
+    if (change === null) {
+      return;
+    }
+
+    try {
+      await sendMessageToActiveTab({ type: "APPLY_STYLE_CHANGE", payload: change });
+      await sendMessageToActiveTab({ type: "REDO_CHANGE" });
+      redoLocalChange();
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof Error ? caughtError.message : "Unable to redo visual change.",
+      );
+    }
+  };
   const resetChanges = async () => {
     setError(null);
 
@@ -161,14 +203,34 @@ export const StylePanel = () => {
           <h2 className="text-sm font-semibold">Styles</h2>
           <p className="mt-1 text-xs text-muted">{changes.length} changes</p>
         </div>
-        <button
-          className="inline-flex h-8 items-center gap-2 rounded-md border border-slate-200 px-3 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
-          onClick={resetChanges}
-          type="button"
-        >
-          <RotateCcw aria-hidden="true" size={14} />
-          Reset
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            disabled={changes.length === 0}
+            onClick={() => void undoChange()}
+            title="Undo"
+            type="button"
+          >
+            <Undo2 aria-hidden="true" size={14} />
+          </button>
+          <button
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            disabled={redoStack.length === 0}
+            onClick={() => void redoChange()}
+            title="Redo"
+            type="button"
+          >
+            <Redo2 aria-hidden="true" size={14} />
+          </button>
+          <button
+            className="inline-flex h-8 items-center gap-2 rounded-md border border-slate-200 px-3 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
+            onClick={resetChanges}
+            type="button"
+          >
+            <RotateCcw aria-hidden="true" size={14} />
+            Reset
+          </button>
+        </div>
       </div>
 
       {Object.entries(groupedFields).map(([group, fields]) => (

@@ -26,5 +26,10 @@ addRuntimeMessageListener((message) => {
 
   if (message.type === "RESET_ELEMENT_CHANGES") {
     styleInjector.reset();
+    return;
+  }
+
+  if (message.type === "UNDO_CHANGE" || message.type === "REDO_CHANGE") {
+    return;
   }
 });
