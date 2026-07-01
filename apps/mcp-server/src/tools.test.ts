@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   handleDetectFramework,
   handleGenerateExport,
+  handleIndexProject,
   handlePreviewPatchSuggestions,
   handleScanProject,
 } from "./tools.js";
@@ -14,8 +15,14 @@ import {
 import type { UIChangeIntent } from "@ui-devtools/shared";
 
 type ScanData = { rootPath: string; files: string[] };
+type IndexData = { rootPath: string; files: Array<{ path: string; classNames: string[] }> };
 type ExportData = { css: { content: string }; tailwind: { content: string; warnings: string[] } };
-type PatchData = Array<{ adapterId: string; warnings: string[] }>;
+type PatchData = Array<{
+  adapterId: string;
+  filesToChange: string[];
+  diffPreview: string;
+  warnings: string[];
+}>;
 type DetectionData = { detections: Array<{ name: string }> };
 
 const tempRoots: string[] = [];
@@ -69,6 +76,28 @@ const changeIntent: UIChangeIntent = {
 
 const normalizePath = (path: string): string => path.replaceAll("\\", "/");
 
+const createSourceAwareProject = async (): Promise<string> => {
+  const rootPath = await createTempProject();
+  await mkdir(join(rootPath, "src"));
+  await mkdir(join(rootPath, "src", "components"));
+  await writeFile(
+    join(rootPath, "package.json"),
+    JSON.stringify({
+      dependencies: { react: "18.3.0" },
+      devDependencies: { tailwindcss: "3.4.0" },
+    }),
+    "utf8",
+  );
+  await writeFile(join(rootPath, "tailwind.config.ts"), "export default {};\n", "utf8");
+  await writeFile(join(rootPath, "src", "styles.css"), "#save {\n  color: #000000;\n}\n", "utf8");
+  await writeFile(
+    join(rootPath, "src", "components", "Button.tsx"),
+    'export const Button = () => <button id="save" className="btn px-2">Save</button>;\n',
+    "utf8",
+  );
+  return rootPath;
+};
+
 describe("MCP tool handlers", () => {
   it("scans projects without returning ignored dependency or secret-looking files", async () => {
     const rootPath = await createTempProject();
@@ -90,6 +119,22 @@ describe("MCP tool handlers", () => {
     expect(files.some((file) => file.startsWith("node_modules"))).toBe(false);
   });
 
+  it("indexes source metadata without returning source content", async () => {
+    const rootPath = await createSourceAwareProject();
+
+    const result = await handleIndexProject({ path: rootPath });
+    const data = result.data as IndexData;
+
+    expect(result.ok).toBe(true);
+    expect(data.files.map((file) => file.path)).toEqual(
+      expect.arrayContaining(["src/components/Button.tsx", "src/styles.css"]),
+    );
+    expect(
+      data.files.find((file) => file.path === "src/components/Button.tsx")?.classNames,
+    ).toEqual(expect.arrayContaining(["btn", "px-2"]));
+    expect(JSON.stringify(data)).not.toContain("export const Button");
+  });
+
   it("detects frameworks through the shared project detector", async () => {
     const rootPath = await createTempProject();
     await writeFile(join(rootPath, "vite.config.ts"), "export default {};\n", "utf8");
@@ -108,7 +153,8 @@ describe("MCP tool handlers", () => {
     );
   });
 
-  it("generates CSS, Tailwind exports, and advisory patch suggestions from change intent", async () => {
+  it("generates CSS, Tailwind exports, and source-aware patch suggestions from change intent", async () => {
+    const rootPath = await createSourceAwareProject();
     const exportResult = handleGenerateExport({ changeIntent });
     const exportData = exportResult.data as ExportData;
 
@@ -116,12 +162,21 @@ describe("MCP tool handlers", () => {
     expect(exportData.css.content).toContain("font-size: 16px;");
     expect(exportData.tailwind.content).toBe("text-base");
 
-    const patchResult = await handlePreviewPatchSuggestions({ changeIntent });
+    const patchResult = await handlePreviewPatchSuggestions({
+      changeIntent,
+      projectPath: rootPath,
+    });
     const patchData = patchResult.data as PatchData;
 
     expect(patchResult.ok).toBe(true);
     expect(patchData.map((patch) => patch.adapterId)).toEqual(
       expect.arrayContaining(["css", "tailwind", "react"]),
+    );
+    expect(patchData.find((patch) => patch.adapterId === "css")?.filesToChange).toEqual([
+      "src/styles.css",
+    ]);
+    expect(patchData.find((patch) => patch.adapterId === "tailwind")?.diffPreview).toContain(
+      'className="btn px-2 text-base"',
     );
   });
 

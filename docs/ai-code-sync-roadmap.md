@@ -1,36 +1,66 @@
 # AI Code Sync Roadmap
 
-The v1 implementation exports structured UI intent and read-only suggestions. Real code patching is intentionally deferred until adapters can prove they understand a project safely.
+The implementation now supports read-only source discovery and human-reviewed patch previews. It still does not automatically mutate source files: every generated diff is advisory until a developer applies it.
 
-## Phase 1: Current Read-Only Sync
+## Phase 1: Browser Intent Capture
+
+Implemented:
 
 - Capture `UIChangeIntent` from the browser extension.
 - Export CSS, Tailwind, JSON, and Markdown from the side panel.
-- Detect local project frameworks and styling tools through the CLI and MCP server.
-- Produce advisory patch suggestions without writing source files.
+- Keep temporary edits scoped to the active tab through injected CSS, undo, redo, and reset.
 
 ## Phase 2: Source-Aware Discovery
 
-- Build a project index that maps routes, components, stylesheets, and class usage.
-- Connect selected DOM metadata to likely source files through sourcemaps, framework dev metadata, or user confirmation.
-- Add adapter-specific confidence thresholds before any patch suggestion can become actionable.
+Implemented:
+
+- Build a bounded project index for routes, components, stylesheets, selectors, class names, ids, and imports.
+- Skip dependency folders, build outputs, secret-looking files, and oversized files.
+- Expose source discovery through the CLI `index` command and the MCP `index_project` tool.
+- Match captured DOM metadata to likely source files by id, class names, text preview, file kind, and framework signals.
+
+Still future work:
+
+- Sourcemap-aware matching.
+- Framework dev-metadata integration.
+- User-confirmed source mapping when confidence is low.
 
 ## Phase 3: Human-Reviewed Patches
 
-- Generate file-specific patches for CSS modules, plain CSS, and Tailwind class changes.
-- Show exact changed files, diff previews, confidence, warnings, and rollback instructions.
-- Require explicit user approval before applying patches.
-- Keep all generated patches small and reversible.
+Implemented:
+
+- Generate file-specific CSS patch previews when an indexed stylesheet is available.
+- Generate file-specific Tailwind class attribute previews when an indexed component or route is available.
+- Show changed files, diff previews, confidence, warnings, and manual review steps.
+- Keep CLI and MCP patch flows read-only.
+
+Still future work:
+
+- A guarded apply command with explicit confirmation.
+- Rollback metadata for applied patches.
+- Richer conflict detection for Tailwind utility replacement/removal.
 
 ## Phase 4: Framework Adapters
 
-- React/Next.js: map component source and JSX class/style props.
-- Vue/Svelte: map single-file component templates and scoped styles.
-- Angular: map component templates and stylesheets.
-- Design-system adapters: add library-aware suggestions for shadcn/ui, MUI, styled-components, and SCSS.
+Implemented:
+
+- React/Next.js, Vue, Svelte, Angular, shadcn/ui, MUI, CSS Modules, SCSS, and styled-components adapters detect project signals and return source-aware review hints when indexed source is available.
+
+Still future work:
+
+- AST-safe React/Next JSX prop edits.
+- Vue/Svelte single-file component template and scoped-style edits.
+- Angular template/style edits.
+- Library-aware transforms for design-system APIs.
 
 ## Phase 5: Verification Loop
 
-- Rebuild and typecheck after patches.
-- Optionally reload the extension session and compare a fresh snapshot against the intended `UIChangeIntent`.
-- Record applied patch metadata so changes can be audited or reverted.
+Implemented:
+
+- Workspace build, typecheck, lint, and tests validate generated package outputs.
+- CLI and MCP can generate preview data for human review.
+
+Still future work:
+
+- Optional extension-session reload and fresh snapshot comparison against the intended `UIChangeIntent`.
+- Stored audit history for applied patches once source mutation is introduced.

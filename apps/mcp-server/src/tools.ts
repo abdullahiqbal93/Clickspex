@@ -78,6 +78,11 @@ export const changeIntentInputSchema = z.object({
 });
 export type ChangeIntentInput = z.infer<typeof changeIntentInputSchema>;
 
+export const patchPreviewInputSchema = changeIntentInputSchema.extend({
+  projectPath: z.string().min(1).optional(),
+});
+export type PatchPreviewInput = z.infer<typeof patchPreviewInputSchema>;
+
 type ToolResult = {
   ok: boolean;
   data?: unknown;
@@ -152,6 +157,20 @@ export const handleDetectFramework = async (input: PathInput): Promise<ToolResul
   }
 };
 
+export const handleIndexProject = async (input: PathInput): Promise<ToolResult> => {
+  try {
+    const parsed = pathInputSchema.parse(input);
+    const rootPath = resolve(parsed.path);
+    const context = await scanProjectContext(rootPath);
+    return {
+      ok: true,
+      data: { rootPath, files: context.files ?? [], indexStats: context.indexStats },
+    };
+  } catch (error) {
+    return structuredError("index_project_failed", error);
+  }
+};
+
 export const handleReadProjectSummary = async (input: PathInput): Promise<ToolResult> => {
   try {
     const parsed = pathInputSchema.parse(input);
@@ -174,7 +193,14 @@ export const handleReadProjectSummary = async (input: PathInput): Promise<ToolRe
 
     return {
       ok: true,
-      data: { rootPath, packageJson: packageJsonSummary, configFiles: context.configFiles },
+      data: {
+        rootPath,
+        packageJson: packageJsonSummary,
+        configFiles: context.configFiles,
+        directories: context.directories,
+        files: context.files ?? [],
+        indexStats: context.indexStats,
+      },
     };
   } catch (error) {
     return structuredError("read_project_summary_failed", error);
@@ -199,19 +225,24 @@ export const handleGenerateExport = (input: ChangeIntentInput): ToolResult => {
 };
 
 export const handlePreviewPatchSuggestions = async (
-  input: ChangeIntentInput,
+  input: PatchPreviewInput,
 ): Promise<ToolResult> => {
   try {
-    const parsed = changeIntentInputSchema.parse(input);
+    const parsed = patchPreviewInputSchema.parse(input);
     // zod validates the shared change intent shape before adapter code consumes it.
     const changeIntent = parsed.changeIntent as UIChangeIntent;
+    const projectContext =
+      parsed.projectPath === undefined
+        ? undefined
+        : await scanProjectContext(resolve(parsed.projectPath), { includeSource: true });
+
     return {
       ok: true,
       data: [
-        ...(await cssAdapter.generatePatch(changeIntent)),
-        ...(await tailwindAdapter.generatePatch(changeIntent)),
+        ...(await cssAdapter.generatePatch(changeIntent, projectContext)),
+        ...(await tailwindAdapter.generatePatch(changeIntent, projectContext)),
         ...(await Promise.all(
-          scaffoldAdapters.map((adapter) => adapter.generatePatch(changeIntent)),
+          scaffoldAdapters.map((adapter) => adapter.generatePatch(changeIntent, projectContext)),
         ).then((patches) => patches.flat())),
       ],
     };

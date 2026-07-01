@@ -38,11 +38,54 @@ const createIntent = (changes: UIChangeIntent["changes"]): UIChangeIntent => ({
 const projectContext: ProjectContext = {
   rootPath: "/fixture",
   packageJson: {
-    dependencies: { tailwindcss: "^3.4.0" },
-    devDependencies: {},
+    dependencies: { react: "18.3.0" },
+    devDependencies: { tailwindcss: "^3.4.0" },
   },
   configFiles: ["tailwind.config.ts", "styles.css"],
   directories: ["src"],
+  files: [
+    {
+      path: "src/styles.css",
+      kind: "stylesheet",
+      size: 24,
+      selectors: ["#save"],
+      classNames: ["btn"],
+      ids: ["save"],
+      imports: [],
+    },
+    {
+      path: "src/components/Button.tsx",
+      kind: "component",
+      size: 86,
+      selectors: [],
+      classNames: ["btn", "px-2"],
+      ids: ["save"],
+      imports: [],
+    },
+  ],
+  sourceFiles: [
+    {
+      path: "src/styles.css",
+      kind: "stylesheet",
+      size: 24,
+      selectors: ["#save"],
+      classNames: ["btn"],
+      ids: ["save"],
+      imports: [],
+      content: "#save {\n  color: #000000;\n}\n",
+    },
+    {
+      path: "src/components/Button.tsx",
+      kind: "component",
+      size: 86,
+      selectors: [],
+      classNames: ["btn", "px-2"],
+      ids: ["save"],
+      imports: [],
+      content:
+        'export const Button = () => <button id="save" className="btn px-2">Save</button>;\n',
+    },
+  ],
 };
 
 describe("CSS adapter", () => {
@@ -76,6 +119,35 @@ describe("CSS adapter", () => {
         "\n",
       ),
     );
+  });
+
+  it("previews source-aware stylesheet diffs when indexed source is available", async () => {
+    const intent = createIntent([
+      {
+        selector: "#save",
+        property: "color",
+        beforeValue: "#000000",
+        afterValue: "#ffffff",
+        timestamp: "2026-07-01T00:00:00.000Z",
+      },
+      {
+        selector: "#save",
+        property: "font-size",
+        beforeValue: "14px",
+        afterValue: "16px",
+        timestamp: "2026-07-01T00:00:00.000Z",
+      },
+    ]);
+
+    const [suggestion] = await cssAdapter.generatePatch(intent, projectContext);
+
+    expect(suggestion).toMatchObject({
+      adapterId: "css",
+      filesToChange: ["src/styles.css"],
+    });
+    expect(suggestion?.diffPreview).toContain("+++ b/src/styles.css");
+    expect(suggestion?.diffPreview).toContain("+  color: #ffffff;");
+    expect(suggestion?.diffPreview).toContain("+  font-size: 16px;");
   });
 });
 
@@ -121,12 +193,43 @@ describe("Tailwind adapter", () => {
     ]);
   });
 
-  it("detects Tailwind from dependency and config evidence", async () => {
+  it("detects Tailwind from dependency, config, and source evidence", async () => {
     await expect(Promise.resolve(tailwindAdapter.detect(projectContext))).resolves.toMatchObject({
       adapterId: "tailwind",
       detected: true,
-      evidence: ["tailwindcss dependency found in package.json.", "Tailwind config file found."],
+      evidence: expect.arrayContaining([
+        "tailwindcss dependency found in package.json.",
+        "Tailwind config file found.",
+        "Utility-like classes found in indexed source files.",
+      ]),
     });
+  });
+
+  it("previews source-aware class attribute diffs when indexed source is available", async () => {
+    const intent = createIntent([
+      {
+        selector: "#save",
+        property: "font-size",
+        beforeValue: "14px",
+        afterValue: "16px",
+        timestamp: "2026-07-01T00:00:00.000Z",
+      },
+      {
+        selector: "#save",
+        property: "padding-left",
+        beforeValue: "8px",
+        afterValue: "16px",
+        timestamp: "2026-07-01T00:00:00.000Z",
+      },
+    ]);
+
+    const [suggestion] = await tailwindAdapter.generatePatch(intent, projectContext);
+
+    expect(suggestion).toMatchObject({
+      adapterId: "tailwind",
+      filesToChange: ["src/components/Button.tsx"],
+    });
+    expect(suggestion?.diffPreview).toContain('className="btn px-2 text-base pl-4"');
   });
 });
 
@@ -149,5 +252,25 @@ describe("framework scaffold adapters", () => {
       diffPreview: "",
     });
     expect(suggestion?.warnings[0]).toContain("does not generate real patches in v1");
+  });
+
+  it("returns source-aware framework review hints when indexed source is available", async () => {
+    const intent = createIntent([]);
+    const [reactAdapter] = scaffoldAdapters;
+
+    if (reactAdapter === undefined) {
+      throw new Error("Expected at least one scaffold adapter.");
+    }
+
+    const detection = await reactAdapter.detect(projectContext);
+    const [suggestion] = await reactAdapter.generatePatch(intent, projectContext);
+
+    expect(detection).toMatchObject({ adapterId: "react", detected: true });
+    expect(suggestion).toMatchObject({
+      adapterId: "react",
+      filesToChange: ["src/components/Button.tsx"],
+      diffPreview: "",
+    });
+    expect(suggestion?.manualSteps[0]).toContain("src/components/Button.tsx");
   });
 });

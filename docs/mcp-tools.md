@@ -1,6 +1,6 @@
 # MCP Tools
 
-The MCP server runs as a local stdio process from `apps/mcp-server`. It is read-only: tools inspect project metadata or generate suggestions from supplied JSON, but they do not write source files.
+The MCP server runs as a local stdio process from `apps/mcp-server`. It is read-only: tools inspect project metadata, build bounded source indexes, or generate suggestions from supplied JSON, but they do not write source files.
 
 Start it after building:
 
@@ -37,7 +37,17 @@ Input:
 { "path": "E:/Dev/AI Projects/Dev-Buddy" }
 ```
 
-Returns the same framework and tooling detection report used by the CLI, including package manager, config files, source directories, and confidence-scored detections.
+Returns the same framework and tooling detection report used by the CLI, including package manager, config files, source directories, indexed file summaries, index stats, and confidence-scored detections.
+
+## index_project
+
+Input:
+
+```json
+{ "path": "E:/Dev/AI Projects/Dev-Buddy" }
+```
+
+Builds a bounded source index and returns file metadata: path, kind, size, selectors, class names, ids, and imports. Source contents are not returned by this tool.
 
 ## read_project_summary
 
@@ -47,7 +57,7 @@ Input:
 { "path": "E:/Dev/AI Projects/Dev-Buddy" }
 ```
 
-Returns root path, package name/version when available, dependencies, devDependencies, and detected config files.
+Returns root path, package name/version when available, dependencies, devDependencies, detected config files, source directories, indexed file summaries, and index stats.
 
 ## generate_export_from_change_intent
 
@@ -61,17 +71,26 @@ The full `changeIntent` must match the `UIChangeIntent` schema from `packages/sh
 
 ## preview_patch_suggestions
 
-Input:
+Input without source context:
 
 ```json
 { "changeIntent": { "id": "...", "timestamp": "..." } }
 ```
 
-Returns patch suggestions from CSS, Tailwind, and scaffold framework adapters. Framework suggestions are intentionally unsupported in v1 and include warnings/manual steps instead of fake source edits.
+Input with source-aware previews:
+
+```json
+{
+  "projectPath": "E:/Dev/AI Projects/Dev-Buddy",
+  "changeIntent": { "id": "...", "timestamp": "..." }
+}
+```
+
+Returns patch suggestions from CSS, Tailwind, and framework adapters. When `projectPath` is supplied, the server indexes source internally and may return file-specific CSS diffs, Tailwind class attribute diffs, and framework source review hints. Suggestions remain advisory and are not applied automatically.
 
 ## Security Notes
 
 - The server resolves local paths but does not write files.
-- Secret-looking files are skipped by project scans.
+- Secret-looking files, dependency folders, build outputs, and oversized files are skipped by project scans and indexes.
 - Generated patch previews are advisory and should be reviewed before manual application.
 - Do not expose this stdio server as a network service without adding authentication, path allowlists, and audit logging.

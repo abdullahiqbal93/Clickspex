@@ -1,12 +1,13 @@
 #!/usr/bin/env node
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import { detectProject } from "@ui-devtools/core/project";
+import { cssAdapter, scaffoldAdapters, tailwindAdapter } from "@ui-devtools/adapters";
+import { detectProject, scanProjectContext } from "@ui-devtools/core/project";
 import chalk from "chalk";
 import { Command } from "commander";
 
-import type { UIChangeIntent } from "@ui-devtools/shared";
+import type { PatchSuggestion, UIChangeIntent } from "@ui-devtools/shared";
 
 const program = new Command();
 
@@ -49,6 +50,25 @@ const exampleIntent = (): UIChangeIntent => ({
   accessibilityNotes: [],
 });
 
+const readChangeIntent = async (path: string): Promise<UIChangeIntent> => {
+  const raw = await readFile(resolve(path), "utf8");
+  return JSON.parse(raw) as UIChangeIntent;
+};
+
+const previewPatchSuggestions = async (
+  changeIntent: UIChangeIntent,
+  projectPath: string,
+): Promise<PatchSuggestion[]> => {
+  const projectContext = await scanProjectContext(projectPath, { includeSource: true });
+  return [
+    ...(await cssAdapter.generatePatch(changeIntent, projectContext)),
+    ...(await tailwindAdapter.generatePatch(changeIntent, projectContext)),
+    ...(await Promise.all(
+      scaffoldAdapters.map((adapter) => adapter.generatePatch(changeIntent, projectContext)),
+    ).then((patches) => patches.flat())),
+  ];
+};
+
 program.name("ui-sync").description("UI DevTools local project utility").version("0.1.0");
 
 program
@@ -81,12 +101,49 @@ program
     process.stdout.write(
       `${chalk.bold("Directories")} ${report.directories.join(", ") || "none"}\n`,
     );
+    process.stdout.write(
+      `${chalk.bold("Indexed files")} ${report.indexStats?.indexedFiles ?? 0}${report.indexStats?.truncated ? " (truncated)" : ""}\n`,
+    );
 
     for (const item of report.detections) {
       process.stdout.write(
         `${chalk.cyan(item.name)} ${item.category} confidence=${item.confidence} evidence=${item.evidence.join("; ")}\n`,
       );
     }
+  });
+
+program
+  .command("index")
+  .description("build a bounded source index for a local project")
+  .option("--path <path>", "project path", process.cwd())
+  .action(async (options: { path: string }) => {
+    const rootPath = resolve(options.path);
+    const context = await scanProjectContext(rootPath);
+    process.stdout.write(
+      `${JSON.stringify({ rootPath, files: context.files ?? [], indexStats: context.indexStats }, null, 2)}\n`,
+    );
+  });
+
+program
+  .command("preview-patch")
+  .description("preview source-aware patch suggestions from a UIChangeIntent JSON file")
+  .requiredOption("--intent <path>", "UIChangeIntent JSON file")
+  .option("--project <path>", "project path", process.cwd())
+  .option("--output <path>", "write suggestions JSON to this file")
+  .action(async (options: { intent: string; project: string; output?: string }) => {
+    const projectPath = resolve(options.project);
+    const changeIntent = await readChangeIntent(options.intent);
+    const suggestions = await previewPatchSuggestions(changeIntent, projectPath);
+    const output = `${JSON.stringify({ projectPath, suggestions }, null, 2)}\n`;
+
+    if (options.output === undefined) {
+      process.stdout.write(output);
+      return;
+    }
+
+    const outputPath = resolve(options.output);
+    await writeFile(outputPath, output, "utf8");
+    process.stdout.write(`${chalk.green("wrote")} ${outputPath}\n`);
   });
 
 program

@@ -12,8 +12,9 @@ The repo is intentionally conservative: the extension can prototype UI changes i
 - Measurement and alignment overlay tools.
 - Lightweight accessibility notes for missing labels, missing image alt text, and simple contrast checks.
 - Exports for CSS, conservative Tailwind classes, JSON, and Markdown.
-- Framework adapter interface with working CSS/Tailwind adapters and honest scaffold adapters for future framework patching.
-- `ui-sync` CLI for local init, project detection, and example change-intent export.
+- Source-aware project indexing for components, routes, stylesheets, selectors, classes, ids, and imports.
+- Framework adapter interface with working CSS/Tailwind patch previews and source-aware framework review hints.
+- `ui-sync` CLI for local init, project detection, source indexing, patch previews, and example change-intent export.
 - Read-only MCP server for project scanning, framework detection, summaries, exports, and patch previews.
 
 ## Workspace
@@ -74,7 +75,9 @@ Load `apps/extension/dist` in Chrome via `chrome://extensions` -> Developer mode
 pnpm --filter @ui-devtools/cli build
 node apps/cli/dist/index.js init --path .
 node apps/cli/dist/index.js detect --path .
+node apps/cli/dist/index.js index --path .
 node apps/cli/dist/index.js export-example --output ui-change-intent.example.json
+node apps/cli/dist/index.js preview-patch --intent ui-change-intent.example.json --project .
 ```
 
 ## MCP Server
@@ -101,14 +104,14 @@ The MCP server exposes read-only tools only. See `docs/mcp-tools.md` for tool si
 - The extension requests `activeTab`, `sidePanel`, and `storage`; it avoids broad background host permissions.
 - Overlay UI is isolated in a Shadow DOM host.
 - Temporary edits are injected through one page style tag and are not persisted to source.
-- CLI and MCP project tooling is read-only.
+- CLI and MCP project tooling is read-only: it can index source and generate diff previews, but it does not write source files.
 - MCP project scans skip `.git`, `node_modules`, and secret-looking files.
 - Patch previews are advisory and require human review.
 
 ## v1 Limitations
 
 - No automatic source-code mutation.
-- Framework adapters are scaffolded except CSS and Tailwind.
+- Framework adapters provide source hints, but AST-safe framework patches are not generated automatically yet.
 - Tailwind export is conservative and does not inspect existing source classes.
 - Cross-origin iframe inspection is not supported.
 - Accessibility checks are intentionally lightweight and do not replace a full audit.

@@ -5,11 +5,11 @@ UI DevTools is a pnpm monorepo with browser, shared, Node CLI, and MCP packages.
 ## Packages
 
 - `apps/extension`: Chrome MV3 extension, side panel UI, background service worker, content script, element picker, overlays, and temporary style injection.
-- `apps/cli`: `ui-sync` local project utility for init, project detection, and example change-intent export.
-- `apps/mcp-server`: read-only MCP stdio server for project scans, framework detection, summaries, export generation, and patch previews.
+- `apps/cli`: `ui-sync` local project utility for init, project detection, source indexing, patch previews, and example change-intent export.
+- `apps/mcp-server`: read-only MCP stdio server for project scans, framework detection, source indexes, summaries, export generation, and patch previews.
 - `packages/shared`: runtime message guards, `UIChangeIntent`, `PatchSuggestion`, adapter interfaces, and shared snapshot types.
-- `packages/core`: browser-independent utilities for selectors, snapshots, style diffs, contrast, box model extraction, measurements, accessibility notes, and project detection.
-- `packages/adapters`: CSS and Tailwind export adapters plus explicit scaffold adapters for framework patching that is not implemented in v1.
+- `packages/core`: browser-independent utilities for selectors, snapshots, style diffs, contrast, box model extraction, measurements, accessibility notes, project detection, and bounded source indexing.
+- `packages/adapters`: CSS and Tailwind export/patch-preview adapters plus framework adapters that provide source-aware review hints without AST-safe automatic edits.
 - `packages/config`: shared TypeScript, Vitest, ESLint, and Prettier configuration.
 
 ## MV3 Message Routing
@@ -38,7 +38,11 @@ Temporary user edits are injected into one page style tag named `__ui-devtools-s
 
 ## Adapter Boundary
 
-Adapters accept a `UIChangeIntent`. CSS and Tailwind adapters generate exports and patch previews. Framework adapters are scaffolded with explicit unsupported patch suggestions so the product never pretends to understand a source tree it cannot safely patch.
+Adapters accept a `UIChangeIntent` and optional `ProjectContext`. CSS and Tailwind adapters generate exports plus file-specific patch previews when indexed source content is available. Framework adapters use dependency/config signals and indexed DOM metadata to point at likely source files, but they do not generate AST-safe framework edits yet.
+
+## Source Index Boundary
+
+The project scanner indexes only known source/style extensions and skips dependency folders, build outputs, secret-looking files, and oversized files. Public summary tools return metadata only. Patch-preview flows can load source content internally to build advisory diffs, but neither the CLI nor MCP server writes source files.
 
 ## Test Isolation
 

@@ -1,3 +1,8 @@
+import { readdir, readFile, stat } from "node:fs/promises";
+import { extname, join, relative } from "node:path";
+
+import type { ProjectContext, ProjectFileKind, ProjectFileSummary } from "@ui-devtools/shared";
+
 export type DetectedItem = {
   name: string;
   category: "framework" | "styling" | "tooling";
@@ -11,17 +16,26 @@ export type ProjectDetectionReport = {
   configFiles: string[];
   directories: string[];
   detections: DetectedItem[];
+  files: ProjectFileSummary[];
+  indexStats?: ProjectContext["indexStats"];
 };
-
-import { readdir, readFile } from "node:fs/promises";
-import { join } from "node:path";
-
-import type { ProjectContext } from "@ui-devtools/shared";
 
 type PackageJson = {
   dependencies: Record<string, string>;
   devDependencies: Record<string, string>;
 };
+
+type ProjectScanOptions = {
+  includeSource?: boolean;
+  indexProject?: boolean;
+  maxDepth?: number;
+  maxFiles?: number;
+  maxFileBytes?: number;
+};
+
+const DEFAULT_MAX_DEPTH = 7;
+const DEFAULT_MAX_FILES = 300;
+const DEFAULT_MAX_FILE_BYTES = 250_000;
 
 const configPatterns = [
   /^next\.config\./,
@@ -37,7 +51,43 @@ const configPatterns = [
   /^yarn\.lock$/,
 ];
 
-const expectedDirectories = new Set(["src", "app", "pages", "components"]);
+const expectedDirectories = new Set(["src", "app", "pages", "components", "styles"]);
+const skippedDirectories = new Set([
+  ".git",
+  ".next",
+  ".turbo",
+  ".vercel",
+  "build",
+  "coverage",
+  "dist",
+  "node_modules",
+  "out",
+]);
+const secretFilePatterns = [/^\.env/i, /secret/i, /credential/i, /token/i, /key$/i];
+const sourceExtensions = new Set([
+  ".css",
+  ".scss",
+  ".sass",
+  ".less",
+  ".pcss",
+  ".html",
+  ".js",
+  ".jsx",
+  ".ts",
+  ".tsx",
+  ".vue",
+  ".svelte",
+]);
+const stylesheetExtensions = new Set([".css", ".scss", ".sass", ".less", ".pcss"]);
+const componentExtensions = new Set([".jsx", ".tsx", ".vue", ".svelte"]);
+
+const toProjectPath = (path: string): string => path.replaceAll("\\", "/");
+
+const uniqueSorted = (values: Iterable<string>): string[] =>
+  Array.from(new Set(Array.from(values).filter((value) => value.length > 0))).sort();
+
+const isSecretLikeFile = (name: string): boolean =>
+  secretFilePatterns.some((pattern) => pattern.test(name));
 
 const readPackageJson = async (rootPath: string): Promise<PackageJson | undefined> => {
   try {
@@ -52,7 +102,205 @@ const readPackageJson = async (rootPath: string): Promise<PackageJson | undefine
   }
 };
 
-export const scanProjectContext = async (rootPath: string): Promise<ProjectContext> => {
+const classifyFile = (projectPath: string): ProjectFileKind => {
+  const extension = extname(projectPath).toLowerCase();
+
+  if (stylesheetExtensions.has(extension)) {
+    return "stylesheet";
+  }
+
+  if (
+    projectPath.startsWith("app/") ||
+    projectPath.startsWith("pages/") ||
+    projectPath.includes("/routes/")
+  ) {
+    return "route";
+  }
+
+  if (componentExtensions.has(extension) || projectPath.includes("/components/")) {
+    return "component";
+  }
+
+  if (configPatterns.some((pattern) => pattern.test(projectPath.split("/").at(-1) ?? ""))) {
+    return "config";
+  }
+
+  return "other";
+};
+
+const extractCssSelectors = (content: string): string[] => {
+  const selectors: string[] = [];
+  const selectorRegex = /(^|})\s*([^{}@]+)\s*\{/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = selectorRegex.exec(content)) !== null) {
+    const selectorGroup = match[2] ?? "";
+    selectors.push(
+      ...selectorGroup
+        .split(",")
+        .map((selector) => selector.trim())
+        .filter((selector) => selector.length > 0 && !selector.startsWith("@")),
+    );
+  }
+
+  return uniqueSorted(selectors).slice(0, 80);
+};
+
+const extractClassNames = (content: string): string[] => {
+  const classes: string[] = [];
+  const classAttributeRegex = /\bclass(?:Name)?\s*=\s*(["'`])([^"'`]+)\1/g;
+  const cssClassRegex = /\.([_a-zA-Z]+[_a-zA-Z0-9-]*)/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = classAttributeRegex.exec(content)) !== null) {
+    classes.push(...(match[2] ?? "").split(/\s+/));
+  }
+
+  while ((match = cssClassRegex.exec(content)) !== null) {
+    classes.push(match[1] ?? "");
+  }
+
+  return uniqueSorted(classes).slice(0, 120);
+};
+
+const extractIds = (content: string): string[] => {
+  const ids: string[] = [];
+  const idAttributeRegex = /\bid\s*=\s*(["'`])([^"'`]+)\1/g;
+  const cssIdRegex = /#([_a-zA-Z]+[_a-zA-Z0-9-]*)/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = idAttributeRegex.exec(content)) !== null) {
+    ids.push(match[2] ?? "");
+  }
+
+  while ((match = cssIdRegex.exec(content)) !== null) {
+    ids.push(match[1] ?? "");
+  }
+
+  return uniqueSorted(ids).slice(0, 80);
+};
+
+const extractImports = (content: string): string[] => {
+  const imports: string[] = [];
+  const importRegex = /(?:import\s+(?:[^"']+\s+from\s+)?|@import\s+)(["'])([^"']+)\1/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = importRegex.exec(content)) !== null) {
+    imports.push(match[2] ?? "");
+  }
+
+  return uniqueSorted(imports).slice(0, 80);
+};
+
+const summarizeFile = async (
+  rootPath: string,
+  absolutePath: string,
+  size: number,
+  includeSource: boolean,
+): Promise<ProjectFileSummary & { content?: string }> => {
+  const projectPath = toProjectPath(relative(rootPath, absolutePath));
+  const content = await readFile(absolutePath, "utf8");
+  const extension = extname(projectPath).toLowerCase();
+  const selectors = stylesheetExtensions.has(extension) ? extractCssSelectors(content) : [];
+
+  return {
+    path: projectPath,
+    kind: classifyFile(projectPath),
+    size,
+    selectors,
+    classNames: extractClassNames(content),
+    ids: extractIds(content),
+    imports: extractImports(content),
+    ...(includeSource ? { content } : {}),
+  };
+};
+
+const scanSourceFiles = async (
+  rootPath: string,
+  options: Required<
+    Pick<ProjectScanOptions, "includeSource" | "maxDepth" | "maxFiles" | "maxFileBytes">
+  >,
+): Promise<Pick<ProjectContext, "files" | "sourceFiles" | "indexStats">> => {
+  const files: ProjectFileSummary[] = [];
+  const sourceFiles: NonNullable<ProjectContext["sourceFiles"]> = [];
+  let skippedFiles = 0;
+  let truncated = false;
+
+  const visit = async (directoryPath: string, depth: number): Promise<void> => {
+    if (truncated || depth > options.maxDepth) {
+      return;
+    }
+
+    const entries = await readdir(directoryPath, { withFileTypes: true });
+
+    for (const entry of entries) {
+      if (truncated) {
+        return;
+      }
+
+      const entryPath = join(directoryPath, entry.name);
+
+      if (entry.isDirectory()) {
+        if (!skippedDirectories.has(entry.name)) {
+          await visit(entryPath, depth + 1);
+        }
+        continue;
+      }
+
+      if (!entry.isFile() || isSecretLikeFile(entry.name)) {
+        skippedFiles += 1;
+        continue;
+      }
+
+      const extension = extname(entry.name).toLowerCase();
+
+      if (!sourceExtensions.has(extension)) {
+        skippedFiles += 1;
+        continue;
+      }
+
+      const stats = await stat(entryPath);
+
+      if (stats.size > options.maxFileBytes) {
+        skippedFiles += 1;
+        continue;
+      }
+
+      const summary = await summarizeFile(rootPath, entryPath, stats.size, options.includeSource);
+      const { content: _content, ...fileSummary } = summary;
+      files.push(fileSummary);
+
+      if (options.includeSource && summary.content !== undefined) {
+        sourceFiles.push({ ...fileSummary, content: summary.content });
+      }
+
+      if (files.length >= options.maxFiles) {
+        truncated = true;
+      }
+    }
+  };
+
+  await visit(rootPath, 0);
+  files.sort((a, b) => a.path.localeCompare(b.path));
+  sourceFiles.sort((a, b) => a.path.localeCompare(b.path));
+
+  return {
+    files,
+    ...(options.includeSource ? { sourceFiles } : {}),
+    indexStats: {
+      indexedFiles: files.length,
+      skippedFiles,
+      truncated,
+      maxDepth: options.maxDepth,
+      maxFileBytes: options.maxFileBytes,
+    },
+  };
+};
+
+export const scanProjectContext = async (
+  rootPath: string,
+  options: ProjectScanOptions = {},
+): Promise<ProjectContext> => {
   const entries = await readdir(rootPath, { withFileTypes: true });
   const configFiles = entries
     .filter((entry) => entry.isFile() && configPatterns.some((pattern) => pattern.test(entry.name)))
@@ -72,6 +320,18 @@ export const scanProjectContext = async (rootPath: string): Promise<ProjectConte
 
   if (packageJson !== undefined) {
     context.packageJson = packageJson;
+  }
+
+  if (options.indexProject ?? true) {
+    Object.assign(
+      context,
+      await scanSourceFiles(rootPath, {
+        includeSource: options.includeSource ?? false,
+        maxDepth: options.maxDepth ?? DEFAULT_MAX_DEPTH,
+        maxFiles: options.maxFiles ?? DEFAULT_MAX_FILES,
+        maxFileBytes: options.maxFileBytes ?? DEFAULT_MAX_FILE_BYTES,
+      }),
+    );
   }
 
   return context;
@@ -179,11 +439,18 @@ export const detectProject = async (rootPath: string): Promise<ProjectDetectionR
         ? "npm"
         : "unknown";
 
-  return {
+  const report: ProjectDetectionReport = {
     rootPath,
     packageManager,
     configFiles: context.configFiles,
     directories: context.directories,
     detections,
+    files: context.files ?? [],
   };
+
+  if (context.indexStats !== undefined) {
+    report.indexStats = context.indexStats;
+  }
+
+  return report;
 };

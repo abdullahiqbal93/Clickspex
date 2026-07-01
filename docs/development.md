@@ -50,10 +50,12 @@ Load `apps/extension/dist` as an unpacked extension in Chrome:
 pnpm --filter @ui-devtools/cli build
 node apps/cli/dist/index.js init --path .
 node apps/cli/dist/index.js detect --path .
+node apps/cli/dist/index.js index --path .
 node apps/cli/dist/index.js export-example --output ui-change-intent.example.json
+node apps/cli/dist/index.js preview-patch --intent ui-change-intent.example.json --project .
 ```
 
-`init` writes `.ui-sync/config.json` with read-only code-sync metadata. `detect` reports known frameworks, package manager, config files, and common source directories.
+`init` writes `.ui-sync/config.json` with read-only code-sync metadata. `detect` reports known frameworks, package manager, config files, common source directories, and index stats. `index` returns bounded source metadata without file contents. `preview-patch` reads a `UIChangeIntent` JSON file and prints advisory source-aware patch suggestions.
 
 ## MCP Server
 

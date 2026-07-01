@@ -52,6 +52,9 @@ importers:
 
   apps/cli:
     dependencies:
+      "@ui-devtools/adapters":
+        specifier: workspace:*
+        version: link:../../packages/adapters
       "@ui-devtools/core":
         specifier: workspace:*
         version: link:../../packages/core

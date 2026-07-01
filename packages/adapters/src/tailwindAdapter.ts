@@ -1,9 +1,12 @@
+import { createUnifiedDiff } from "./diffPreview.js";
+
 import type {
   AdapterDetectionResult,
   AdapterExport,
   FrameworkAdapter,
   PatchSuggestion,
   ProjectContext,
+  ProjectSourceFile,
   StyleChange,
   UIChangeIntent,
 } from "@ui-devtools/shared";
@@ -230,29 +233,231 @@ const detectTailwind = (projectContext: ProjectContext): AdapterDetectionResult 
     evidence.push("Tailwind config file found.");
   }
 
+  if (
+    projectContext.files?.some((file) =>
+      file.classNames.some((className) => className.includes("-")),
+    )
+  ) {
+    evidence.push("Utility-like classes found in indexed source files.");
+  }
+
   return {
     adapterId: "tailwind",
     name: "Tailwind CSS",
     detected: evidence.length > 0,
-    confidence: evidence.length === 0 ? 0 : Math.min(1, evidence.length * 0.45),
+    confidence: evidence.length === 0 ? 0 : Math.min(1, evidence.length * 0.35 + 0.1),
     evidence,
   };
 };
 
-const generateTailwindPatch = (changeIntent: UIChangeIntent): PatchSuggestion[] => {
+const scoreSourceFile = (file: ProjectSourceFile, changeIntent: UIChangeIntent): number => {
+  if (file.kind !== "component" && file.kind !== "route") {
+    return 0;
+  }
+
+  let score = file.kind === "route" ? 0.32 : 0.38;
+
+  if (
+    changeIntent.target.id !== undefined &&
+    changeIntent.target.id.length > 0 &&
+    file.ids.includes(changeIntent.target.id)
+  ) {
+    score += 0.28;
+  }
+
+  const matchingClasses = changeIntent.target.classList.filter((className) =>
+    file.classNames.includes(className),
+  ).length;
+  score += matchingClasses * 0.18;
+
+  const textPreview = changeIntent.target.textPreview?.trim();
+
+  if (textPreview !== undefined && textPreview.length > 0 && file.content.includes(textPreview)) {
+    score += 0.08;
+  }
+
+  return Math.min(0.9, score);
+};
+
+const selectSourceFile = (
+  projectContext: ProjectContext | undefined,
+  changeIntent: UIChangeIntent,
+): { file: ProjectSourceFile; confidence: number } | null => {
+  const candidates = projectContext?.sourceFiles ?? [];
+
+  return (
+    candidates
+      .map((file) => ({ file, confidence: scoreSourceFile(file, changeIntent) }))
+      .filter((candidate) => candidate.confidence > 0)
+      .sort((a, b) => b.confidence - a.confidence || a.file.path.localeCompare(b.file.path))[0] ??
+    null
+  );
+};
+
+const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const mergeClasses = (existingValue: string, additions: string[]): string => {
+  const existing = existingValue.split(/\s+/).filter((className) => className.length > 0);
+  const merged = [...existing];
+
+  for (const className of additions) {
+    if (!merged.includes(className)) {
+      merged.push(className);
+    }
+  }
+
+  return merged.join(" ");
+};
+
+const patchMatchingClassAttribute = (
+  content: string,
+  targetClasses: string[],
+  additions: string[],
+): string | null => {
+  if (targetClasses.length === 0) {
+    return null;
+  }
+
+  const classAttributeRegex = /\b(className|class)\s*=\s*(["'`])([^"'`]*)(["'`])/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = classAttributeRegex.exec(content)) !== null) {
+    const currentValue = match[3] ?? "";
+    const currentClasses = currentValue.split(/\s+/);
+
+    if (!targetClasses.some((className) => currentClasses.includes(className))) {
+      continue;
+    }
+
+    const nextValue = mergeClasses(currentValue, additions);
+    const start = match.index + match[0].indexOf(currentValue);
+    return `${content.slice(0, start)}${nextValue}${content.slice(start + currentValue.length)}`;
+  }
+
+  return null;
+};
+
+const patchElementWithId = (
+  content: string,
+  id: string | undefined,
+  additions: string[],
+  path: string,
+): string | null => {
+  if (id === undefined || id.length === 0) {
+    return null;
+  }
+
+  const idRegex = new RegExp(`<[^>]*\\bid\\s*=\\s*(["'\`])${escapeRegExp(id)}\\1[^>]*>`, "m");
+  const tagMatch = idRegex.exec(content);
+
+  if (tagMatch === null || tagMatch.index === undefined) {
+    return null;
+  }
+
+  const tag = tagMatch[0];
+  const classAttribute = /\b(className|class)\s*=\s*(["'`])([^"'`]*)(["'`])/.exec(tag);
+
+  if (classAttribute !== null && classAttribute.index !== undefined) {
+    const currentValue = classAttribute[3] ?? "";
+    const nextValue = mergeClasses(currentValue, additions);
+    const start = classAttribute.index + classAttribute[0].indexOf(currentValue);
+    const nextTag = `${tag.slice(0, start)}${nextValue}${tag.slice(start + currentValue.length)}`;
+    return `${content.slice(0, tagMatch.index)}${nextTag}${content.slice(tagMatch.index + tag.length)}`;
+  }
+
+  const attributeName = /\.(html|vue|svelte)$/i.test(path) ? "class" : "className";
+  const insertAt = tag.endsWith("/>") ? tag.length - 2 : tag.length - 1;
+  const nextTag = `${tag.slice(0, insertAt)} ${attributeName}="${additions.join(" ")}"${tag.slice(insertAt)}`;
+  return `${content.slice(0, tagMatch.index)}${nextTag}${content.slice(tagMatch.index + tag.length)}`;
+};
+
+const sourceAwareTailwindPatch = (
+  changeIntent: UIChangeIntent,
+  projectContext: ProjectContext | undefined,
+  additions: string[],
+): { file: ProjectSourceFile; confidence: number; nextContent: string } | null => {
+  const selected = selectSourceFile(projectContext, changeIntent);
+
+  if (selected === null) {
+    return null;
+  }
+
+  const classPatched = patchMatchingClassAttribute(
+    selected.file.content,
+    changeIntent.target.classList,
+    additions,
+  );
+  const nextContent =
+    classPatched ??
+    patchElementWithId(
+      selected.file.content,
+      changeIntent.target.id,
+      additions,
+      selected.file.path,
+    );
+
+  if (nextContent === null || nextContent === selected.file.content) {
+    return null;
+  }
+
+  return { ...selected, nextContent };
+};
+
+const generateTailwindPatch = (
+  changeIntent: UIChangeIntent,
+  projectContext?: ProjectContext,
+): PatchSuggestion[] => {
   const result = generateTailwindClassesFromChangeIntent(changeIntent);
+
+  if (result.classes.length === 0) {
+    return [
+      {
+        adapterId: "tailwind",
+        title: "Apply conservative Tailwind utility classes",
+        confidence: 0,
+        explanation: "No exact Tailwind utility mapping was available for the captured changes.",
+        filesToChange: [],
+        diffPreview: "",
+        warnings: result.warnings,
+        manualSteps: [],
+      },
+    ];
+  }
+
+  const patch = sourceAwareTailwindPatch(changeIntent, projectContext, result.classes);
+
+  if (patch !== null) {
+    return [
+      {
+        adapterId: "tailwind",
+        title: `Apply Tailwind classes in ${patch.file.path}`,
+        confidence: patch.confidence,
+        explanation:
+          "Selected an indexed component or route by matching the captured element id, classes, and text.",
+        filesToChange: [patch.file.path],
+        diffPreview: createUnifiedDiff(patch.file.path, patch.file.content, patch.nextContent),
+        warnings: [
+          ...result.warnings,
+          "Review for conflicting existing utilities before applying this class edit.",
+        ],
+        manualSteps: [
+          "Apply the diff after confirming this source element matches the selected DOM node.",
+        ],
+      },
+    ];
+  }
 
   return [
     {
       adapterId: "tailwind",
       title: "Apply conservative Tailwind utility classes",
-      confidence: result.classes.length > 0 ? 0.45 : 0,
+      confidence: 0.45,
       explanation:
-        "Generated utility classes only for exact value mappings. v1 does not inspect source components.",
+        "Generated utility classes only for exact value mappings. Provide indexed source content to preview a file-specific class edit.",
       filesToChange: [],
       diffPreview: "",
       warnings: result.warnings,
-      manualSteps: result.classes.length > 0 ? [`Review and add: ${result.classes.join(" ")}`] : [],
+      manualSteps: [`Review and add: ${result.classes.join(" ")}`],
     },
   ];
 };

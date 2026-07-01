@@ -5,13 +5,15 @@ import {
   changeIntentInputSchema,
   handleDetectFramework,
   handleGenerateExport,
+  handleIndexProject,
   handlePreviewPatchSuggestions,
   handleReadProjectSummary,
   handleScanProject,
+  patchPreviewInputSchema,
   pathInputSchema,
 } from "./tools.js";
 
-import type { ChangeIntentInput, PathInput } from "./tools.js";
+import type { ChangeIntentInput, PathInput, PatchPreviewInput } from "./tools.js";
 
 const toContent = (result: unknown) => ({
   content: [
@@ -39,8 +41,15 @@ server.tool(
 );
 
 server.tool(
+  "index_project",
+  "Build a bounded source index with file kinds, selectors, classes, ids, and imports.",
+  pathInputSchema.shape,
+  async (input: PathInput) => toContent(await handleIndexProject(input)),
+);
+
+server.tool(
   "read_project_summary",
-  "Return package.json summary and config file list.",
+  "Return package.json summary, config files, directories, and indexed source metadata.",
   pathInputSchema.shape,
   async (input: PathInput) => toContent(await handleReadProjectSummary(input)),
 );
@@ -54,9 +63,9 @@ server.tool(
 
 server.tool(
   "preview_patch_suggestions",
-  "Accept a UIChangeIntent JSON object and return PatchSuggestion objects.",
-  changeIntentInputSchema.shape,
-  async (input: ChangeIntentInput) => toContent(await handlePreviewPatchSuggestions(input)),
+  "Accept a UIChangeIntent JSON object plus optional projectPath and return PatchSuggestion objects.",
+  patchPreviewInputSchema.shape,
+  async (input: PatchPreviewInput) => toContent(await handlePreviewPatchSuggestions(input)),
 );
 
 const transport = new StdioServerTransport();
