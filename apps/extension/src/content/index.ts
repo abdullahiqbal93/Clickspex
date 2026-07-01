@@ -34,7 +34,13 @@ addRuntimeMessageListener((message) => {
     return;
   }
 
-  if (message.type === "UNDO_CHANGE" || message.type === "REDO_CHANGE") {
+  if (message.type === "UNDO_CHANGE") {
+    styleInjector.undo();
+    return;
+  }
+
+  if (message.type === "REDO_CHANGE") {
+    styleInjector.redo();
     return;
   }
 });

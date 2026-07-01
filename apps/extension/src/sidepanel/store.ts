@@ -21,9 +21,7 @@ export type PanelState = {
   redoStack: StyleChange[];
   selectedElement: ElementSnapshot | null;
   applyLocalStyleChange: (change: StyleChange) => void;
-  prepareRedoChange: () => StyleChange | null;
   prepareStyleChange: (property: SupportedStyleProperty, afterValue: string) => StyleChange | null;
-  prepareUndoChange: () => StyleChange | null;
   redoLocalChange: () => void;
   resetElementChanges: () => void;
   setActiveTab: (tab: PanelTab) => void;
@@ -66,20 +64,6 @@ export const usePanelStore = create<PanelState>((set, get) => ({
       changes: [...state.changes, change],
       redoStack: [],
     })),
-  prepareRedoChange: () => {
-    const [change] = get().redoStack.slice(-1);
-
-    if (change === undefined) {
-      return null;
-    }
-
-    return createStyleChange(
-      change.selector,
-      change.property,
-      change.beforeValue,
-      change.afterValue,
-    );
-  },
   prepareStyleChange: (property, afterValue) => {
     const state = get();
 
@@ -95,20 +79,6 @@ export const usePanelStore = create<PanelState>((set, get) => ({
     }
 
     return createStyleChange(state.selectedElement.selector, property, beforeValue, afterValue);
-  },
-  prepareUndoChange: () => {
-    const [change] = get().changes.slice(-1);
-
-    if (change === undefined) {
-      return null;
-    }
-
-    return createStyleChange(
-      change.selector,
-      change.property,
-      change.afterValue,
-      change.beforeValue,
-    );
   },
   redoLocalChange: () =>
     set((state) => {

@@ -108,8 +108,6 @@ export const StylePanel = () => {
   const selectedElement = usePanelStore((state) => state.selectedElement);
   const styles = usePanelStore((state) => getCurrentStyleRecord(state));
   const prepareStyleChange = usePanelStore((state) => state.prepareStyleChange);
-  const prepareUndoChange = usePanelStore((state) => state.prepareUndoChange);
-  const prepareRedoChange = usePanelStore((state) => state.prepareRedoChange);
   const applyLocalStyleChange = usePanelStore((state) => state.applyLocalStyleChange);
   const resetElementChanges = usePanelStore((state) => state.resetElementChanges);
   const undoLocalChange = usePanelStore((state) => state.undoLocalChange);
@@ -136,14 +134,12 @@ export const StylePanel = () => {
 
   const undoChange = async () => {
     setError(null);
-    const change = prepareUndoChange();
 
-    if (change === null) {
+    if (changes.length === 0) {
       return;
     }
 
     try {
-      await sendMessageToActiveTab({ type: "APPLY_STYLE_CHANGE", payload: change });
       await sendMessageToActiveTab({ type: "UNDO_CHANGE" });
       undoLocalChange();
     } catch (caughtError) {
@@ -155,14 +151,12 @@ export const StylePanel = () => {
 
   const redoChange = async () => {
     setError(null);
-    const change = prepareRedoChange();
 
-    if (change === null) {
+    if (redoStack.length === 0) {
       return;
     }
 
     try {
-      await sendMessageToActiveTab({ type: "APPLY_STYLE_CHANGE", payload: change });
       await sendMessageToActiveTab({ type: "REDO_CHANGE" });
       redoLocalChange();
     } catch (caughtError) {
