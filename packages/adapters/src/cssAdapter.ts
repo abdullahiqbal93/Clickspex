@@ -1,4 +1,4 @@
-import { buildCssRule, styleChangesToRecord } from "@ui-devtools/core";
+import { buildCssRule, styleChangesToRecord } from "@ui-devtools/core/styleDiff";
 
 import type {
   AdapterDetectionResult,

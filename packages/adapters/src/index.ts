@@ -1,6 +1,6 @@
-export { cssAdapter, generateCssFromChangeIntent } from "./cssAdapter";
-export { scaffoldAdapters } from "./scaffoldAdapters";
-export { generateTailwindClassesFromChangeIntent, tailwindAdapter } from "./tailwindAdapter";
+export { cssAdapter, generateCssFromChangeIntent } from "./cssAdapter.js";
+export { scaffoldAdapters } from "./scaffoldAdapters.js";
+export { generateTailwindClassesFromChangeIntent, tailwindAdapter } from "./tailwindAdapter.js";
 
 export type {
   AdapterDetectionResult,

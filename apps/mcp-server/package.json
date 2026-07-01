@@ -1,0 +1,23 @@
+{
+  "name": "@ui-devtools/mcp-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint .",
+    "test": "vitest run --passWithNoTests",
+    "format": "prettier --write ."
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@ui-devtools/adapters": "workspace:*",
+    "@ui-devtools/core": "workspace:*",
+    "@ui-devtools/shared": "workspace:*",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@ui-devtools/config": "workspace:*"
+  }
+}

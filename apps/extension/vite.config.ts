@@ -6,13 +6,9 @@ import { defineConfig } from "vite";
 
 import manifest from "./manifest";
 
-const sharedSourcePath = fileURLToPath(
-  new URL("../../packages/shared/src/index.ts", import.meta.url),
-);
-const coreSourcePath = fileURLToPath(new URL("../../packages/core/src/index.ts", import.meta.url));
-const adaptersSourcePath = fileURLToPath(
-  new URL("../../packages/adapters/src/index.ts", import.meta.url),
-);
+const sharedSourcePath = fileURLToPath(new URL("../../packages/shared/src", import.meta.url));
+const coreSourcePath = fileURLToPath(new URL("../../packages/core/src", import.meta.url));
+const adaptersSourcePath = fileURLToPath(new URL("../../packages/adapters/src", import.meta.url));
 
 export default defineConfig({
   plugins: [react(), crx({ manifest })],

@@ -13,6 +13,10 @@
     "./project": {
       "types": "./src/projectDetection.ts",
       "import": "./dist/projectDetection.js"
+    },
+    "./styleDiff": {
+      "types": "./src/styleDiff.ts",
+      "import": "./dist/styleDiff.js"
     }
   },
   "scripts": {
