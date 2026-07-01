@@ -1,11 +1,17 @@
-import { createStyleChange } from "@ui-devtools/core";
+import { createStyleChange, getAccessibilityNotes } from "@ui-devtools/core";
 import { create } from "zustand";
 
-import type { ElementSnapshot, StyleChange, SupportedStyleProperty } from "@ui-devtools/shared";
+import type {
+  AccessibilityNote,
+  ElementSnapshot,
+  StyleChange,
+  SupportedStyleProperty,
+} from "@ui-devtools/shared";
 
 export type PanelTab = "inspect" | "styles" | "box" | "measure" | "accessibility" | "export";
 
 export type PanelState = {
+  accessibilityNotes: AccessibilityNote[];
   activeTab: PanelTab;
   changes: StyleChange[];
   error: string | null;
@@ -46,6 +52,7 @@ export const getCurrentStyleRecord = (state: Pick<PanelState, "changes" | "selec
 };
 
 export const usePanelStore = create<PanelState>((set, get) => ({
+  accessibilityNotes: [],
   activeTab: "inspect",
   changes: [],
   error: null,
@@ -124,7 +131,13 @@ export const usePanelStore = create<PanelState>((set, get) => ({
   setMeasurementTarget: (measurementTarget) => set({ measurementTarget }),
   setPickerActive: (pickerActive) => set({ pickerActive }),
   setSelectedElement: (selectedElement) =>
-    set({ changes: [], measurementTarget: null, redoStack: [], selectedElement }),
+    set({
+      accessibilityNotes: selectedElement === null ? [] : getAccessibilityNotes(selectedElement),
+      changes: [],
+      measurementTarget: null,
+      redoStack: [],
+      selectedElement,
+    }),
   undoLocalChange: () =>
     set((state) => {
       const changes = state.changes.slice(0, -1);

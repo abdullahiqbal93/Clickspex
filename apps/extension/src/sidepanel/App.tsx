@@ -12,6 +12,7 @@ import { useEffect } from "react";
 
 import { connectSidePanelPort, sendMessageToActiveTab } from "../chrome/messaging";
 
+import { AccessibilityPanel } from "./components/AccessibilityPanel";
 import { BoxModelPanel } from "./components/BoxModelPanel";
 import { InspectorPanel } from "./components/InspectorPanel";
 import { MeasurePanel } from "./components/MeasurePanel";
@@ -28,10 +29,9 @@ const tabs = [
 ] as const satisfies ReadonlyArray<{ id: PanelTab; label: string; icon: typeof Crosshair }>;
 
 const placeholderLabels: Record<
-  Exclude<PanelTab, "inspect" | "styles" | "box" | "measure">,
+  Exclude<PanelTab, "inspect" | "styles" | "box" | "measure" | "accessibility">,
   string
 > = {
-  accessibility: "Accessibility",
   export: "Export",
 };
 
@@ -163,6 +163,8 @@ export const App = () => {
           <BoxModelPanel />
         ) : activeTab === "measure" ? (
           <MeasurePanel />
+        ) : activeTab === "accessibility" ? (
+          <AccessibilityPanel />
         ) : (
           <div className="rounded-lg border border-slate-200 bg-panel p-4 shadow-panel">
             <h2 className="text-sm font-semibold">{placeholderLabels[activeTab]}</h2>
