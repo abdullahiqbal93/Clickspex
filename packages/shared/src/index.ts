@@ -12,6 +12,7 @@ export const SUPPORTED_STYLE_PROPERTIES = [
   "gap",
   "color",
   "background-color",
+  "font-family",
   "font-size",
   "font-weight",
   "line-height",
@@ -46,7 +47,6 @@ export const IMPORTANT_COMPUTED_STYLE_PROPERTIES = [
   "border-right-color",
   "border-bottom-color",
   "border-left-color",
-  "font-family",
   "letter-spacing",
   "text-align",
   "z-index",
@@ -173,6 +173,30 @@ export type AdapterExport = {
   warnings: string[];
 };
 
+export type ProjectFileKind = "route" | "component" | "stylesheet" | "config" | "asset" | "other";
+
+export type ProjectFileSummary = {
+  path: string;
+  kind: ProjectFileKind;
+  size: number;
+  selectors: string[];
+  classNames: string[];
+  ids: string[];
+  imports: string[];
+};
+
+export type ProjectSourceFile = ProjectFileSummary & {
+  content: string;
+};
+
+export type ProjectIndexStats = {
+  indexedFiles: number;
+  skippedFiles: number;
+  truncated: boolean;
+  maxDepth: number;
+  maxFileBytes: number;
+};
+
 export type ProjectContext = {
   rootPath: string;
   packageJson?: {
@@ -181,6 +205,9 @@ export type ProjectContext = {
   };
   configFiles: string[];
   directories: string[];
+  files?: ProjectFileSummary[];
+  sourceFiles?: ProjectSourceFile[];
+  indexStats?: ProjectIndexStats;
 };
 
 export type AdapterDetectionResult = {
@@ -202,31 +229,71 @@ export interface FrameworkAdapter {
   generateExport(changeIntent: UIChangeIntent): AdapterExport;
 }
 
+export type PageColorInfo = {
+  hex: string;
+  rgb: string;
+  count: number;
+  properties: string[];
+};
+
+export type PageFontInfo = {
+  family: string;
+  sizes: string[];
+  weights: string[];
+  count: number;
+};
+
+export type PageAssetInfo = {
+  type: "img" | "svg" | "bg";
+  src: string;
+  alt: string;
+  width: number;
+  height: number;
+};
+
+export type PageScanResult = {
+  colors: PageColorInfo[];
+  fonts: PageFontInfo[];
+  assets: PageAssetInfo[];
+};
+
 export type ExtensionMessage =
   | { type: "PICKER_ENABLE" }
   | { type: "PICKER_DISABLE" }
   | { type: "ELEMENT_HOVERED"; payload: { selector: string; rect: RectSnapshot } }
   | { type: "ELEMENT_SELECTED"; payload: ElementSnapshot }
+  | { type: "ELEMENT_UNSELECTED" }
   | { type: "APPLY_STYLE_CHANGE"; payload: StyleChange }
   | { type: "RESET_ELEMENT_CHANGES" }
   | { type: "UNDO_CHANGE" }
   | { type: "REDO_CHANGE" }
   | { type: "GET_SELECTED_ELEMENT" }
   | { type: "EXPORT_CHANGE_INTENT" }
-  | { type: "MEASURE_START" }
-  | { type: "MEASURE_TARGET_SELECTED"; payload: ElementSnapshot };
+  | { type: "MEASURE_START"; payload?: ElementSnapshot }
+  | { type: "MEASURE_TARGET_SELECTED"; payload: ElementSnapshot }
+  | { type: "RULER_ENABLE" }
+  | { type: "RULER_DISABLE" }
+  | { type: "SCAN_PAGE" }
+  | { type: "GRID_TOGGLE" }
+  | { type: "SELECT_ANCESTOR"; payload: { depth: number } }
+  | { type: "SET_ANIMATION_SPEED"; payload: { speed: number } }
+  | { type: "PAGE_SCAN_RESULT"; payload: PageScanResult };
 
 export type MessageType = ExtensionMessage["type"];
 
 const MESSAGE_TYPES_WITHOUT_PAYLOAD = new Set<MessageType>([
   "PICKER_ENABLE",
   "PICKER_DISABLE",
+  "ELEMENT_UNSELECTED",
   "RESET_ELEMENT_CHANGES",
   "UNDO_CHANGE",
   "REDO_CHANGE",
   "GET_SELECTED_ELEMENT",
   "EXPORT_CHANGE_INTENT",
-  "MEASURE_START",
+  "RULER_ENABLE",
+  "RULER_DISABLE",
+  "SCAN_PAGE",
+  "GRID_TOGGLE",
 ]);
 
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -337,6 +404,22 @@ export const isExtensionMessage = (value: unknown): value is ExtensionMessage =>
 
   if (messageType === "APPLY_STYLE_CHANGE") {
     return isStyleChange(value.payload);
+  }
+
+  if (messageType === "PAGE_SCAN_RESULT") {
+    return isRecord(value.payload) && Array.isArray(value.payload.colors) && Array.isArray(value.payload.fonts) && Array.isArray(value.payload.assets);
+  }
+
+  if (messageType === "MEASURE_START") {
+    return value.payload === undefined || isElementSnapshot(value.payload);
+  }
+
+  if (messageType === "SELECT_ANCESTOR") {
+    return isRecord(value.payload) && isNumber(value.payload.depth);
+  }
+
+  if (messageType === "SET_ANIMATION_SPEED") {
+    return isRecord(value.payload) && isNumber(value.payload.speed);
   }
 
   return false;

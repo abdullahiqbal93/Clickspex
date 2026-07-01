@@ -12,17 +12,20 @@ import {
 import type { ExtensionMessage } from "@ui-devtools/shared";
 
 type RuntimeListener = Parameters<typeof chrome.runtime.onMessage.addListener>[0];
+type MockTab = { id?: number; url?: string };
 
 const pickerMessage: ExtensionMessage = { type: "PICKER_ENABLE" };
 
-const installChromeMock = (activeTabId: number | null = 42) => {
+const installChromeMock = (activeTab: MockTab | null = { id: 42, url: "https://example.test" }) => {
   let listener: RuntimeListener | null = null;
-  const sendMessage = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
+  const sendMessage = vi
+    .fn<() => Promise<MessageResponse | undefined>>()
+    .mockResolvedValue({ ok: true });
   const connect = vi.fn(() => ({ name: SIDE_PANEL_PORT_NAME }));
-  const query = vi
-    .fn<() => Promise<Array<{ id?: number }>>>()
-    .mockResolvedValue([activeTabId === null ? {} : { id: activeTabId }]);
-  const tabSendMessage = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
+  const query = vi.fn<() => Promise<MockTab[]>>().mockResolvedValue([activeTab ?? {}]);
+  const tabSendMessage = vi
+    .fn<() => Promise<MessageResponse | undefined>>()
+    .mockResolvedValue({ ok: true });
   const addListener = vi.fn((callback: RuntimeListener) => {
     listener = callback;
   });
@@ -73,8 +76,15 @@ describe("Chrome messaging helpers", () => {
     expect(port).toEqual({ name: SIDE_PANEL_PORT_NAME });
   });
 
+  it("throws when a runtime command returns an error response", async () => {
+    const chromeMock = installChromeMock();
+    chromeMock.sendMessage.mockResolvedValueOnce({ ok: false, error: "boom" });
+
+    await expect(sendRuntimeMessage(pickerMessage)).rejects.toThrow("boom");
+  });
+
   it("sends tab messages to the active tab", async () => {
-    const chromeMock = installChromeMock(99);
+    const chromeMock = installChromeMock({ id: 99, url: "https://example.test" });
 
     await sendMessageToActiveTab(pickerMessage);
 
@@ -86,6 +96,19 @@ describe("Chrome messaging helpers", () => {
     installChromeMock(null);
 
     await expect(sendMessageToActiveTab(pickerMessage)).rejects.toThrow("No active tab");
+  });
+
+  it("throws before messaging unsupported browser pages", async () => {
+    installChromeMock({ id: 7, url: "chrome://extensions" });
+
+    await expect(sendMessageToActiveTab(pickerMessage)).rejects.toThrow("http and https");
+  });
+
+  it("throws when a tab command returns an error response", async () => {
+    const chromeMock = installChromeMock({ id: 99, url: "https://example.test" });
+    chromeMock.tabSendMessage.mockResolvedValueOnce({ ok: false, error: "content failed" });
+
+    await expect(sendMessageToActiveTab(pickerMessage)).rejects.toThrow("content failed");
   });
 
   it("wraps valid runtime messages with ok/error responses and removes listeners", async () => {

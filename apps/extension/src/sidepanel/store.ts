@@ -4,6 +4,7 @@ import { create } from "zustand";
 import type {
   AccessibilityNote,
   ElementSnapshot,
+  PageScanResult,
   StyleChange,
   SupportedStyleProperty,
 } from "@ui-devtools/shared";
@@ -15,9 +16,13 @@ export type PanelState = {
   activeTab: PanelTab;
   changes: StyleChange[];
   error: string | null;
+  gridActive: boolean;
   hoveredSelector: string | null;
   measurementTarget: ElementSnapshot | null;
+  pageScan: PageScanResult | null;
+  pageScanLoading: boolean;
   pickerActive: boolean;
+  rulerActive: boolean;
   redoStack: StyleChange[];
   selectedElement: ElementSnapshot | null;
   applyLocalStyleChange: (change: StyleChange) => void;
@@ -26,9 +31,13 @@ export type PanelState = {
   resetElementChanges: () => void;
   setActiveTab: (tab: PanelTab) => void;
   setError: (error: string | null) => void;
+  setGridActive: (active: boolean) => void;
   setHoveredSelector: (selector: string | null) => void;
   setMeasurementTarget: (snapshot: ElementSnapshot | null) => void;
+  setPageScan: (result: PageScanResult | null) => void;
+  setPageScanLoading: (loading: boolean) => void;
   setPickerActive: (active: boolean) => void;
+  setRulerActive: (active: boolean) => void;
   setSelectedElement: (snapshot: ElementSnapshot | null) => void;
   undoLocalChange: () => void;
 };
@@ -54,9 +63,13 @@ export const usePanelStore = create<PanelState>((set, get) => ({
   activeTab: "inspect",
   changes: [],
   error: null,
+  gridActive: false,
   hoveredSelector: null,
   measurementTarget: null,
+  pageScan: null,
+  pageScanLoading: false,
   pickerActive: false,
+  rulerActive: false,
   redoStack: [],
   selectedElement: null,
   applyLocalStyleChange: (change) =>
@@ -97,9 +110,13 @@ export const usePanelStore = create<PanelState>((set, get) => ({
   resetElementChanges: () => set({ changes: [], redoStack: [] }),
   setActiveTab: (tab) => set({ activeTab: tab }),
   setError: (error) => set({ error }),
+  setGridActive: (gridActive) => set({ gridActive }),
   setHoveredSelector: (hoveredSelector) => set({ hoveredSelector }),
   setMeasurementTarget: (measurementTarget) => set({ measurementTarget }),
-  setPickerActive: (pickerActive) => set({ pickerActive }),
+  setPageScan: (pageScan) => set({ pageScan, pageScanLoading: false }),
+  setPageScanLoading: (pageScanLoading) => set({ pageScanLoading }),
+  setPickerActive: (pickerActive) => set({ pickerActive, rulerActive: pickerActive ? false : get().rulerActive }),
+  setRulerActive: (rulerActive) => set({ rulerActive, pickerActive: rulerActive ? false : get().pickerActive }),
   setSelectedElement: (selectedElement) =>
     set({
       accessibilityNotes: selectedElement === null ? [] : getAccessibilityNotes(selectedElement),

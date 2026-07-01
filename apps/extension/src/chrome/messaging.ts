@@ -1,4 +1,4 @@
-import { isExtensionMessage, type ExtensionMessage } from "@ui-devtools/shared";
+import { isExtensionMessage, isRecord, type ExtensionMessage } from "@ui-devtools/shared";
 
 export const SIDE_PANEL_PORT_NAME = "ui-devtools-side-panel";
 
@@ -15,8 +15,25 @@ export type MessageResponse = {
 const errorMessageFromUnknown = (error: unknown): string =>
   error instanceof Error ? error.message : "Unknown extension messaging error";
 
+const assertOkMessageResponse = (response: unknown): void => {
+  if (response === undefined) {
+    return;
+  }
+
+  if (!isRecord(response) || response.ok !== false) {
+    return;
+  }
+
+  throw new Error(
+    typeof response.error === "string" ? response.error : "Extension command failed.",
+  );
+};
+
+const canReceiveContentScriptMessages = (url: string | undefined): boolean =>
+  url === undefined || url.startsWith("http://") || url.startsWith("https://");
+
 export const sendRuntimeMessage = async (message: ExtensionMessage): Promise<void> => {
-  await chrome.runtime.sendMessage(message);
+  assertOkMessageResponse(await chrome.runtime.sendMessage(message));
 };
 
 export const connectSidePanelPort = (): chrome.runtime.Port =>
@@ -29,7 +46,11 @@ export const sendMessageToActiveTab = async (message: ExtensionMessage): Promise
     throw new Error("No active tab is available for UI DevTools messaging.");
   }
 
-  await chrome.tabs.sendMessage(activeTab.id, message);
+  if (!canReceiveContentScriptMessages(activeTab.url)) {
+    throw new Error("UI DevTools can inspect only http and https pages.");
+  }
+
+  assertOkMessageResponse(await chrome.tabs.sendMessage(activeTab.id, message));
 };
 
 export const addRuntimeMessageListener = (handler: MessageHandler): (() => void) => {

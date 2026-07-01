@@ -9,7 +9,7 @@ export const AccessibilityPanel = () => {
 
   if (selectedElement === null) {
     return (
-      <div className="rounded-lg border border-slate-200 bg-panel p-4 shadow-panel">
+      <div className="rounded-lg border border-border bg-panel/80 backdrop-blur-sm p-4 shadow-card">
         <div className="flex items-center gap-2 text-sm font-semibold">
           <ShieldCheck aria-hidden="true" size={16} />
           Accessibility
@@ -26,7 +26,7 @@ export const AccessibilityPanel = () => {
 
   return (
     <div className="space-y-3">
-      <section className="rounded-lg border border-slate-200 bg-panel p-4 shadow-panel">
+      <section className="rounded-lg border border-border bg-panel/80 backdrop-blur-sm p-4 shadow-card">
         <div className="flex items-start gap-3">
           <ShieldCheck aria-hidden="true" className="mt-0.5 text-accent" size={17} />
           <div>
@@ -38,7 +38,7 @@ export const AccessibilityPanel = () => {
         </div>
       </section>
 
-      <section className="rounded-lg border border-slate-200 bg-panel p-4 shadow-panel">
+      <section className="rounded-lg border border-border bg-panel/80 backdrop-blur-sm p-4 shadow-card">
         <h3 className="text-sm font-semibold">Contrast</h3>
         <div className="mt-3 flex items-center justify-between rounded-md bg-slate-50 p-3">
           <span className="text-xs font-medium text-slate-500">Ratio</span>
@@ -48,7 +48,7 @@ export const AccessibilityPanel = () => {
         </div>
       </section>
 
-      <section className="rounded-lg border border-slate-200 bg-panel p-4 shadow-panel">
+      <section className="rounded-lg border border-border bg-panel/80 backdrop-blur-sm p-4 shadow-card">
         <h3 className="text-sm font-semibold">Warnings</h3>
         <div className="mt-3 space-y-2">
           {notes.length > 0 ? (

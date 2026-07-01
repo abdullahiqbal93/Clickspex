@@ -1,5 +1,6 @@
 import { Hash, LayoutPanelLeft, MousePointer2, Rows3, Type } from "lucide-react";
 
+import { sendMessageToActiveTab } from "../../chrome/messaging";
 import type { ElementSnapshot } from "@ui-devtools/shared";
 
 type InspectorPanelProps = {
@@ -12,20 +13,24 @@ const PreviewRow = ({
   icon: Icon,
   label,
   value,
+  children,
 }: {
   icon: typeof Hash;
   label: string;
-  value: string;
+  value?: string;
+  children?: React.ReactNode;
 }) => (
   <div className="grid grid-cols-[22px_82px_minmax(0,1fr)] items-start gap-2 border-b border-slate-100 py-2 last:border-b-0">
     <Icon aria-hidden="true" className="mt-0.5 text-slate-400" size={15} />
     <span className="text-xs font-medium text-slate-500">{label}</span>
-    <span className="break-words text-xs text-slate-900">{value}</span>
+    <span className="break-words text-xs text-slate-900">
+      {children ?? value}
+    </span>
   </div>
 );
 
 const EmptyInspector = () => (
-  <div className="rounded-lg border border-slate-200 bg-panel p-4 shadow-panel">
+  <div className="rounded-lg border border-border bg-panel/80 backdrop-blur-sm p-4 shadow-card">
     <div className="flex items-center gap-2 text-sm font-semibold">
       <MousePointer2 aria-hidden="true" size={16} />
       Selection
@@ -44,7 +49,7 @@ export const InspectorPanel = ({ selectedElement }: InspectorPanelProps) => {
 
   return (
     <div className="space-y-3">
-      <div className="rounded-lg border border-slate-200 bg-panel p-4 shadow-panel">
+      <div className="rounded-lg border border-border bg-panel/80 backdrop-blur-sm p-4 shadow-card">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-[10px] font-semibold uppercase tracking-normal text-slate-500">
@@ -61,7 +66,34 @@ export const InspectorPanel = ({ selectedElement }: InspectorPanelProps) => {
 
         <div className="mt-3 overflow-hidden rounded-md border border-slate-100">
           <PreviewRow icon={Hash} label="Selector" value={selectedElement.selector} />
-          <PreviewRow icon={Rows3} label="DOM path" value={selectedElement.domPath} />
+          <PreviewRow icon={Rows3} label="DOM path">
+            <div className="flex flex-wrap items-center gap-1">
+              {selectedElement.domPath.split(" > ").map((segment, index, array) => {
+                const isLast = index === array.length - 1;
+                const depth = array.length - 1 - index;
+                return (
+                  <span key={index} className="flex items-center gap-1">
+                    <button
+                      className={`font-mono text-[10px] ${
+                        isLast
+                          ? "font-semibold text-accent"
+                          : "text-slate-500 hover:text-slate-900 hover:underline"
+                      }`}
+                      onClick={() => {
+                        if (!isLast) {
+                          sendMessageToActiveTab({ type: "SELECT_ANCESTOR", payload: { depth } }).catch(console.error);
+                        }
+                      }}
+                      type="button"
+                    >
+                      {segment}
+                    </button>
+                    {!isLast && <span className="text-[10px] text-slate-300">/</span>}
+                  </span>
+                );
+              })}
+            </div>
+          </PreviewRow>
           <PreviewRow icon={Type} label="Text" value={selectedElement.textPreview || "None"} />
           <PreviewRow
             icon={LayoutPanelLeft}
@@ -71,7 +103,7 @@ export const InspectorPanel = ({ selectedElement }: InspectorPanelProps) => {
         </div>
       </div>
 
-      <div className="rounded-lg border border-slate-200 bg-panel p-4 shadow-panel">
+      <div className="rounded-lg border border-border bg-panel/80 backdrop-blur-sm p-4 shadow-card">
         <h3 className="text-sm font-semibold">Identity</h3>
         <dl className="mt-3 grid grid-cols-[82px_minmax(0,1fr)] gap-x-3 gap-y-2 text-xs">
           <dt className="font-medium text-slate-500">ID</dt>
@@ -87,7 +119,7 @@ export const InspectorPanel = ({ selectedElement }: InspectorPanelProps) => {
         </dl>
       </div>
 
-      <div className="rounded-lg border border-slate-200 bg-panel p-4 shadow-panel">
+      <div className="rounded-lg border border-border bg-panel/80 backdrop-blur-sm p-4 shadow-card">
         <h3 className="text-sm font-semibold">Attributes</h3>
         <div className="mt-3 max-h-48 overflow-auto rounded-md border border-slate-100">
           {attributes.length > 0 ? (

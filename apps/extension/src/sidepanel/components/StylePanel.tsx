@@ -1,4 +1,4 @@
-import { Redo2, RotateCcw, SlidersHorizontal, Undo2 } from "lucide-react";
+import { Clipboard, Redo2, RotateCcw, SlidersHorizontal, Undo2 } from "lucide-react";
 
 import { sendMessageToActiveTab } from "../../chrome/messaging";
 import { getCurrentStyleRecord, usePanelStore } from "../store";
@@ -26,6 +26,7 @@ const STYLE_FIELDS: StyleField[] = [
   { property: "gap", label: "Gap", group: "Spacing" },
   { property: "color", label: "Text color", group: "Color" },
   { property: "background-color", label: "Background", group: "Color" },
+  { property: "font-family", label: "Font family", group: "Typography" },
   { property: "font-size", label: "Font size", group: "Typography" },
   {
     property: "font-weight",
@@ -106,7 +107,7 @@ export const StylePanel = () => {
   const changes = usePanelStore((state) => state.changes);
   const redoStack = usePanelStore((state) => state.redoStack);
   const selectedElement = usePanelStore((state) => state.selectedElement);
-  const styles = usePanelStore((state) => getCurrentStyleRecord(state));
+  const styles = getCurrentStyleRecord({ changes, selectedElement });
   const prepareStyleChange = usePanelStore((state) => state.prepareStyleChange);
   const applyLocalStyleChange = usePanelStore((state) => state.applyLocalStyleChange);
   const resetElementChanges = usePanelStore((state) => state.resetElementChanges);
@@ -180,7 +181,7 @@ export const StylePanel = () => {
 
   if (selectedElement === null) {
     return (
-      <div className="rounded-lg border border-slate-200 bg-panel p-4 shadow-panel">
+      <div className="rounded-lg border border-border bg-panel/80 backdrop-blur-sm p-4 shadow-card">
         <div className="flex items-center gap-2 text-sm font-semibold">
           <SlidersHorizontal aria-hidden="true" size={16} />
           Styles
@@ -190,16 +191,34 @@ export const StylePanel = () => {
     );
   }
 
+  const copyGroupCss = async (group: string, fields: StyleField[]) => {
+    const cssLines = fields
+      .map((field) => {
+        const val = styles[field.property];
+        return val ? `  ${field.property}: ${val};` : null;
+      })
+      .filter(Boolean);
+
+    if (cssLines.length === 0) return;
+
+    const css = `${selectedElement.selector} {\n${cssLines.join("\n")}\n}`;
+    try {
+      await navigator.clipboard.writeText(css);
+    } catch {
+      // ignore
+    }
+  };
+
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-panel p-3 shadow-panel">
+      <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-panel/80 backdrop-blur-sm p-3 shadow-card">
         <div>
           <h2 className="text-sm font-semibold">Styles</h2>
           <p className="mt-1 text-xs text-muted">{changes.length} changes</p>
         </div>
         <div className="flex items-center gap-2">
           <button
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
             disabled={changes.length === 0}
             onClick={() => void undoChange()}
             title="Undo"
@@ -208,7 +227,7 @@ export const StylePanel = () => {
             <Undo2 aria-hidden="true" size={14} />
           </button>
           <button
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
             disabled={redoStack.length === 0}
             onClick={() => void redoChange()}
             title="Redo"
@@ -217,8 +236,17 @@ export const StylePanel = () => {
             <Redo2 aria-hidden="true" size={14} />
           </button>
           <button
-            className="inline-flex h-8 items-center gap-2 rounded-md border border-slate-200 px-3 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
-            onClick={resetChanges}
+            className="inline-flex h-8 items-center gap-2 rounded-md border border-border px-3 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
+            onClick={() => void copyGroupCss("All", STYLE_FIELDS)}
+            title="Copy all modified styles"
+            type="button"
+          >
+            <Clipboard aria-hidden="true" size={14} />
+            Copy All
+          </button>
+          <button
+            className="inline-flex h-8 items-center gap-2 rounded-md border border-border px-3 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
+            onClick={() => void resetChanges()}
             type="button"
           >
             <RotateCcw aria-hidden="true" size={14} />
@@ -229,10 +257,20 @@ export const StylePanel = () => {
 
       {Object.entries(groupedFields).map(([group, fields]) => (
         <section
-          className="rounded-lg border border-slate-200 bg-panel p-4 shadow-panel"
+          className="rounded-lg border border-border bg-panel/80 backdrop-blur-sm p-4 shadow-card"
           key={group}
         >
-          <h3 className="text-sm font-semibold">{group}</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold">{group}</h3>
+            <button
+              className="inline-flex h-6 w-6 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+              onClick={() => void copyGroupCss(group, fields)}
+              title={`Copy ${group} CSS`}
+              type="button"
+            >
+              <Clipboard aria-hidden="true" size={12} />
+            </button>
+          </div>
           <div className="mt-3 space-y-2">
             {fields.map((field) => {
               const value = styles[field.property] ?? "";
@@ -251,7 +289,7 @@ export const StylePanel = () => {
                     {hexColor !== null ? (
                       <input
                         aria-label={`${field.label} swatch`}
-                        className="h-8 w-9 shrink-0 cursor-pointer rounded border border-slate-200 bg-transparent p-0"
+                        className="h-8 w-9 shrink-0 cursor-pointer rounded border border-border bg-transparent p-0"
                         onChange={(event) => void commitChange(field.property, event.target.value)}
                         type="color"
                         value={hexColor}
@@ -259,13 +297,13 @@ export const StylePanel = () => {
                     ) : null}
                     {field.options === undefined ? (
                       <input
-                        className="h-8 min-w-0 flex-1 rounded-md border border-slate-200 px-2 text-xs outline-none transition focus:border-accent focus:ring-2 focus:ring-blue-100"
+                        className="h-8 min-w-0 flex-1 rounded-md border border-border px-2 text-xs outline-none transition focus:border-accent focus:ring-2 focus:ring-blue-100"
                         onChange={(event) => void commitChange(field.property, event.target.value)}
                         value={value}
                       />
                     ) : (
                       <select
-                        className="h-8 min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-2 text-xs outline-none transition focus:border-accent focus:ring-2 focus:ring-blue-100"
+                        className="h-8 min-w-0 flex-1 rounded-md border border-border bg-white px-2 text-xs outline-none transition focus:border-accent focus:ring-2 focus:ring-blue-100"
                         onChange={(event) => void commitChange(field.property, event.target.value)}
                         value={value}
                       >

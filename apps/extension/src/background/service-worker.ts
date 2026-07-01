@@ -10,6 +10,8 @@ chrome.runtime.onInstalled.addListener(() => {
   void chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
 });
 
+void chrome.storage.session.setAccessLevel({ accessLevel: "TRUSTED_AND_UNTRUSTED_CONTEXTS" });
+
 chrome.runtime.onConnect.addListener((port) => {
   if (port.name !== SIDE_PANEL_PORT_NAME) {
     return;

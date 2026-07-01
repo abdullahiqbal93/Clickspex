@@ -21,8 +21,9 @@ const formatContentSize = (value: string, fallback: number): string =>
 export const BoxModelPanel = () => {
   const [linkedMargin, setLinkedMargin] = useState(false);
   const [linkedPadding, setLinkedPadding] = useState(false);
+  const changes = usePanelStore((state) => state.changes);
   const selectedElement = usePanelStore((state) => state.selectedElement);
-  const styles = usePanelStore((state) => getCurrentStyleRecord(state));
+  const styles = getCurrentStyleRecord({ changes, selectedElement });
   const prepareStyleChange = usePanelStore((state) => state.prepareStyleChange);
   const applyLocalStyleChange = usePanelStore((state) => state.applyLocalStyleChange);
   const setError = usePanelStore((state) => state.setError);
@@ -54,7 +55,7 @@ export const BoxModelPanel = () => {
 
   if (selectedElement === null) {
     return (
-      <div className="rounded-lg border border-slate-200 bg-panel p-4 shadow-panel">
+      <div className="rounded-lg border border-border bg-panel/80 backdrop-blur-sm p-4 shadow-card">
         <h2 className="text-sm font-semibold">Box model</h2>
         <p className="mt-2 text-xs text-muted">Idle</p>
       </div>
@@ -70,11 +71,11 @@ export const BoxModelPanel = () => {
     linked: boolean,
     setLinked: (linked: boolean) => void,
   ) => (
-    <section className="rounded-lg border border-slate-200 bg-panel p-4 shadow-panel">
+    <section className="rounded-lg border border-border bg-panel/80 backdrop-blur-sm p-4 shadow-card">
       <div className="flex items-center justify-between gap-3">
         <h3 className="text-sm font-semibold capitalize">{group}</h3>
         <button
-          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-700 transition hover:bg-slate-50"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-slate-700 transition hover:bg-slate-50"
           onClick={() => setLinked(!linked)}
           title={linked ? "Unlink sides" : "Link sides"}
           type="button"
@@ -97,7 +98,7 @@ export const BoxModelPanel = () => {
                 {side}
               </span>
               <input
-                className="h-8 w-full rounded-md border border-slate-200 px-2 text-xs outline-none transition focus:border-accent focus:ring-2 focus:ring-blue-100"
+                className="h-8 w-full rounded-md border border-border px-2 text-xs outline-none transition focus:border-accent focus:ring-2 focus:ring-blue-100"
                 onChange={(event) => void commitSide(group, side, event.target.value, linked)}
                 value={value}
               />
@@ -110,9 +111,9 @@ export const BoxModelPanel = () => {
 
   return (
     <div className="space-y-3">
-      <section className="rounded-lg border border-slate-200 bg-panel p-4 shadow-panel">
+      <section className="rounded-lg border border-border bg-panel/80 backdrop-blur-sm p-4 shadow-card">
         <h2 className="text-sm font-semibold">Box model</h2>
-        <div className="mt-4 grid grid-cols-[44px_1fr_44px] grid-rows-[32px_32px_1fr_32px_32px] overflow-hidden rounded-md border border-slate-200 text-center text-[10px] font-semibold uppercase tracking-normal text-slate-600">
+        <div className="mt-4 grid grid-cols-[44px_1fr_44px] grid-rows-[32px_32px_1fr_32px_32px] overflow-hidden rounded-md border border-border text-center text-[10px] font-semibold uppercase tracking-normal text-slate-600">
           <div className="col-start-2 flex items-center justify-center bg-teal-50">
             {styles["margin-top"] ?? boxModel.margin.top}
           </div>
@@ -154,7 +155,7 @@ export const BoxModelPanel = () => {
       {renderEditableGroup("margin", linkedMargin, setLinkedMargin)}
       {renderEditableGroup("padding", linkedPadding, setLinkedPadding)}
 
-      <section className="rounded-lg border border-slate-200 bg-panel p-4 shadow-panel">
+      <section className="rounded-lg border border-border bg-panel/80 backdrop-blur-sm p-4 shadow-card">
         <h3 className="text-sm font-semibold">Border</h3>
         <div className="mt-3 grid grid-cols-4 gap-2 text-center text-xs text-slate-700">
           {sides.map((side) => (

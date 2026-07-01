@@ -27,11 +27,11 @@ const ExportBlock = ({ title, content, warnings = [] }: ExportBlockProps) => {
   };
 
   return (
-    <section className="rounded-lg border border-slate-200 bg-panel p-4 shadow-panel">
+    <section className="rounded-lg border border-border bg-panel/80 backdrop-blur-sm p-4 shadow-card">
       <div className="flex items-center justify-between gap-3">
         <h3 className="text-sm font-semibold">{title}</h3>
         <button
-          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-700 transition hover:bg-slate-50"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-slate-700 transition hover:bg-slate-50"
           onClick={() => void copy()}
           title="Copy"
           type="button"
@@ -96,7 +96,7 @@ export const ExportPanel = () => {
 
   if (selectedElement === null || changeIntent === null) {
     return (
-      <div className="rounded-lg border border-slate-200 bg-panel p-4 shadow-panel">
+      <div className="rounded-lg border border-border bg-panel/80 backdrop-blur-sm p-4 shadow-card">
         <div className="flex items-center gap-2 text-sm font-semibold">
           <Code2 aria-hidden="true" size={16} />
           Export
@@ -113,11 +113,11 @@ export const ExportPanel = () => {
 
   return (
     <div className="space-y-3">
-      <section className="rounded-lg border border-slate-200 bg-panel p-4 shadow-panel">
+      <section className="rounded-lg border border-border bg-panel/80 backdrop-blur-sm p-4 shadow-card">
         <h2 className="text-sm font-semibold">Export</h2>
         <p className="mt-1 text-xs leading-5 text-muted">
-          Tailwind suggestions are value-based approximations. Framework adapters do not patch
-          source files in v1.
+          Tailwind suggestions are value-based approximations. CLI and MCP tools can turn exported
+          JSON into source-aware patch previews for review.
         </p>
       </section>
       <ExportBlock content={cssExport.content} title="CSS" warnings={cssExport.warnings} />
