@@ -1,4 +1,4 @@
-import { isExtensionMessage, type ElementSnapshot } from "@ui-devtools/shared";
+import { isExtensionMessage } from "@ui-devtools/shared";
 import {
   Accessibility,
   Box,
@@ -8,9 +8,12 @@ import {
   Ruler,
   SquareMousePointer,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 
 import { connectSidePanelPort, sendMessageToActiveTab } from "../chrome/messaging";
+
+import { InspectorPanel } from "./components/InspectorPanel";
+import { type PanelTab, usePanelStore } from "./store";
 
 const tabs = [
   { id: "inspect", label: "Inspect", icon: Crosshair },
@@ -19,13 +22,27 @@ const tabs = [
   { id: "measure", label: "Measure", icon: Ruler },
   { id: "accessibility", label: "A11y", icon: Accessibility },
   { id: "export", label: "Export", icon: Code2 },
-] as const;
+] as const satisfies ReadonlyArray<{ id: PanelTab; label: string; icon: typeof Crosshair }>;
+
+const placeholderLabels: Record<Exclude<PanelTab, "inspect">, string> = {
+  styles: "Styles",
+  box: "Box model",
+  measure: "Measure",
+  accessibility: "Accessibility",
+  export: "Export",
+};
 
 export const App = () => {
-  const [pickerActive, setPickerActive] = useState(false);
-  const [selectedElement, setSelectedElement] = useState<ElementSnapshot | null>(null);
-  const [hoveredSelector, setHoveredSelector] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const activeTab = usePanelStore((state) => state.activeTab);
+  const error = usePanelStore((state) => state.error);
+  const hoveredSelector = usePanelStore((state) => state.hoveredSelector);
+  const pickerActive = usePanelStore((state) => state.pickerActive);
+  const selectedElement = usePanelStore((state) => state.selectedElement);
+  const setActiveTab = usePanelStore((state) => state.setActiveTab);
+  const setError = usePanelStore((state) => state.setError);
+  const setHoveredSelector = usePanelStore((state) => state.setHoveredSelector);
+  const setPickerActive = usePanelStore((state) => state.setPickerActive);
+  const setSelectedElement = usePanelStore((state) => state.setSelectedElement);
 
   useEffect(() => {
     const port = connectSidePanelPort();
@@ -39,6 +56,7 @@ export const App = () => {
         setSelectedElement(rawMessage.payload);
         setPickerActive(false);
         setHoveredSelector(null);
+        setActiveTab("inspect");
       }
 
       if (rawMessage.type === "ELEMENT_HOVERED") {
@@ -51,8 +69,11 @@ export const App = () => {
     };
 
     port.onMessage.addListener(handleMessage);
-    return () => port.disconnect();
-  }, []);
+    return () => {
+      port.onMessage.removeListener(handleMessage);
+      port.disconnect();
+    };
+  }, [setActiveTab, setHoveredSelector, setPickerActive, setSelectedElement]);
 
   const togglePicker = async () => {
     setError(null);
@@ -73,14 +94,14 @@ export const App = () => {
     <main className="min-h-screen bg-canvas text-ink">
       <header className="border-b border-slate-200 bg-panel px-4 py-3">
         <div className="flex items-center justify-between gap-3">
-          <div>
+          <div className="min-w-0">
             <h1 className="text-sm font-semibold">UI DevTools</h1>
-            <p className="text-xs text-muted">
+            <p className="truncate text-xs text-muted">
               {selectedElement?.selector ?? hoveredSelector ?? "No element selected"}
             </p>
           </div>
           <button
-            className="inline-flex h-8 items-center gap-2 rounded-md bg-accent px-3 text-xs font-medium text-white shadow-sm transition hover:bg-blue-700"
+            className="inline-flex h-8 shrink-0 items-center gap-2 rounded-md bg-accent px-3 text-xs font-medium text-white shadow-sm transition hover:bg-blue-700"
             onClick={togglePicker}
             type="button"
           >
@@ -96,10 +117,18 @@ export const App = () => {
       >
         {tabs.map((tab) => {
           const Icon = tab.icon;
+          const selected = activeTab === tab.id;
+
           return (
             <button
-              className="flex h-12 flex-col items-center justify-center gap-1 text-[10px] font-medium text-slate-600 transition hover:bg-slate-50 hover:text-ink"
+              aria-current={selected ? "page" : undefined}
+              className={`flex h-12 flex-col items-center justify-center gap-1 text-[10px] font-medium transition ${
+                selected
+                  ? "bg-blue-50 text-accent"
+                  : "text-slate-600 hover:bg-slate-50 hover:text-ink"
+              }`}
               key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
               type="button"
             >
               <Icon aria-hidden="true" size={15} />
@@ -116,21 +145,16 @@ export const App = () => {
           </div>
         ) : null}
 
-        <div className="rounded-lg border border-slate-200 bg-panel p-4 shadow-panel">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h2 className="text-sm font-semibold">
-                {selectedElement === null ? "Selection" : selectedElement.tagName}
-              </h2>
-              <p className="mt-1 break-all text-xs leading-5 text-muted">
-                {selectedElement?.selector ?? hoveredSelector ?? "Idle"}
-              </p>
-            </div>
-            <span className="rounded bg-slate-100 px-2 py-1 text-[10px] font-semibold uppercase tracking-normal text-slate-600">
-              {pickerActive ? "Picking" : "Ready"}
-            </span>
+        {activeTab === "inspect" ? (
+          <InspectorPanel selectedElement={selectedElement} />
+        ) : (
+          <div className="rounded-lg border border-slate-200 bg-panel p-4 shadow-panel">
+            <h2 className="text-sm font-semibold">{placeholderLabels[activeTab]}</h2>
+            <p className="mt-2 break-all text-xs text-muted">
+              {selectedElement?.selector ?? hoveredSelector ?? "Idle"}
+            </p>
           </div>
-        </div>
+        )}
       </section>
     </main>
   );

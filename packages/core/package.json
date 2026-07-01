@@ -22,6 +22,7 @@
     "@ui-devtools/shared": "workspace:*"
   },
   "devDependencies": {
-    "@ui-devtools/config": "workspace:*"
+    "@ui-devtools/config": "workspace:*",
+    "vitest": "^3.2.6"
   }
 }
