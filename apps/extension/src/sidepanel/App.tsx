@@ -13,6 +13,7 @@ import { useEffect } from "react";
 import { connectSidePanelPort, sendMessageToActiveTab } from "../chrome/messaging";
 
 import { InspectorPanel } from "./components/InspectorPanel";
+import { StylePanel } from "./components/StylePanel";
 import { type PanelTab, usePanelStore } from "./store";
 
 const tabs = [
@@ -24,8 +25,7 @@ const tabs = [
   { id: "export", label: "Export", icon: Code2 },
 ] as const satisfies ReadonlyArray<{ id: PanelTab; label: string; icon: typeof Crosshair }>;
 
-const placeholderLabels: Record<Exclude<PanelTab, "inspect">, string> = {
-  styles: "Styles",
+const placeholderLabels: Record<Exclude<PanelTab, "inspect" | "styles">, string> = {
   box: "Box model",
   measure: "Measure",
   accessibility: "Accessibility",
@@ -147,6 +147,8 @@ export const App = () => {
 
         {activeTab === "inspect" ? (
           <InspectorPanel selectedElement={selectedElement} />
+        ) : activeTab === "styles" ? (
+          <StylePanel />
         ) : (
           <div className="rounded-lg border border-slate-200 bg-panel p-4 shadow-panel">
             <h2 className="text-sm font-semibold">{placeholderLabels[activeTab]}</h2>
