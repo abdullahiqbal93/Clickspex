@@ -9,6 +9,10 @@
     ".": {
       "types": "./src/index.ts",
       "import": "./dist/index.js"
+    },
+    "./project": {
+      "types": "./src/projectDetection.ts",
+      "import": "./dist/projectDetection.js"
     }
   },
   "scripts": {

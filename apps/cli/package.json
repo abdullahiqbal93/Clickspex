@@ -1,0 +1,25 @@
+{
+  "name": "@ui-devtools/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "ui-sync": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint .",
+    "test": "vitest run --passWithNoTests",
+    "format": "prettier --write ."
+  },
+  "dependencies": {
+    "@ui-devtools/core": "workspace:*",
+    "@ui-devtools/shared": "workspace:*",
+    "chalk": "^5.0.0",
+    "commander": "^14.0.0"
+  },
+  "devDependencies": {
+    "@ui-devtools/config": "workspace:*"
+  }
+}
