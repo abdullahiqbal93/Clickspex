@@ -52,6 +52,16 @@ importers:
 
   packages/config: {}
 
+  packages/core:
+    dependencies:
+      "@ui-devtools/shared":
+        specifier: workspace:*
+        version: link:../shared
+    devDependencies:
+      "@ui-devtools/config":
+        specifier: workspace:*
+        version: link:../config
+
   packages/shared:
     devDependencies:
       "@ui-devtools/config":

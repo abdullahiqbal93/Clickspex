@@ -1,5 +1,5 @@
 {
-  "name": "@ui-devtools/shared",
+  "name": "@ui-devtools/core",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -17,6 +17,9 @@
     "lint": "eslint .",
     "test": "vitest run --passWithNoTests",
     "format": "prettier --write ."
+  },
+  "dependencies": {
+    "@ui-devtools/shared": "workspace:*"
   },
   "devDependencies": {
     "@ui-devtools/config": "workspace:*"
