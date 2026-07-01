@@ -99,6 +99,19 @@ importers:
         specifier: ^5.0.0
         version: 5.4.21(@types/node@24.13.2)
 
+  packages/adapters:
+    dependencies:
+      "@ui-devtools/core":
+        specifier: workspace:*
+        version: link:../core
+      "@ui-devtools/shared":
+        specifier: workspace:*
+        version: link:../shared
+    devDependencies:
+      "@ui-devtools/config":
+        specifier: workspace:*
+        version: link:../config
+
   packages/config: {}
 
   packages/core:
