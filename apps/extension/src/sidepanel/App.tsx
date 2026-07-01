@@ -14,6 +14,7 @@ import { connectSidePanelPort, sendMessageToActiveTab } from "../chrome/messagin
 
 import { BoxModelPanel } from "./components/BoxModelPanel";
 import { InspectorPanel } from "./components/InspectorPanel";
+import { MeasurePanel } from "./components/MeasurePanel";
 import { StylePanel } from "./components/StylePanel";
 import { type PanelTab, usePanelStore } from "./store";
 
@@ -26,8 +27,10 @@ const tabs = [
   { id: "export", label: "Export", icon: Code2 },
 ] as const satisfies ReadonlyArray<{ id: PanelTab; label: string; icon: typeof Crosshair }>;
 
-const placeholderLabels: Record<Exclude<PanelTab, "inspect" | "styles" | "box">, string> = {
-  measure: "Measure",
+const placeholderLabels: Record<
+  Exclude<PanelTab, "inspect" | "styles" | "box" | "measure">,
+  string
+> = {
   accessibility: "Accessibility",
   export: "Export",
 };
@@ -42,6 +45,7 @@ export const App = () => {
   const setError = usePanelStore((state) => state.setError);
   const setHoveredSelector = usePanelStore((state) => state.setHoveredSelector);
   const setPickerActive = usePanelStore((state) => state.setPickerActive);
+  const setMeasurementTarget = usePanelStore((state) => state.setMeasurementTarget);
   const setSelectedElement = usePanelStore((state) => state.setSelectedElement);
 
   useEffect(() => {
@@ -66,6 +70,12 @@ export const App = () => {
       if (rawMessage.type === "PICKER_DISABLE") {
         setPickerActive(false);
       }
+
+      if (rawMessage.type === "MEASURE_TARGET_SELECTED") {
+        setMeasurementTarget(rawMessage.payload);
+        setPickerActive(false);
+        setActiveTab("measure");
+      }
     };
 
     port.onMessage.addListener(handleMessage);
@@ -73,7 +83,7 @@ export const App = () => {
       port.onMessage.removeListener(handleMessage);
       port.disconnect();
     };
-  }, [setActiveTab, setHoveredSelector, setPickerActive, setSelectedElement]);
+  }, [setActiveTab, setHoveredSelector, setMeasurementTarget, setPickerActive, setSelectedElement]);
 
   const togglePicker = async () => {
     setError(null);
@@ -151,6 +161,8 @@ export const App = () => {
           <StylePanel />
         ) : activeTab === "box" ? (
           <BoxModelPanel />
+        ) : activeTab === "measure" ? (
+          <MeasurePanel />
         ) : (
           <div className="rounded-lg border border-slate-200 bg-panel p-4 shadow-panel">
             <h2 className="text-sm font-semibold">{placeholderLabels[activeTab]}</h2>

@@ -10,12 +10,17 @@ const styleInjector = new StyleInjector();
 
 addRuntimeMessageListener((message) => {
   if (message.type === "PICKER_ENABLE") {
-    picker.enable();
+    picker.enable("select");
     return;
   }
 
   if (message.type === "PICKER_DISABLE") {
     picker.disable();
+    return;
+  }
+
+  if (message.type === "MEASURE_START") {
+    picker.enable("measure");
     return;
   }
 

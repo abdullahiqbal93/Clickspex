@@ -10,6 +10,7 @@ export type PanelState = {
   changes: StyleChange[];
   error: string | null;
   hoveredSelector: string | null;
+  measurementTarget: ElementSnapshot | null;
   pickerActive: boolean;
   redoStack: StyleChange[];
   selectedElement: ElementSnapshot | null;
@@ -22,6 +23,7 @@ export type PanelState = {
   setActiveTab: (tab: PanelTab) => void;
   setError: (error: string | null) => void;
   setHoveredSelector: (selector: string | null) => void;
+  setMeasurementTarget: (snapshot: ElementSnapshot | null) => void;
   setPickerActive: (active: boolean) => void;
   setSelectedElement: (snapshot: ElementSnapshot | null) => void;
   undoLocalChange: () => void;
@@ -48,6 +50,7 @@ export const usePanelStore = create<PanelState>((set, get) => ({
   changes: [],
   error: null,
   hoveredSelector: null,
+  measurementTarget: null,
   pickerActive: false,
   redoStack: [],
   selectedElement: null,
@@ -118,8 +121,10 @@ export const usePanelStore = create<PanelState>((set, get) => ({
   setActiveTab: (tab) => set({ activeTab: tab }),
   setError: (error) => set({ error }),
   setHoveredSelector: (hoveredSelector) => set({ hoveredSelector }),
+  setMeasurementTarget: (measurementTarget) => set({ measurementTarget }),
   setPickerActive: (pickerActive) => set({ pickerActive }),
-  setSelectedElement: (selectedElement) => set({ changes: [], redoStack: [], selectedElement }),
+  setSelectedElement: (selectedElement) =>
+    set({ changes: [], measurementTarget: null, redoStack: [], selectedElement }),
   undoLocalChange: () =>
     set((state) => {
       const changes = state.changes.slice(0, -1);

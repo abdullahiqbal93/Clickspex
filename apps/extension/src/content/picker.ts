@@ -3,6 +3,7 @@ import { captureElementSnapshot } from "@ui-devtools/core";
 import { sendRuntimeMessage } from "../chrome/messaging";
 
 import type { OverlayController } from "./overlay";
+import type { ElementSnapshot } from "@ui-devtools/shared";
 
 const isInspectableElement = (
   target: EventTarget | null,
@@ -10,13 +11,19 @@ const isInspectableElement = (
 ): target is Element =>
   target instanceof Element && target !== overlayHost && !overlayHost.contains(target);
 
+type PickerMode = "select" | "measure";
+
 export class ElementPickerController {
   private active = false;
   private hoveredElement: Element | null = null;
+  private mode: PickerMode = "select";
+  private selectedSnapshot: ElementSnapshot | null = null;
 
   public constructor(private readonly overlay: OverlayController) {}
 
-  public enable(): void {
+  public enable(mode: PickerMode = "select"): void {
+    this.mode = mode;
+
     if (this.active) {
       return;
     }
@@ -87,6 +94,18 @@ export class ElementPickerController {
 
     const element = event.target;
     const snapshot = captureElementSnapshot(element);
+
+    if (this.mode === "measure") {
+      if (this.selectedSnapshot !== null) {
+        this.overlay.showMeasurement(this.selectedSnapshot.rect, snapshot.rect);
+      }
+
+      void sendRuntimeMessage({ type: "MEASURE_TARGET_SELECTED", payload: snapshot });
+      this.disable();
+      return;
+    }
+
+    this.selectedSnapshot = snapshot;
     this.overlay.showSelected(element.getBoundingClientRect());
     void sendRuntimeMessage({ type: "ELEMENT_SELECTED", payload: snapshot });
     this.disable();
