@@ -16,7 +16,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint .",
     "test": "vitest run --passWithNoTests",
-    "format": "prettier --write ."
+    "format": "prettier --write . --ignore-path ../../.prettierignore"
   },
   "devDependencies": {
     "@ui-devtools/config": "workspace:*"
