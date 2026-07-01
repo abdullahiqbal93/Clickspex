@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { createUIChangeIntent } from "./changeIntent";
-import { createStyleChange } from "./styleDiff";
+import { createStyleChange, diffStyles } from "./styleDiff";
 
 import type { ElementSnapshot } from "@ui-devtools/shared";
 
@@ -14,7 +14,7 @@ const snapshot: ElementSnapshot = {
   selector: "#save",
   domPath: "html > body > button#save:nth-of-type(1)",
   rect: { x: 0, y: 0, top: 0, right: 100, bottom: 40, left: 0, width: 100, height: 40 },
-  computedStyles: { color: "black", width: "100px" },
+  computedStyles: { color: "black", width: "100px", "font-size": "14px" },
   boxModel: {
     margin: { top: "0px", right: "0px", bottom: "0px", left: "0px" },
     border: { top: "0px", right: "0px", bottom: "0px", left: "0px" },
@@ -42,9 +42,50 @@ describe("createUIChangeIntent", () => {
       changes: [change],
     });
 
-    expect(intent.target).toMatchObject({ selector: "#save", id: "save" });
+    expect(intent).toMatchObject({
+      id: "intent-1",
+      timestamp: "2026-07-01T00:00:00.000Z",
+      pageUrl: "https://example.com",
+      viewport: { width: 1280, height: 720, devicePixelRatio: 1 },
+      target: { selector: "#save", id: "save" },
+      changes: [change],
+    });
     expect(intent.before.styles.color).toBe("black");
     expect(intent.after.styles.color).toBe("white");
-    expect(intent.changes).toEqual([change]);
+    expect(JSON.parse(JSON.stringify(intent))).toMatchObject({ id: "intent-1" });
+  });
+
+  it("generates a unique id and valid ISO timestamp when values are omitted", () => {
+    const intent = createUIChangeIntent({
+      pageUrl: "https://example.com",
+      viewport: { width: 1280, height: 720, devicePixelRatio: 1 },
+      target: snapshot,
+      changes: [],
+    });
+
+    expect(intent.id).toMatch(
+      /^ui-change-\d+-[a-z0-9]+$|^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    );
+    expect(Number.isNaN(Date.parse(intent.timestamp))).toBe(false);
+  });
+
+  it("uses style diffs that include only actually changed properties", () => {
+    const changes = diffStyles(
+      "#save",
+      { color: "black", width: "100px", "font-size": "14px" },
+      { color: "white", width: "100px", "font-size": "16px" },
+      "2026-07-01T00:00:00.000Z",
+    );
+    const intent = createUIChangeIntent({
+      pageUrl: "https://example.com",
+      viewport: { width: 1280, height: 720, devicePixelRatio: 1 },
+      target: snapshot,
+      changes,
+    });
+
+    expect(intent.changes.map((change) => change.property)).toEqual(["color", "font-size"]);
+    expect(
+      intent.changes.filter((change) => change.beforeValue !== change.afterValue),
+    ).toHaveLength(intent.changes.length);
   });
 });

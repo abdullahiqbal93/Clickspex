@@ -3,9 +3,8 @@ import { join, resolve } from "node:path";
 
 import { cssAdapter, scaffoldAdapters, tailwindAdapter } from "@ui-devtools/adapters";
 import { detectProject, scanProjectContext } from "@ui-devtools/core/project";
+import { SUPPORTED_STYLE_PROPERTIES, type UIChangeIntent } from "@ui-devtools/shared";
 import { z } from "zod";
-
-import type { UIChangeIntent } from "@ui-devtools/shared";
 
 const rectSchema = z.object({
   x: z.number(),
@@ -34,7 +33,7 @@ const boxModelSchema = z.object({
 
 const styleChangeSchema = z.object({
   selector: z.string(),
-  property: z.string(),
+  property: z.enum(SUPPORTED_STYLE_PROPERTIES),
   beforeValue: z.string(),
   afterValue: z.string(),
   timestamp: z.string(),
@@ -185,6 +184,7 @@ export const handleReadProjectSummary = async (input: PathInput): Promise<ToolRe
 export const handleGenerateExport = (input: ChangeIntentInput): ToolResult => {
   try {
     const parsed = changeIntentInputSchema.parse(input);
+    // zod validates the shared change intent shape before adapter code consumes it.
     const changeIntent = parsed.changeIntent as UIChangeIntent;
     return {
       ok: true,
@@ -203,6 +203,7 @@ export const handlePreviewPatchSuggestions = async (
 ): Promise<ToolResult> => {
   try {
     const parsed = changeIntentInputSchema.parse(input);
+    // zod validates the shared change intent shape before adapter code consumes it.
     const changeIntent = parsed.changeIntent as UIChangeIntent;
     return {
       ok: true,

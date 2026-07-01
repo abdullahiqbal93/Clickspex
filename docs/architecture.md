@@ -34,7 +34,7 @@ The background service worker is deliberately stateless. It keeps only a transie
 
 The content script creates a single Shadow DOM host named `__ui-devtools-host__` for visual overlays. Overlay CSS is scoped inside the shadow root, so the inspected page does not receive extension classes or global overlay styles.
 
-Temporary user edits are injected into one page style tag named `__ui-devtools-styles__`. The style injector rewrites rules for the current session, supports reset, and does not persist changes to the source application.
+Temporary user edits are injected into one page style tag named `__ui-devtools-styles__`. The style injector rewrites rules for the current session, supports undo, redo, and reset, and does not persist changes to the source application.
 
 ## Adapter Boundary
 

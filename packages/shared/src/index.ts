@@ -349,7 +349,7 @@ export const createUnsupportedPatchSuggestion = (
   adapterId,
   title,
   confidence: 0,
-  explanation: "Not yet implemented. See TODO in adapter source.",
+  explanation: "Not yet implemented. See ROADMAP(v2) in adapter source.",
   filesToChange: [],
   diffPreview: "",
   warnings: ["This adapter does not generate real patches in v1."],

@@ -40,7 +40,7 @@ const createScaffoldAdapter = (id: string, name: string): FrameworkAdapter => ({
   }),
 });
 
-// TODO(v2): Implement framework-aware source discovery and patch generation for these adapters.
+// ROADMAP(v2): Implement framework-aware source discovery and patch generation once adapters can safely map DOM selections to source files.
 export const scaffoldAdapters: FrameworkAdapter[] = scaffoldDefinitions.map(([id, name]) =>
   createScaffoldAdapter(id, name),
 );

@@ -62,10 +62,19 @@ describe("CSS adapter", () => {
         afterValue: "16px",
         timestamp: "2026-07-01T00:00:00.000Z",
       },
+      {
+        selector: "#save",
+        property: "padding-left",
+        beforeValue: "8px",
+        afterValue: "16px",
+        timestamp: "2026-07-01T00:00:00.000Z",
+      },
     ]);
 
     expect(cssAdapter.generateExport(intent).content).toBe(
-      ["#save {", "  color: #ffffff;", "  font-size: 16px;", "}"].join("\n"),
+      ["#save {", "  color: #ffffff;", "  font-size: 16px;", "  padding-left: 16px;", "}"].join(
+        "\n",
+      ),
     );
   });
 });
@@ -89,6 +98,13 @@ describe("Tailwind adapter", () => {
       },
       {
         selector: "#save",
+        property: "font-size",
+        beforeValue: "16px",
+        afterValue: "13px",
+        timestamp: "2026-07-01T00:00:00.000Z",
+      },
+      {
+        selector: "#save",
         property: "line-height",
         beforeValue: "20px",
         afterValue: "21px",
@@ -99,7 +115,10 @@ describe("Tailwind adapter", () => {
     const result = generateTailwindClassesFromChangeIntent(intent);
 
     expect(result.classes).toEqual(["text-base", "pl-4"]);
-    expect(result.warnings).toEqual(["No conservative Tailwind mapping for line-height: 21px"]);
+    expect(result.warnings).toEqual([
+      "No conservative Tailwind mapping for font-size: 13px",
+      "No conservative Tailwind mapping for line-height: 21px",
+    ]);
   });
 
   it("detects Tailwind from dependency and config evidence", async () => {
@@ -125,7 +144,9 @@ describe("framework scaffold adapters", () => {
     expect(suggestion).toMatchObject({
       adapterId: "react",
       confidence: 0,
+      explanation: "Not yet implemented. See ROADMAP(v2) in adapter source.",
       filesToChange: [],
+      diffPreview: "",
     });
     expect(suggestion?.warnings[0]).toContain("does not generate real patches in v1");
   });
