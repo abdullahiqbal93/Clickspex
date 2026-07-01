@@ -1,0 +1,77 @@
+# MCP Tools
+
+The MCP server runs as a local stdio process from `apps/mcp-server`. It is read-only: tools inspect project metadata or generate suggestions from supplied JSON, but they do not write source files.
+
+Start it after building:
+
+```bash
+pnpm --filter @ui-devtools/mcp-server build
+node apps/mcp-server/dist/index.js
+```
+
+All tool results use this wrapper:
+
+```ts
+type ToolResult = {
+  ok: boolean;
+  data?: unknown;
+  error?: { code: string; message: string };
+};
+```
+
+## scan_project
+
+Input:
+
+```json
+{ "path": "E:/Dev/AI Projects/Dev-Buddy" }
+```
+
+Returns a shallow file listing up to depth 2. It skips `node_modules`, `.git`, and filenames that look like secrets, credentials, tokens, keys, or `.env` files.
+
+## detect_framework
+
+Input:
+
+```json
+{ "path": "E:/Dev/AI Projects/Dev-Buddy" }
+```
+
+Returns the same framework and tooling detection report used by the CLI, including package manager, config files, source directories, and confidence-scored detections.
+
+## read_project_summary
+
+Input:
+
+```json
+{ "path": "E:/Dev/AI Projects/Dev-Buddy" }
+```
+
+Returns root path, package name/version when available, dependencies, devDependencies, and detected config files.
+
+## generate_export_from_change_intent
+
+Input:
+
+```json
+{ "changeIntent": { "id": "...", "timestamp": "..." } }
+```
+
+The full `changeIntent` must match the `UIChangeIntent` schema from `packages/shared`. Returns CSS and Tailwind adapter exports.
+
+## preview_patch_suggestions
+
+Input:
+
+```json
+{ "changeIntent": { "id": "...", "timestamp": "..." } }
+```
+
+Returns patch suggestions from CSS, Tailwind, and scaffold framework adapters. Framework suggestions are intentionally unsupported in v1 and include warnings/manual steps instead of fake source edits.
+
+## Security Notes
+
+- The server resolves local paths but does not write files.
+- Secret-looking files are skipped by project scans.
+- Generated patch previews are advisory and should be reviewed before manual application.
+- Do not expose this stdio server as a network service without adding authentication, path allowlists, and audit logging.
