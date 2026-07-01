@@ -14,6 +14,7 @@ import { connectSidePanelPort, sendMessageToActiveTab } from "../chrome/messagin
 
 import { AccessibilityPanel } from "./components/AccessibilityPanel";
 import { BoxModelPanel } from "./components/BoxModelPanel";
+import { ExportPanel } from "./components/ExportPanel";
 import { InspectorPanel } from "./components/InspectorPanel";
 import { MeasurePanel } from "./components/MeasurePanel";
 import { StylePanel } from "./components/StylePanel";
@@ -27,13 +28,6 @@ const tabs = [
   { id: "accessibility", label: "A11y", icon: Accessibility },
   { id: "export", label: "Export", icon: Code2 },
 ] as const satisfies ReadonlyArray<{ id: PanelTab; label: string; icon: typeof Crosshair }>;
-
-const placeholderLabels: Record<
-  Exclude<PanelTab, "inspect" | "styles" | "box" | "measure" | "accessibility">,
-  string
-> = {
-  export: "Export",
-};
 
 export const App = () => {
   const activeTab = usePanelStore((state) => state.activeTab);
@@ -166,12 +160,7 @@ export const App = () => {
         ) : activeTab === "accessibility" ? (
           <AccessibilityPanel />
         ) : (
-          <div className="rounded-lg border border-slate-200 bg-panel p-4 shadow-panel">
-            <h2 className="text-sm font-semibold">{placeholderLabels[activeTab]}</h2>
-            <p className="mt-2 break-all text-xs text-muted">
-              {selectedElement?.selector ?? hoveredSelector ?? "Idle"}
-            </p>
-          </div>
+          <ExportPanel />
         )}
       </section>
     </main>

@@ -1,9 +1,19 @@
 import { captureElementSnapshot } from "@ui-devtools/core";
 
 import { sendRuntimeMessage } from "../chrome/messaging";
+import { writePageContext } from "../chrome/session";
 
 import type { OverlayController } from "./overlay";
 import type { ElementSnapshot } from "@ui-devtools/shared";
+
+const getPageContext = () => ({
+  pageUrl: window.location.href,
+  viewport: {
+    width: window.innerWidth,
+    height: window.innerHeight,
+    devicePixelRatio: window.devicePixelRatio,
+  },
+});
 
 const isInspectableElement = (
   target: EventTarget | null,
@@ -94,6 +104,7 @@ export class ElementPickerController {
 
     const element = event.target;
     const snapshot = captureElementSnapshot(element);
+    void writePageContext(getPageContext());
 
     if (this.mode === "measure") {
       if (this.selectedSnapshot !== null) {
