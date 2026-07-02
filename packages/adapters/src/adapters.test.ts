@@ -121,6 +121,37 @@ describe("CSS adapter", () => {
     );
   });
 
+  it("exports pseudo-state declarations as pseudo-class CSS rules", () => {
+    const intent = createIntent([
+      {
+        selector: "#save",
+        property: "transition",
+        beforeValue: "",
+        afterValue: "all 200ms ease-out",
+        timestamp: "2026-07-01T00:00:00.000Z",
+      },
+      {
+        selector: "#save",
+        property: "transform",
+        beforeValue: "",
+        afterValue: "scale(1.04)",
+        timestamp: "2026-07-01T00:00:00.000Z",
+        state: "hover",
+      },
+    ]);
+
+    expect(cssAdapter.generateExport(intent).content).toBe(
+      [
+        "#save {",
+        "  transition: all 200ms ease-out;",
+        "}",
+        "",
+        "#save:hover {",
+        "  transform: scale(1.04);",
+        "}",
+      ].join("\n"),
+    );
+  });
   it("previews source-aware stylesheet diffs when indexed source is available", async () => {
     const intent = createIntent([
       {
@@ -193,6 +224,22 @@ describe("Tailwind adapter", () => {
     ]);
   });
 
+  it("prefixes mapped Tailwind utilities with pseudo-state variants", () => {
+    const intent = createIntent([
+      {
+        selector: "#save",
+        property: "display",
+        beforeValue: "block",
+        afterValue: "flex",
+        timestamp: "2026-07-01T00:00:00.000Z",
+        state: "hover",
+      },
+    ]);
+
+    const result = generateTailwindClassesFromChangeIntent(intent);
+
+    expect(result.classes).toEqual(["hover:flex"]);
+  });
   it("detects Tailwind from dependency, config, and source evidence", async () => {
     await expect(Promise.resolve(tailwindAdapter.detect(projectContext))).resolves.toMatchObject({
       adapterId: "tailwind",

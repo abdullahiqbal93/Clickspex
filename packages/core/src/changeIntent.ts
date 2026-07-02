@@ -1,4 +1,4 @@
-import { mergeStyleChanges } from "./styleDiff";
+import { getStyleChangeState, mergeStyleChanges } from "./styleDiff";
 
 import type {
   AccessibilityNote,
@@ -38,7 +38,8 @@ export const createUIChangeIntent = ({
   timestamp = new Date().toISOString(),
   id = createId(),
 }: CreateUIChangeIntentInput): UIChangeIntent => {
-  const afterStyles = mergeStyleChanges(target.computedStyles, changes);
+  const targetChanges = changes.filter((change) => change.selector === target.selector);
+  const afterStyles = mergeStyleChanges(target.computedStyles, targetChanges);
   const intentTarget: UIChangeIntent["target"] = {
     tagName: target.tagName,
     classList: target.classList,
@@ -69,7 +70,7 @@ export const createUIChangeIntent = ({
     after: {
       styles: afterStyles,
     },
-    changes,
+    changes: targetChanges,
     accessibilityNotes,
   };
 
@@ -86,7 +87,11 @@ export const createUIChangeIntent = ({
 
 export const summarizeChangeIntentAsMarkdown = (changeIntent: UIChangeIntent): string => {
   const changes = changeIntent.changes
-    .map((change) => `- ${change.property}: ${change.beforeValue} -> ${change.afterValue}`)
+    .map((change) => {
+      const state = getStyleChangeState(change);
+      const stateLabel = state === "base" ? "" : `:${state} `;
+      return `- ${stateLabel}${change.property}: ${change.beforeValue} -> ${change.afterValue}`;
+    })
     .join("\n");
 
   return [

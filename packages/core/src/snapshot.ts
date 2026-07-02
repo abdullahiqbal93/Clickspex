@@ -62,8 +62,10 @@ const getParentLayoutInfo = (element: Element): ParentLayoutInfo | null => {
     selector: generateUniqueSelector(parent),
     display: parentStyles.getPropertyValue("display"),
     flexDirection: parentStyles.getPropertyValue("flex-direction") || null,
+    flexWrap: parentStyles.getPropertyValue("flex-wrap") || null,
     gap: parentStyles.getPropertyValue("gap") || null,
     alignItems: parentStyles.getPropertyValue("align-items") || null,
+    alignContent: parentStyles.getPropertyValue("align-content") || null,
     justifyContent: parentStyles.getPropertyValue("justify-content") || null,
   };
 };

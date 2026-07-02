@@ -1,6 +1,10 @@
 export const SUPPORTED_STYLE_PROPERTIES = [
   "width",
+  "min-width",
+  "max-width",
   "height",
+  "min-height",
+  "max-height",
   "margin-top",
   "margin-right",
   "margin-bottom",
@@ -12,29 +16,86 @@ export const SUPPORTED_STYLE_PROPERTIES = [
   "gap",
   "color",
   "background-color",
+  "background-repeat",
   "font-family",
   "font-size",
   "font-weight",
+  "font-style",
   "line-height",
+  "letter-spacing",
+  "text-align",
+  "text-transform",
+  "text-decoration-line",
+  "border-width",
+  "border-style",
+  "border-color",
   "border-radius",
   "display",
+  "box-sizing",
+  "overflow",
+  "overflow-x",
+  "overflow-y",
   "flex-direction",
+  "flex-wrap",
   "justify-content",
   "align-items",
+  "align-content",
+  "align-self",
+  "order",
+  "flex-grow",
+  "flex-shrink",
+  "flex-basis",
+  "justify-items",
+  "justify-self",
   "position",
   "top",
   "right",
   "bottom",
   "left",
+  "z-index",
+  "visibility",
   "opacity",
+  "cursor",
+  "pointer-events",
+  "user-select",
+  "object-fit",
+  "object-position",
   "transform",
+  "transform-origin",
+  "filter",
+  "box-shadow",
+  "transition",
+  "transition-property",
+  "transition-duration",
+  "transition-timing-function",
+  "transition-delay",
+  "animation",
+  "animation-name",
+  "animation-duration",
+  "animation-timing-function",
+  "animation-delay",
+  "animation-iteration-count",
+  "animation-direction",
+  "animation-fill-mode",
+  "animation-play-state",
 ] as const;
 
 export type SupportedStyleProperty = (typeof SUPPORTED_STYLE_PROPERTIES)[number];
 
+export const STYLE_TARGET_STATES = [
+  "base",
+  "hover",
+  "focus",
+  "focus-visible",
+  "focus-within",
+  "active",
+  "disabled",
+  "checked",
+] as const;
+
+export type StyleTargetState = (typeof STYLE_TARGET_STATES)[number];
 export const IMPORTANT_COMPUTED_STYLE_PROPERTIES = [
   ...SUPPORTED_STYLE_PROPERTIES,
-  "box-sizing",
   "border-top-width",
   "border-right-width",
   "border-bottom-width",
@@ -47,9 +108,6 @@ export const IMPORTANT_COMPUTED_STYLE_PROPERTIES = [
   "border-right-color",
   "border-bottom-color",
   "border-left-color",
-  "letter-spacing",
-  "text-align",
-  "z-index",
 ] as const;
 
 export type ImportantComputedStyleProperty = (typeof IMPORTANT_COMPUTED_STYLE_PROPERTIES)[number];
@@ -87,8 +145,10 @@ export type ParentLayoutInfo = {
   selector: string;
   display: string;
   flexDirection: string | null;
+  flexWrap: string | null;
   gap: string | null;
   alignItems: string | null;
+  alignContent: string | null;
   justifyContent: string | null;
 };
 
@@ -112,6 +172,7 @@ export type StyleChange = {
   beforeValue: string;
   afterValue: string;
   timestamp: string;
+  state?: StyleTargetState;
 };
 
 export type AccessibilityNote = {
@@ -257,6 +318,15 @@ export type PageScanResult = {
   assets: PageAssetInfo[];
 };
 
+export type ElementSearchResult = Pick<
+  ElementSnapshot,
+  "tagName" | "id" | "classList" | "textPreview" | "selector" | "rect"
+>;
+
+export type PinCardKind = "styles" | "audit";
+
+export type DomMoveDirection = "previous" | "next" | "out-before" | "out-after";
+
 export type ExtensionMessage =
   | { type: "PICKER_ENABLE" }
   | { type: "PICKER_DISABLE" }
@@ -276,6 +346,20 @@ export type ExtensionMessage =
   | { type: "SCAN_PAGE" }
   | { type: "GRID_TOGGLE" }
   | { type: "SELECT_ANCESTOR"; payload: { depth: number } }
+  | { type: "SEARCH_ELEMENTS"; payload: { query: string } }
+  | { type: "ELEMENT_SEARCH_RESULT"; payload: { query: string; results: ElementSearchResult[] } }
+  | { type: "SELECT_SEARCH_RESULT"; payload: { selector: string } }
+  | { type: "PIN_ELEMENT_CARD"; payload: { snapshot: ElementSnapshot; kind: PinCardKind } }
+  | { type: "CLEAR_PINNED_CARDS" }
+  | { type: "ELEMENT_MOVE_ENABLE" }
+  | { type: "ELEMENT_MOVE_DISABLE" }
+  | { type: "RESTORE_SELECTED_ELEMENT" }
+  | { type: "UNDO_MOVE_POSITION" }
+  | { type: "REDO_MOVE_POSITION" }
+  | { type: "MOVE_SELECTED_ELEMENT"; payload: { direction: DomMoveDirection } }
+  | { type: "NUDGE_SELECTED_ELEMENT"; payload: { deltaX: number; deltaY: number } }
+  | { type: "REPLACE_SELECTED_IMAGE"; payload: { src: string } }
+  | { type: "START_TEXT_EDIT" }
   | { type: "SET_ANIMATION_SPEED"; payload: { speed: number } }
   | { type: "PAGE_SCAN_RESULT"; payload: PageScanResult };
 
@@ -294,6 +378,13 @@ const MESSAGE_TYPES_WITHOUT_PAYLOAD = new Set<MessageType>([
   "RULER_DISABLE",
   "SCAN_PAGE",
   "GRID_TOGGLE",
+  "CLEAR_PINNED_CARDS",
+  "ELEMENT_MOVE_ENABLE",
+  "ELEMENT_MOVE_DISABLE",
+  "RESTORE_SELECTED_ELEMENT",
+  "UNDO_MOVE_POSITION",
+  "REDO_MOVE_POSITION",
+  "START_TEXT_EDIT",
 ]);
 
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -312,6 +403,9 @@ const isStringArray = (value: unknown): value is string[] =>
 
 export const isSupportedStyleProperty = (value: unknown): value is SupportedStyleProperty =>
   isString(value) && SUPPORTED_STYLE_PROPERTIES.includes(value as SupportedStyleProperty);
+
+export const isStyleTargetState = (value: unknown): value is StyleTargetState =>
+  isString(value) && STYLE_TARGET_STATES.includes(value as StyleTargetState);
 
 export const isRectSnapshot = (value: unknown): value is RectSnapshot => {
   if (!isRecord(value)) {
@@ -375,9 +469,31 @@ export const isStyleChange = (value: unknown): value is StyleChange => {
     isSupportedStyleProperty(value.property) &&
     isString(value.beforeValue) &&
     isString(value.afterValue) &&
-    isString(value.timestamp)
+    isString(value.timestamp) &&
+    (value.state === undefined || isStyleTargetState(value.state))
   );
 };
+
+const isElementSearchResult = (value: unknown): value is ElementSearchResult => {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    isString(value.tagName) &&
+    isString(value.id) &&
+    isStringArray(value.classList) &&
+    isString(value.textPreview) &&
+    isString(value.selector) &&
+    isRectSnapshot(value.rect)
+  );
+};
+
+const isPinCardKind = (value: unknown): value is PinCardKind =>
+  value === "styles" || value === "audit";
+
+const isDomMoveDirection = (value: unknown): value is DomMoveDirection =>
+  value === "previous" || value === "next" || value === "out-before" || value === "out-after";
 
 export const isExtensionMessage = (value: unknown): value is ExtensionMessage => {
   if (!isRecord(value) || !isString(value.type)) {
@@ -407,7 +523,47 @@ export const isExtensionMessage = (value: unknown): value is ExtensionMessage =>
   }
 
   if (messageType === "PAGE_SCAN_RESULT") {
-    return isRecord(value.payload) && Array.isArray(value.payload.colors) && Array.isArray(value.payload.fonts) && Array.isArray(value.payload.assets);
+    return (
+      isRecord(value.payload) &&
+      Array.isArray(value.payload.colors) &&
+      Array.isArray(value.payload.fonts) &&
+      Array.isArray(value.payload.assets)
+    );
+  }
+
+  if (messageType === "ELEMENT_SEARCH_RESULT") {
+    return (
+      isRecord(value.payload) &&
+      isString(value.payload.query) &&
+      Array.isArray(value.payload.results) &&
+      value.payload.results.every(isElementSearchResult)
+    );
+  }
+
+  if (messageType === "PIN_ELEMENT_CARD") {
+    return (
+      isRecord(value.payload) &&
+      isElementSnapshot(value.payload.snapshot) &&
+      isPinCardKind(value.payload.kind)
+    );
+  }
+
+  if (messageType === "SEARCH_ELEMENTS" || messageType === "SELECT_SEARCH_RESULT") {
+    return isRecord(value.payload) && isString(value.payload.query ?? value.payload.selector);
+  }
+
+  if (messageType === "MOVE_SELECTED_ELEMENT") {
+    return isRecord(value.payload) && isDomMoveDirection(value.payload.direction);
+  }
+
+  if (messageType === "NUDGE_SELECTED_ELEMENT") {
+    return (
+      isRecord(value.payload) && isNumber(value.payload.deltaX) && isNumber(value.payload.deltaY)
+    );
+  }
+
+  if (messageType === "REPLACE_SELECTED_IMAGE") {
+    return isRecord(value.payload) && isString(value.payload.src);
   }
 
   if (messageType === "MEASURE_START") {

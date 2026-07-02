@@ -146,7 +146,7 @@ const extractCssSelectors = (content: string): string[] => {
   return uniqueSorted(selectors).slice(0, 80);
 };
 
-const extractClassNames = (content: string): string[] => {
+const extractClassNames = (content: string, includeCssSelectors: boolean): string[] => {
   const classes: string[] = [];
   const classAttributeRegex = /\bclass(?:Name)?\s*=\s*(["'`])([^"'`]+)\1/g;
   const cssClassRegex = /\.([_a-zA-Z]+[_a-zA-Z0-9-]*)/g;
@@ -156,14 +156,16 @@ const extractClassNames = (content: string): string[] => {
     classes.push(...(match[2] ?? "").split(/\s+/));
   }
 
-  while ((match = cssClassRegex.exec(content)) !== null) {
-    classes.push(match[1] ?? "");
+  if (includeCssSelectors) {
+    while ((match = cssClassRegex.exec(content)) !== null) {
+      classes.push(match[1] ?? "");
+    }
   }
 
   return uniqueSorted(classes).slice(0, 120);
 };
 
-const extractIds = (content: string): string[] => {
+const extractIds = (content: string, includeCssSelectors: boolean): string[] => {
   const ids: string[] = [];
   const idAttributeRegex = /\bid\s*=\s*(["'`])([^"'`]+)\1/g;
   const cssIdRegex = /#([_a-zA-Z]+[_a-zA-Z0-9-]*)/g;
@@ -173,8 +175,10 @@ const extractIds = (content: string): string[] => {
     ids.push(match[2] ?? "");
   }
 
-  while ((match = cssIdRegex.exec(content)) !== null) {
-    ids.push(match[1] ?? "");
+  if (includeCssSelectors) {
+    while ((match = cssIdRegex.exec(content)) !== null) {
+      ids.push(match[1] ?? "");
+    }
   }
 
   return uniqueSorted(ids).slice(0, 80);
@@ -201,15 +205,16 @@ const summarizeFile = async (
   const projectPath = toProjectPath(relative(rootPath, absolutePath));
   const content = await readFile(absolutePath, "utf8");
   const extension = extname(projectPath).toLowerCase();
-  const selectors = stylesheetExtensions.has(extension) ? extractCssSelectors(content) : [];
+  const isStylesheet = stylesheetExtensions.has(extension);
+  const selectors = isStylesheet ? extractCssSelectors(content) : [];
 
   return {
     path: projectPath,
     kind: classifyFile(projectPath),
     size,
     selectors,
-    classNames: extractClassNames(content),
-    ids: extractIds(content),
+    classNames: extractClassNames(content, isStylesheet),
+    ids: extractIds(content, isStylesheet),
     imports: extractImports(content),
     ...(includeSource ? { content } : {}),
   };

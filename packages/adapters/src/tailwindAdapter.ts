@@ -1,3 +1,5 @@
+import { getStyleChangeState } from "@ui-buddy/core/styleDiff";
+
 import { createUnifiedDiff } from "./diffPreview.js";
 
 import type {
@@ -210,8 +212,11 @@ export const generateTailwindClassesFromChangeIntent = (
       continue;
     }
 
-    if (!classes.includes(className)) {
-      classes.push(className);
+    const state = getStyleChangeState(change);
+    const targetClassName = state === "base" ? className : `${state}:${className}`;
+
+    if (!classes.includes(targetClassName)) {
+      classes.push(targetClassName);
     }
   }
 

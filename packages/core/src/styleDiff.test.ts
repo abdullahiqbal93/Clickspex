@@ -24,6 +24,19 @@ describe("style diff utilities", () => {
     });
   });
 
+  it("diffs supported transition and animation properties", () => {
+    const changes = diffStyles(
+      ".card",
+      { "animation-play-state": "running", "transition-duration": "150ms" },
+      { "animation-play-state": "paused", "transition-duration": "300ms" },
+      "2026-07-01T00:00:00.000Z",
+    );
+
+    expect(changes.map((change) => change.property)).toEqual([
+      "transition-duration",
+      "animation-play-state",
+    ]);
+  });
   it("merges later style changes into an existing style record", () => {
     const merged = mergeStyleChanges({ color: "black", padding: "4px" }, [
       createStyleChange(".card", "color", "black", "white"),
@@ -32,6 +45,46 @@ describe("style diff utilities", () => {
     expect(merged).toEqual({ color: "white", padding: "4px" });
   });
 
+  it("builds pseudo-class CSS rules from state changes", () => {
+    const css = buildCssRuleFromChanges(".card", [
+      createStyleChange(".card", "transition", "", "all 200ms ease", "2026-07-01T00:00:00.000Z"),
+      createStyleChange(
+        ".card",
+        "transform",
+        "",
+        "scale(1.04)",
+        "2026-07-01T00:00:00.000Z",
+        "hover",
+      ),
+    ]);
+
+    expect(css).toBe(
+      [
+        ".card {",
+        "  transition: all 200ms ease;",
+        "}",
+        "",
+        ".card:hover {",
+        "  transform: scale(1.04);",
+        "}",
+      ].join("\n"),
+    );
+  });
+
+  it("keeps pseudo-state edits out of base after-style merges", () => {
+    const merged = mergeStyleChanges({ transform: "none" }, [
+      createStyleChange(
+        ".card",
+        "transform",
+        "",
+        "scale(1.04)",
+        "2026-07-01T00:00:00.000Z",
+        "hover",
+      ),
+    ]);
+
+    expect(merged).toEqual({ transform: "none" });
+  });
   it("builds a CSS rule from changed declarations", () => {
     const css = buildCssRuleFromChanges(".card", [
       createStyleChange(".card", "color", "black", "white"),

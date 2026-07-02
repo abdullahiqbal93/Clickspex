@@ -69,6 +69,52 @@ describe("createUIChangeIntent", () => {
     expect(Number.isNaN(Date.parse(intent.timestamp))).toBe(false);
   });
 
+  it("includes only changes for the selected target", () => {
+    const targetChange = createStyleChange(
+      "#save",
+      "color",
+      "black",
+      "white",
+      "2026-07-01T00:00:00.000Z",
+    );
+    const otherChange = createStyleChange(
+      "#cancel",
+      "color",
+      "blue",
+      "red",
+      "2026-07-01T00:00:00.000Z",
+    );
+
+    const intent = createUIChangeIntent({
+      pageUrl: "https://example.com",
+      viewport: { width: 1280, height: 720, devicePixelRatio: 1 },
+      target: snapshot,
+      changes: [targetChange, otherChange],
+    });
+
+    expect(intent.changes).toEqual([targetChange]);
+    expect(intent.after.styles.color).toBe("white");
+  });
+  it("keeps pseudo-state changes in changes but out of base after styles", () => {
+    const change = createStyleChange(
+      "#save",
+      "transform",
+      "",
+      "scale(1.04)",
+      "2026-07-01T00:00:00.000Z",
+      "hover",
+    );
+
+    const intent = createUIChangeIntent({
+      pageUrl: "https://example.com",
+      viewport: { width: 1280, height: 720, devicePixelRatio: 1 },
+      target: snapshot,
+      changes: [change],
+    });
+
+    expect(intent.changes).toEqual([change]);
+    expect(intent.after.styles.transform).toBeUndefined();
+  });
   it("uses style diffs that include only actually changed properties", () => {
     const changes = diffStyles(
       "#save",

@@ -117,7 +117,7 @@ const detectScaffold = (
       hasMatchingExtension(file.path, definition.fileExtensions),
     ) ?? [];
 
-  if (fileMatches.length > 0) {
+  if (evidence.length > 0 && fileMatches.length > 0) {
     evidence.push(`${fileMatches.length} matching source file(s) indexed.`);
   }
 
@@ -183,6 +183,10 @@ const sourceAwareSuggestion = (
   changeIntent: UIChangeIntent,
   projectContext?: ProjectContext,
 ): PatchSuggestion[] => {
+  if (projectContext === undefined || !detectScaffold(definition, projectContext).detected) {
+    return [createUnsupportedPatchSuggestion(definition.id, `${definition.name} patch generation`)];
+  }
+
   const selected = selectSourceFile(definition, projectContext, changeIntent);
 
   if (selected === null) {

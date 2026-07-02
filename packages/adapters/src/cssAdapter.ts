@@ -1,4 +1,8 @@
-import { buildCssRule, styleChangesToRecord } from "@ui-buddy/core/styleDiff";
+import {
+  buildCssRule,
+  buildCssRulesFromChanges,
+  styleChangesToRuleRecords,
+} from "@ui-buddy/core/styleDiff";
 
 import { createUnifiedDiff } from "./diffPreview.js";
 
@@ -13,7 +17,7 @@ import type {
 } from "@ui-buddy/shared";
 
 export const generateCssFromChangeIntent = (changeIntent: UIChangeIntent): string =>
-  buildCssRule(changeIntent.target.selector, styleChangesToRecord(changeIntent.changes));
+  buildCssRulesFromChanges(changeIntent.target.selector, changeIntent.changes);
 
 const detectCss = (projectContext: ProjectContext): AdapterDetectionResult => {
   const stylesheetFiles = projectContext.files?.filter((file) => file.kind === "stylesheet") ?? [];
@@ -153,9 +157,9 @@ const generateCssPatch = (
   changeIntent: UIChangeIntent,
   projectContext?: ProjectContext,
 ): PatchSuggestion[] => {
-  const declarations = styleChangesToRecord(changeIntent.changes);
+  const ruleRecords = styleChangesToRuleRecords(changeIntent.target.selector, changeIntent.changes);
 
-  if (Object.keys(declarations).length === 0) {
+  if (ruleRecords.length === 0) {
     return standaloneCssPatch(changeIntent, "No style declarations were changed.");
   }
 
@@ -170,10 +174,9 @@ const generateCssPatch = (
     );
   }
 
-  const nextContent = upsertCssRule(
+  const nextContent = ruleRecords.reduce(
+    (content, record) => upsertCssRule(content, record.selector, record.styles),
     selected.file.content,
-    changeIntent.target.selector,
-    declarations,
   );
 
   return [
