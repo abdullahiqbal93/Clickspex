@@ -89,10 +89,16 @@ export const App = () => {
       }
 
       if (rawMessage.type === "ELEMENT_SELECTED") {
+        const hadSelection = usePanelStore.getState().selectedElement !== null;
         setSelectedElement(rawMessage.payload);
         setPickerActive(true);
         setHoveredSelector(null);
-        setActiveTab("inspect");
+
+        // Jump to Inspect only for the first selection; keep the user's tab
+        // (Styles, Box, A11y, ...) when they re-pick another element.
+        if (!hadSelection) {
+          setActiveTab("inspect");
+        }
       }
 
       if (rawMessage.type === "ELEMENT_UNSELECTED") {

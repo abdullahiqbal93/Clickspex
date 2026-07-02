@@ -548,8 +548,12 @@ export const isExtensionMessage = (value: unknown): value is ExtensionMessage =>
     );
   }
 
-  if (messageType === "SEARCH_ELEMENTS" || messageType === "SELECT_SEARCH_RESULT") {
-    return isRecord(value.payload) && isString(value.payload.query ?? value.payload.selector);
+  if (messageType === "SEARCH_ELEMENTS") {
+    return isRecord(value.payload) && isString(value.payload.query);
+  }
+
+  if (messageType === "SELECT_SEARCH_RESULT") {
+    return isRecord(value.payload) && isString(value.payload.selector);
   }
 
   if (messageType === "MOVE_SELECTED_ELEMENT") {

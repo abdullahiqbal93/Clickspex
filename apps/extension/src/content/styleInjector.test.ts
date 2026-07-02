@@ -34,7 +34,7 @@ describe("StyleInjector", () => {
 
     expect(document.querySelectorAll("#__ui-buddy-styles__")).toHaveLength(1);
     expect(styleElement()?.textContent).toBe(
-      ["#save {", "  color: white;", "  font-size: 16px;", "}"].join("\n"),
+      ["#save {", "  color: white !important;", "  font-size: 16px !important;", "}"].join("\n"),
     );
   });
 
@@ -44,11 +44,11 @@ describe("StyleInjector", () => {
     injector.applyChange(createChange("color", "black", "white"));
     injector.applyChange(createChange("color", "white", "red"));
 
-    expect(styleElement()?.textContent).toContain("color: red;");
+    expect(styleElement()?.textContent).toContain("color: red !important;");
 
     injector.undo();
 
-    expect(styleElement()?.textContent).toContain("color: white;");
+    expect(styleElement()?.textContent).toContain("color: white !important;");
 
     injector.undo();
 
@@ -62,13 +62,15 @@ describe("StyleInjector", () => {
     injector.undo();
     injector.redo();
 
-    expect(styleElement()?.textContent).toContain("color: white;");
+    expect(styleElement()?.textContent).toContain("color: white !important;");
 
     injector.undo();
     injector.applyChange(createChange("font-size", "14px", "16px"));
     injector.redo();
 
-    expect(styleElement()?.textContent).toBe(["#save {", "  font-size: 16px;", "}"].join("\n"));
+    expect(styleElement()?.textContent).toBe(
+      ["#save {", "  font-size: 16px !important;", "}"].join("\n"),
+    );
   });
 
   it("writes pseudo-state edits as pseudo-class CSS rules", () => {
@@ -77,7 +79,7 @@ describe("StyleInjector", () => {
     injector.applyChange(createChange("transform", "", "scale(1.04)", "hover"));
 
     expect(styleElement()?.textContent).toContain("#save:hover {");
-    expect(styleElement()?.textContent).toContain("  transform: scale(1.04);");
+    expect(styleElement()?.textContent).toContain("  transform: scale(1.04) !important;");
   });
   it("adds keyframes for built-in animation presets", () => {
     const injector = new StyleInjector();
@@ -85,7 +87,7 @@ describe("StyleInjector", () => {
     injector.applyChange(createChange("animation", "", "ui-buddy-fade-in 300ms ease-out both"));
 
     expect(styleElement()?.textContent).toContain(
-      "animation: ui-buddy-fade-in 300ms ease-out both;",
+      "animation: ui-buddy-fade-in 300ms ease-out both !important;",
     );
     expect(styleElement()?.textContent).toContain("@keyframes ui-buddy-fade-in");
   });

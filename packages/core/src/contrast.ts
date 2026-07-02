@@ -43,22 +43,39 @@ const parseHexColor = (value: string): RgbaColor | null => {
   };
 };
 
-const parseRgbColor = (value: string): RgbaColor | null => {
-  const match = value
-    .trim()
-    .match(/^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*(?:,\s*([\d.]+)\s*)?\)$/i);
+const parseAlpha = (alpha: string | undefined): number => {
+  if (alpha === undefined) {
+    return 1;
+  }
 
-  if (match === null) {
+  const parsed = alpha.endsWith("%") ? Number.parseFloat(alpha) / 100 : Number.parseFloat(alpha);
+
+  return Number.isFinite(parsed) ? Math.min(1, Math.max(0, parsed)) : 1;
+};
+
+const parseRgbColor = (value: string): RgbaColor | null => {
+  // Legacy comma syntax: rgb(0, 0, 0) / rgba(0, 0, 0, 0.5)
+  const legacyMatch = value
+    .trim()
+    .match(/^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*(?:,\s*([\d.]+%?)\s*)?\)$/i);
+  // Modern space syntax: rgb(0 0 0) / rgb(0 0 0 / 50%)
+  const modernMatch =
+    legacyMatch ??
+    value
+      .trim()
+      .match(/^rgba?\(\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*(?:\/\s*([\d.]+%?)\s*)?\)$/i);
+
+  if (modernMatch === null) {
     return null;
   }
 
-  const [, r, g, b, alpha] = match;
+  const [, r, g, b, alpha] = modernMatch;
 
   return {
     r: clampChannel(Number.parseFloat(r ?? "0")),
     g: clampChannel(Number.parseFloat(g ?? "0")),
     b: clampChannel(Number.parseFloat(b ?? "0")),
-    a: alpha === undefined ? 1 : Math.min(1, Math.max(0, Number.parseFloat(alpha))),
+    a: parseAlpha(alpha),
   };
 };
 
@@ -105,7 +122,24 @@ export const contrastRatioFromCssColors = (
     return null;
   }
 
-  return contrastRatio(foregroundColor, backgroundColor);
+  // A non-opaque background means the effective backdrop is unknown (the page
+  // behind it shows through), so a ratio computed against it would be wrong.
+  if (backgroundColor.a < 1) {
+    return null;
+  }
+
+  // Blend a semi-transparent foreground over the opaque background first.
+  const blendedForeground: RgbaColor =
+    foregroundColor.a < 1
+      ? {
+          r: foregroundColor.r * foregroundColor.a + backgroundColor.r * (1 - foregroundColor.a),
+          g: foregroundColor.g * foregroundColor.a + backgroundColor.g * (1 - foregroundColor.a),
+          b: foregroundColor.b * foregroundColor.a + backgroundColor.b * (1 - foregroundColor.a),
+          a: 1,
+        }
+      : foregroundColor;
+
+  return contrastRatio(blendedForeground, backgroundColor);
 };
 
 export const getAccessibilityNotes = (snapshot: ElementSnapshot): AccessibilityNote[] => {

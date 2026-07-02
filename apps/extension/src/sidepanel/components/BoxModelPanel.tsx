@@ -4,6 +4,8 @@ import { useState } from "react";
 import { sendMessageToActiveTab } from "../../chrome/messaging";
 import { getCurrentStyleRecord, usePanelStore } from "../store";
 
+import { CommitInput } from "./CommitInput";
+
 import type { StyleChange, SupportedStyleProperty } from "@ui-buddy/shared";
 
 type BoxGroup = "margin" | "padding";
@@ -59,7 +61,10 @@ export const BoxModelPanel = () => {
         const property = propertyFor(group, side);
         const currentValue = styles[property] ?? selectedElement.boxModel[group][side];
         const parsed = parseLength(currentValue);
-        return prepareStyleChange(property, `${Math.max(0, parsed.amount + delta)}${parsed.unit}`);
+        // Padding cannot be negative, but margins can.
+        const nextAmount =
+          group === "padding" ? Math.max(0, parsed.amount + delta) : parsed.amount + delta;
+        return prepareStyleChange(property, `${nextAmount}${parsed.unit}`);
       })
       .filter((change): change is StyleChange => change !== null);
 
@@ -135,9 +140,9 @@ export const BoxModelPanel = () => {
               <span className="text-[10px] font-semibold uppercase tracking-normal text-slate-500">
                 {side}
               </span>
-              <input
+              <CommitInput
                 className="h-8 w-full rounded-md border border-border px-2 text-xs outline-none transition focus:border-accent focus:ring-2 focus:ring-blue-100"
-                onChange={(event) => void commitSide(group, side, event.target.value, linked)}
+                onCommit={(nextValue) => void commitSide(group, side, nextValue, linked)}
                 value={value}
               />
             </label>

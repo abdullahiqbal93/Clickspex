@@ -31,7 +31,7 @@ const collectAttributes = (element: Element): Record<string, string> => {
 
 export const getTextPreview = (element: Element, maxLength = 120): string => {
   const normalized = (element.textContent ?? "").replace(/\s+/g, " ").trim();
-  return normalized.length > maxLength ? `${normalized.slice(0, maxLength - 1)}�` : normalized;
+  return normalized.length > maxLength ? `${normalized.slice(0, maxLength - 1)}…` : normalized;
 };
 
 export const getImportantComputedStyles = (styles: CSSStyleDeclaration): Record<string, string> => {

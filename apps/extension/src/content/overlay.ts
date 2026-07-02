@@ -134,18 +134,65 @@ export class OverlayController {
     pinned: boolean,
   ): DocumentFragment {
     const fragment = this.host.ownerDocument.createDocumentFragment();
+    const elements: HTMLDivElement[] = [];
+
+    // Horizontal edge-to-edge gap (0 when the rects overlap on this axis,
+    // matching the core measurement logic).
+    const horizontalGap =
+      source.right < target.left
+        ? { start: source.right, end: target.left }
+        : target.right < source.left
+          ? { start: target.right, end: source.left }
+          : null;
     const hY = Math.min(source.bottom, target.bottom) + 12;
-    const hStart = source.right <= target.left ? source.right : target.right;
-    const hEnd = source.right <= target.left ? target.left : source.left;
+
+    if (horizontalGap !== null) {
+      elements.push(
+        this.createLine("horizontal", horizontalGap.start, hY, horizontalGap.end - horizontalGap.start),
+        this.createLabel(
+          `${Math.round(horizontalGap.end - horizontalGap.start)}px`,
+          (horizontalGap.start + horizontalGap.end) / 2,
+          hY,
+        ),
+      );
+    }
+
+    // Vertical edge-to-edge gap.
+    const verticalGap =
+      source.bottom < target.top
+        ? { start: source.bottom, end: target.top }
+        : target.bottom < source.top
+          ? { start: target.bottom, end: source.top }
+          : null;
     const vX = Math.min(source.right, target.right) + 12;
-    const vStart = source.bottom <= target.top ? source.bottom : target.bottom;
-    const vEnd = source.bottom <= target.top ? target.top : source.top;
-    const elements = [
-      this.createLine("horizontal", hStart, hY, hEnd - hStart),
-      this.createLabel(`${Math.abs(Math.round(hEnd - hStart))}px`, (hStart + hEnd) / 2, hY),
-      this.createLine("vertical", vX, vStart, vEnd - vStart),
-      this.createLabel(`${Math.abs(Math.round(vEnd - vStart))}px`, vX, (vStart + vEnd) / 2),
-    ];
+
+    if (verticalGap !== null) {
+      elements.push(
+        this.createLine("vertical", vX, verticalGap.start, verticalGap.end - verticalGap.start),
+        this.createLabel(
+          `${Math.round(verticalGap.end - verticalGap.start)}px`,
+          vX,
+          (verticalGap.start + verticalGap.end) / 2,
+        ),
+      );
+    }
+
+    // Overlapping rects: show center-to-center deltas instead of a bogus gap.
+    if (horizontalGap === null && verticalGap === null) {
+      const sourceCenterX = source.left + source.width / 2;
+      const sourceCenterY = source.top + source.height / 2;
+      const targetCenterX = target.left + target.width / 2;
+      const targetCenterY = target.top + target.height / 2;
+      const deltaX = Math.round(targetCenterX - sourceCenterX);
+      const deltaY = Math.round(targetCenterY - sourceCenterY);
+      elements.push(
+        this.createLabel(
+          `Δ ${deltaX}px, ${deltaY}px`,
+          (sourceCenterX + targetCenterX) / 2,
+          (sourceCenterY + targetCenterY) / 2,
+        ),
+      );
+    }
 
     for (const element of elements) {
       if (pinned) {

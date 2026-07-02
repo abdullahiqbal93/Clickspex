@@ -5,6 +5,8 @@ import { useState } from "react";
 import { sendMessageToActiveTab } from "../../chrome/messaging";
 import { getCurrentStyleRecord, usePanelStore } from "../store";
 
+import { CommitInput } from "./CommitInput";
+
 import type { StyleTargetState, SupportedStyleProperty } from "@ui-buddy/shared";
 
 type StylePreset = {
@@ -1296,12 +1298,12 @@ export const StylePanel = () => {
                           ) : null}
                           {selectOptionsSource === undefined ? (
                             <>
-                              <input
+                              <CommitInput
                                 className="h-8 min-w-0 flex-1 rounded-md border border-border px-2 text-xs outline-none transition placeholder:text-slate-400 focus:border-accent focus:ring-2 focus:ring-blue-100"
                                 id={inputId}
                                 list={suggestionListId}
-                                onChange={(event) =>
-                                  void commitChange(field.property, event.target.value)
+                                onCommit={(nextValue) =>
+                                  void commitChange(field.property, nextValue)
                                 }
                                 placeholder={guidance.placeholder}
                                 value={value}

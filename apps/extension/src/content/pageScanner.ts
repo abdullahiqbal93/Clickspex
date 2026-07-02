@@ -9,11 +9,6 @@ const parseRgb = (value: string): { r: number; g: number; b: number } | null => 
   return { r: parseInt(m[1]!, 10), g: parseInt(m[2]!, 10), b: parseInt(m[3]!, 10) };
 };
 
-const isVisible = (el: Element): boolean => {
-  const style = window.getComputedStyle(el);
-  return style.display !== "none" && style.visibility !== "hidden" && style.opacity !== "0";
-};
-
 export const scanPage = (): PageScanResult => {
   const colorMap = new Map<string, { rgb: string; count: number; properties: Set<string> }>();
   const fontMap = new Map<string, { sizes: Set<string>; weights: Set<string>; count: number }>();
@@ -28,14 +23,46 @@ export const scanPage = (): PageScanResult => {
     "border-right-color",
   ];
 
-  // Limit to first 150 elements to ensure it runs instantly without freezing
-  const allElements = document.querySelectorAll("*");
-  const elements = Array.from(allElements).slice(0, 150);
+  // Bounded scan: cover far more of the page than the old 150-element cap,
+  // but stop early on a time budget so huge pages never freeze. The budget is
+  // checked inside the processing loop, where the getComputedStyle cost is.
+  const MAX_ELEMENTS = 5000;
+  const TIME_BUDGET_MS = 300;
+  const startedAt = performance.now();
+  const allElements = Array.from(
+    document.body?.querySelectorAll("*") ?? document.querySelectorAll("*"),
+  ).slice(0, MAX_ELEMENTS);
 
-  for (const el of elements) {
-    if (!isVisible(el)) continue;
+  for (const el of allElements) {
+    if (performance.now() - startedAt > TIME_BUDGET_MS) {
+      break;
+    }
 
     const styles = window.getComputedStyle(el);
+
+    if (
+      styles.display === "none" ||
+      styles.visibility === "hidden" ||
+      styles.opacity === "0"
+    ) {
+      continue;
+    }
+
+    // Background images (collected here to reuse this getComputedStyle call)
+    const bg = styles.backgroundImage;
+    if (bg && bg !== "none") {
+      const urlMatch = bg.match(/url\(["']?(.+?)["']?\)/);
+      if (urlMatch?.[1] && !urlMatch[1].startsWith("data:")) {
+        const rect = el.getBoundingClientRect();
+        assets.push({
+          type: "bg",
+          src: urlMatch[1],
+          alt: "",
+          width: Math.round(rect.width),
+          height: Math.round(rect.height),
+        });
+      }
+    }
 
     // Colors
     for (const prop of colorProps) {
@@ -95,33 +122,15 @@ export const scanPage = (): PageScanResult => {
     if (rect.width > 0 && rect.height > 0) {
       const serializer = new XMLSerializer();
       const svgStr = serializer.serializeToString(svg);
-      const blob = new Blob([svgStr], { type: "image/svg+xml" });
+      // Use a data: URL — blob: URLs minted in the page context cannot be
+      // loaded by the extension side panel (different origin/process).
       assets.push({
         type: "svg",
-        src: URL.createObjectURL(blob),
+        src: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgStr)}`,
         alt: svg.getAttribute("aria-label") || "",
         width: Math.round(rect.width),
         height: Math.round(rect.height),
       });
-    }
-  }
-
-  // Background images
-  for (const el of elements) {
-    const styles = window.getComputedStyle(el);
-    const bg = styles.backgroundImage;
-    if (bg && bg !== "none") {
-      const urlMatch = bg.match(/url\(["']?(.+?)["']?\)/);
-      if (urlMatch?.[1] && !urlMatch[1].startsWith("data:")) {
-        const rect = el.getBoundingClientRect();
-        assets.push({
-          type: "bg",
-          src: urlMatch[1],
-          alt: "",
-          width: Math.round(rect.width),
-          height: Math.round(rect.height),
-        });
-      }
     }
   }
 

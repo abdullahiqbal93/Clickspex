@@ -1,6 +1,20 @@
-import { buildCssRule, buildStyleTargetSelector } from "@ui-buddy/core";
+import { buildStyleTargetSelector } from "@ui-buddy/core";
 
 import type { StyleChange } from "@ui-buddy/shared";
+
+// Live preview rules use !important so temporary edits reliably win over the
+// page's own (often more specific or inline) styles. Exported CSS stays clean.
+const buildImportantCssRule = (selector: string, styles: Record<string, string>): string => {
+  const declarations = Object.entries(styles)
+    .filter(([, value]) => value.trim().length > 0)
+    .map(([property, value]) => `  ${property}: ${value} !important;`);
+
+  if (declarations.length === 0) {
+    return `${selector} {}`;
+  }
+
+  return [`${selector} {`, ...declarations, "}"].join("\n");
+};
 
 const STYLE_ELEMENT_ID = "__ui-buddy-styles__";
 
@@ -130,7 +144,7 @@ export class StyleInjector {
     }
 
     const cssRules = Array.from(rulesBySelector.entries())
-      .map(([selector, styles]) => buildCssRule(selector, styles))
+      .map(([selector, styles]) => buildImportantCssRule(selector, styles))
       .join("\n\n");
     const animationKeyframes = getAnimationPresetKeyframes(rulesBySelector);
 

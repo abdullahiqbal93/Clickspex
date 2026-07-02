@@ -3,7 +3,11 @@ import { join, resolve } from "node:path";
 
 import { cssAdapter, scaffoldAdapters, tailwindAdapter } from "@ui-buddy/adapters";
 import { detectProject, scanProjectContext } from "@ui-buddy/core/project";
-import { SUPPORTED_STYLE_PROPERTIES, type UIChangeIntent } from "@ui-buddy/shared";
+import {
+  STYLE_TARGET_STATES,
+  SUPPORTED_STYLE_PROPERTIES,
+  type UIChangeIntent,
+} from "@ui-buddy/shared";
 import { z } from "zod";
 
 const rectSchema = z.object({
@@ -37,6 +41,9 @@ const styleChangeSchema = z.object({
   beforeValue: z.string(),
   afterValue: z.string(),
   timestamp: z.string(),
+  // Optional pseudo-state (hover/focus/...). Without this field zod silently
+  // strips `state`, so pseudo-state changes were exported as base styles.
+  state: z.enum(STYLE_TARGET_STATES).optional(),
 });
 
 const accessibilityNoteSchema = z.object({

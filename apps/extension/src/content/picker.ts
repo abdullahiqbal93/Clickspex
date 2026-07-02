@@ -115,6 +115,8 @@ export class ElementPickerController {
     document.addEventListener("click", this.handleClick, true);
     document.addEventListener("dblclick", this.handleDoubleClick, true);
     document.addEventListener("keydown", this.handleKeyDown, true);
+    window.addEventListener("scroll", this.handleViewportChange, true);
+    window.addEventListener("resize", this.handleViewportChange);
   }
 
   public disable(options: DisableOptions = {}): void {
@@ -141,6 +143,8 @@ export class ElementPickerController {
     document.removeEventListener("click", this.handleClick, true);
     document.removeEventListener("dblclick", this.handleDoubleClick, true);
     document.removeEventListener("keydown", this.handleKeyDown, true);
+    window.removeEventListener("scroll", this.handleViewportChange, true);
+    window.removeEventListener("resize", this.handleViewportChange);
   }
 
   public clearSelection(notifyPanel = true): void {
@@ -631,7 +635,8 @@ export class ElementPickerController {
       const haystack = [
         element.tagName,
         element.id,
-        element.className,
+        // element.className is an SVGAnimatedString on SVG elements.
+        element.getAttribute("class") ?? "",
         element.getAttribute("role") ?? "",
         element.getAttribute("aria-label") ?? "",
         element.textContent?.slice(0, 200) ?? "",
@@ -850,6 +855,27 @@ export class ElementPickerController {
     event.preventDefault();
     event.stopPropagation();
   };
+  private viewportRefreshFrame: number | null = null;
+
+  private readonly handleViewportChange = (): void => {
+    if (this.viewportRefreshFrame !== null) {
+      return;
+    }
+
+    this.viewportRefreshFrame = window.requestAnimationFrame(() => {
+      this.viewportRefreshFrame = null;
+
+      // The hover box is repositioned on the next pointermove; hide it so it
+      // does not float detached from its element while the page scrolls.
+      this.hoveredElement = null;
+      this.overlay.clearHover();
+
+      if (this.selectedElementNode !== null && this.selectedElementNode.isConnected) {
+        this.overlay.showSelected(this.selectedElementNode.getBoundingClientRect());
+      }
+    });
+  };
+
   private readonly handlePointerMove = (event: PointerEvent): void => {
     if (
       this.isEditingText ||
@@ -953,14 +979,19 @@ export class ElementPickerController {
   };
 
   private readonly handleDoubleClick = (event: MouseEvent): void => {
-    if (!this.active || !isInspectableElement(event.target, this.overlay.hostElement)) {
+    if (
+      this.isEditingText ||
+      !this.active ||
+      !isInspectableElement(event.target, this.overlay.hostElement) ||
+      !(event.target instanceof HTMLElement)
+    ) {
       return;
     }
 
     event.preventDefault();
     event.stopPropagation();
 
-    this.beginTextEdit(event.target as HTMLElement);
+    this.beginTextEdit(event.target);
   };
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
