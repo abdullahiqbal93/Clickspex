@@ -8,6 +8,7 @@ const CONTENT_TO_PANEL_MESSAGES = new Set<ExtensionMessage["type"]>([
   "MEASURE_TARGET_SELECTED",
   "RULER_DISABLE",
   "PAGE_SCAN_RESULT",
+  "ELEMENT_SEARCH_RESULT",
 ]);
 
 export const shouldForwardToSidePanel = (message: ExtensionMessage): boolean =>

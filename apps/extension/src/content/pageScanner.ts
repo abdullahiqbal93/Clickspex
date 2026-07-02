@@ -19,7 +19,14 @@ export const scanPage = (): PageScanResult => {
   const fontMap = new Map<string, { sizes: Set<string>; weights: Set<string>; count: number }>();
   const assets: PageAssetInfo[] = [];
 
-  const colorProps = ["color", "background-color", "border-top-color", "border-bottom-color", "border-left-color", "border-right-color"];
+  const colorProps = [
+    "color",
+    "background-color",
+    "border-top-color",
+    "border-bottom-color",
+    "border-left-color",
+    "border-right-color",
+  ];
 
   // Limit to first 150 elements to ensure it runs instantly without freezing
   const allElements = document.querySelectorAll("*");
@@ -47,7 +54,8 @@ export const scanPage = (): PageScanResult => {
     }
 
     // Fonts
-    const family = styles.getPropertyValue("font-family").split(",")[0]?.trim().replace(/['"]/g, "") ?? "";
+    const family =
+      styles.getPropertyValue("font-family").split(",")[0]?.trim().replace(/['"]/g, "") ?? "";
     if (family) {
       const size = styles.getPropertyValue("font-size");
       const weight = styles.getPropertyValue("font-weight");
@@ -57,7 +65,11 @@ export const scanPage = (): PageScanResult => {
         if (size) existing.sizes.add(size);
         if (weight) existing.weights.add(weight);
       } else {
-        fontMap.set(family, { sizes: new Set(size ? [size] : []), weights: new Set(weight ? [weight] : []), count: 1 });
+        fontMap.set(family, {
+          sizes: new Set(size ? [size] : []),
+          weights: new Set(weight ? [weight] : []),
+          count: 1,
+        });
       }
     }
   }
@@ -66,7 +78,13 @@ export const scanPage = (): PageScanResult => {
   const images = Array.from(document.querySelectorAll("img")).slice(0, 50);
   for (const img of images) {
     if (img.src && !img.src.startsWith("data:")) {
-      assets.push({ type: "img", src: img.src, alt: img.alt || "", width: img.naturalWidth, height: img.naturalHeight });
+      assets.push({
+        type: "img",
+        src: img.src,
+        alt: img.alt || "",
+        width: img.naturalWidth,
+        height: img.naturalHeight,
+      });
     }
   }
 
@@ -78,7 +96,13 @@ export const scanPage = (): PageScanResult => {
       const serializer = new XMLSerializer();
       const svgStr = serializer.serializeToString(svg);
       const blob = new Blob([svgStr], { type: "image/svg+xml" });
-      assets.push({ type: "svg", src: URL.createObjectURL(blob), alt: svg.getAttribute("aria-label") || "", width: Math.round(rect.width), height: Math.round(rect.height) });
+      assets.push({
+        type: "svg",
+        src: URL.createObjectURL(blob),
+        alt: svg.getAttribute("aria-label") || "",
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+      });
     }
   }
 
@@ -90,18 +114,34 @@ export const scanPage = (): PageScanResult => {
       const urlMatch = bg.match(/url\(["']?(.+?)["']?\)/);
       if (urlMatch?.[1] && !urlMatch[1].startsWith("data:")) {
         const rect = el.getBoundingClientRect();
-        assets.push({ type: "bg", src: urlMatch[1], alt: "", width: Math.round(rect.width), height: Math.round(rect.height) });
+        assets.push({
+          type: "bg",
+          src: urlMatch[1],
+          alt: "",
+          width: Math.round(rect.width),
+          height: Math.round(rect.height),
+        });
       }
     }
   }
 
   const colors: PageColorInfo[] = Array.from(colorMap.entries())
-    .map(([hex, info]) => ({ hex, rgb: info.rgb, count: info.count, properties: Array.from(info.properties) }))
+    .map(([hex, info]) => ({
+      hex,
+      rgb: info.rgb,
+      count: info.count,
+      properties: Array.from(info.properties),
+    }))
     .sort((a, b) => b.count - a.count)
     .slice(0, 30);
 
   const fonts: PageFontInfo[] = Array.from(fontMap.entries())
-    .map(([family, info]) => ({ family, sizes: Array.from(info.sizes).sort(), weights: Array.from(info.weights).sort(), count: info.count }))
+    .map(([family, info]) => ({
+      family,
+      sizes: Array.from(info.sizes).sort(),
+      weights: Array.from(info.weights).sort(),
+      count: info.count,
+    }))
     .sort((a, b) => b.count - a.count);
 
   return { colors, fonts, assets: assets.slice(0, 50) };

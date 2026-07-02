@@ -5,7 +5,7 @@ export class ManualRulerController {
   private isDrawing = false;
   private startX = 0;
   private startY = 0;
-  
+
   private readonly host: HTMLDivElement;
   private readonly shadowRootRef: ShadowRoot;
   private readonly rulerBox: HTMLDivElement;
@@ -19,9 +19,9 @@ export class ManualRulerController {
     this.host.style.zIndex = "2147483647"; // Max z-index
     this.host.style.pointerEvents = "none";
     this.host.style.cursor = "crosshair";
-    
+
     this.shadowRootRef = this.host.attachShadow({ mode: "open" });
-    
+
     const style = document.createElement("style");
     style.textContent = `
       :host {
@@ -57,19 +57,19 @@ export class ManualRulerController {
     this.label = document.createElement("div");
     this.label.className = "ruler-label";
     this.rulerBox.appendChild(this.label);
-    
+
     this.shadowRootRef.appendChild(this.rulerBox);
   }
 
   public enable(): void {
     if (this.active) return;
     this.active = true;
-    
+
     if (!this.host.parentNode) {
       document.documentElement.appendChild(this.host);
     }
     this.host.style.pointerEvents = "auto";
-    
+
     document.addEventListener("mousedown", this.handleMouseDown, true);
     document.addEventListener("mousemove", this.handleMouseMove, true);
     document.addEventListener("mouseup", this.handleMouseUp, true);
@@ -80,14 +80,14 @@ export class ManualRulerController {
     if (!this.active) return;
     this.active = false;
     this.isDrawing = false;
-    
+
     this.host.style.pointerEvents = "none";
     this.rulerBox.style.display = "none";
-    
+
     if (this.host.parentNode) {
       this.host.parentNode.removeChild(this.host);
     }
-    
+
     document.removeEventListener("mousedown", this.handleMouseDown, true);
     document.removeEventListener("mousemove", this.handleMouseMove, true);
     document.removeEventListener("mouseup", this.handleMouseUp, true);
@@ -98,11 +98,11 @@ export class ManualRulerController {
     if (!this.active) return;
     e.preventDefault();
     e.stopPropagation();
-    
+
     this.isDrawing = true;
     this.startX = e.clientX;
     this.startY = e.clientY;
-    
+
     this.rulerBox.style.display = "block";
     this.updateBox(this.startX, this.startY);
   };
@@ -111,7 +111,7 @@ export class ManualRulerController {
     if (!this.active || !this.isDrawing) return;
     e.preventDefault();
     e.stopPropagation();
-    
+
     this.updateBox(e.clientX, e.clientY);
   };
 
@@ -119,10 +119,10 @@ export class ManualRulerController {
     if (!this.active || !this.isDrawing) return;
     e.preventDefault();
     e.stopPropagation();
-    
+
     this.isDrawing = false;
     this.updateBox(e.clientX, e.clientY);
-    
+
     // We keep the box on screen until they draw a new one or press Escape.
   };
 
@@ -138,12 +138,12 @@ export class ManualRulerController {
     const top = Math.min(this.startY, endY);
     const width = Math.abs(endX - this.startX);
     const height = Math.abs(endY - this.startY);
-    
+
     this.rulerBox.style.left = `${left}px`;
     this.rulerBox.style.top = `${top}px`;
     this.rulerBox.style.width = `${width}px`;
     this.rulerBox.style.height = `${height}px`;
-    
+
     this.label.textContent = `${width} × ${height}`;
   }
 }

@@ -14,7 +14,9 @@ const iconsDir = join(__dirname, "..", "public", "icons");
 mkdirSync(iconsDir, { recursive: true });
 
 // Create SVG icon as a string
-const createSvg = (size) => `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 128 128">
+const createSvg = (
+  size,
+) => `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 128 128">
   <defs>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" style="stop-color:#2563eb"/>

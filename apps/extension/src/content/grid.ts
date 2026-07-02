@@ -1,5 +1,3 @@
-import { sendRuntimeMessage } from "../chrome/messaging";
-
 export class GridController {
   private active = false;
   private readonly host: HTMLDivElement;
@@ -13,9 +11,9 @@ export class GridController {
     this.host.style.inset = "0";
     this.host.style.zIndex = "2147483646"; // Just below ruler/picker
     this.host.style.pointerEvents = "none";
-    
+
     this.shadowRootRef = this.host.attachShadow({ mode: "open" });
-    
+
     const style = document.createElement("style");
     style.textContent = `
       :host {
@@ -47,21 +45,21 @@ export class GridController {
 
     this.gridContainer = document.createElement("div");
     this.gridContainer.className = "grid-container";
-    
+
     // Create 12 columns
     for (let i = 0; i < 12; i++) {
       const col = document.createElement("div");
       col.className = "column";
       this.gridContainer.appendChild(col);
     }
-    
+
     this.shadowRootRef.appendChild(this.gridContainer);
   }
 
   public enable(): void {
     if (this.active) return;
     this.active = true;
-    
+
     if (!this.host.parentNode) {
       document.documentElement.appendChild(this.host);
     }
@@ -70,7 +68,7 @@ export class GridController {
   public disable(): void {
     if (!this.active) return;
     this.active = false;
-    
+
     if (this.host.parentNode) {
       this.host.parentNode.removeChild(this.host);
     }

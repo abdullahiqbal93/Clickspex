@@ -1,14 +1,56 @@
-import { buildCssRule } from "@ui-buddy/core";
+import { buildCssRule, buildStyleTargetSelector } from "@ui-buddy/core";
 
 import type { StyleChange } from "@ui-buddy/shared";
 
 const STYLE_ELEMENT_ID = "__ui-buddy-styles__";
 
+const ANIMATION_PRESET_KEYFRAMES: Record<string, string> = {
+  "ui-buddy-fade-in": `@keyframes ui-buddy-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}`,
+  "ui-buddy-slide-up": `@keyframes ui-buddy-slide-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}`,
+  "ui-buddy-pop": `@keyframes ui-buddy-pop {
+  0% { opacity: 0; transform: scale(0.96); }
+  100% { opacity: 1; transform: scale(1); }
+}`,
+  "ui-buddy-pulse": `@keyframes ui-buddy-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+}`,
+};
+
+const getAnimationPresetKeyframes = (
+  rulesBySelector: Map<string, Record<string, string>>,
+): string[] => {
+  const keyframes = new Set<string>();
+
+  for (const styles of rulesBySelector.values()) {
+    const animationValues = [styles.animation, styles["animation-name"]].filter(
+      (value): value is string => value !== undefined,
+    );
+
+    for (const value of animationValues) {
+      for (const [name, css] of Object.entries(ANIMATION_PRESET_KEYFRAMES)) {
+        if (value.includes(name)) {
+          keyframes.add(css);
+        }
+      }
+    }
+  }
+
+  return [...keyframes];
+};
+
 const applyChangeToRules = (
   rulesBySelector: Map<string, Record<string, string>>,
   change: StyleChange,
 ): void => {
-  const existing = rulesBySelector.get(change.selector) ?? {};
+  const selector = buildStyleTargetSelector(change.selector, change.state ?? "base");
+  const existing = rulesBySelector.get(selector) ?? {};
   const nextStyles = { ...existing };
 
   if (change.afterValue.trim().length === 0) {
@@ -18,9 +60,9 @@ const applyChangeToRules = (
   }
 
   if (Object.keys(nextStyles).length === 0) {
-    rulesBySelector.delete(change.selector);
+    rulesBySelector.delete(selector);
   } else {
-    rulesBySelector.set(change.selector, nextStyles);
+    rulesBySelector.set(selector, nextStyles);
   }
 };
 
@@ -90,7 +132,8 @@ export class StyleInjector {
     const cssRules = Array.from(rulesBySelector.entries())
       .map(([selector, styles]) => buildCssRule(selector, styles))
       .join("\n\n");
+    const animationKeyframes = getAnimationPresetKeyframes(rulesBySelector);
 
-    this.getStyleElement().textContent = cssRules;
+    this.getStyleElement().textContent = [cssRules, ...animationKeyframes].join("\n\n");
   }
 }

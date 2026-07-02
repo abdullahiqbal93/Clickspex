@@ -11,12 +11,14 @@ const createChange = (
   property: StyleChange["property"],
   beforeValue: string,
   afterValue: string,
+  state?: StyleChange["state"],
 ): StyleChange => ({
   selector: "#save",
   property,
   beforeValue,
   afterValue,
   timestamp: "2026-07-01T00:00:00.000Z",
+  ...(state === undefined ? {} : { state }),
 });
 
 describe("StyleInjector", () => {
@@ -69,6 +71,24 @@ describe("StyleInjector", () => {
     expect(styleElement()?.textContent).toBe(["#save {", "  font-size: 16px;", "}"].join("\n"));
   });
 
+  it("writes pseudo-state edits as pseudo-class CSS rules", () => {
+    const injector = new StyleInjector();
+
+    injector.applyChange(createChange("transform", "", "scale(1.04)", "hover"));
+
+    expect(styleElement()?.textContent).toContain("#save:hover {");
+    expect(styleElement()?.textContent).toContain("  transform: scale(1.04);");
+  });
+  it("adds keyframes for built-in animation presets", () => {
+    const injector = new StyleInjector();
+
+    injector.applyChange(createChange("animation", "", "ui-buddy-fade-in 300ms ease-out both"));
+
+    expect(styleElement()?.textContent).toContain(
+      "animation: ui-buddy-fade-in 300ms ease-out both;",
+    );
+    expect(styleElement()?.textContent).toContain("@keyframes ui-buddy-fade-in");
+  });
   it("reset clears style output and history", () => {
     const injector = new StyleInjector();
 

@@ -15,6 +15,13 @@ describe("background message router", () => {
     };
 
     expect(shouldForwardToSidePanel(message)).toBe(true);
+    expect(shouldForwardToSidePanel({ type: "ELEMENT_UNSELECTED" })).toBe(true);
+    expect(
+      shouldForwardToSidePanel({
+        type: "ELEMENT_SEARCH_RESULT",
+        payload: { query: "button", results: [] },
+      }),
+    ).toBe(true);
   });
 
   it("does not forward side-panel command messages back to the side panel", () => {
