@@ -1,4 +1,4 @@
-import { Link2, Unlink2 } from "lucide-react";
+import { Link2, Minus, Plus, Unlink2 } from "lucide-react";
 import { useState } from "react";
 
 import { sendMessageToActiveTab } from "../../chrome/messaging";
@@ -35,6 +35,44 @@ export const BoxModelPanel = () => {
     }
   };
 
+  const parseLength = (value: string): { amount: number; unit: string } => {
+    const match = value.trim().match(/^(-?\d+(?:\.\d+)?)([a-z%]*)$/i);
+
+    if (match === null) {
+      return { amount: 0, unit: "px" };
+    }
+
+    return {
+      amount: Number.parseFloat(match[1] ?? "0"),
+      unit: match[2]?.length ? match[2] : "px",
+    };
+  };
+
+  const nudgeGroup = async (group: BoxGroup, delta: number) => {
+    if (selectedElement === null) {
+      return;
+    }
+
+    setError(null);
+    const nextChanges = sides
+      .map((side) => {
+        const property = propertyFor(group, side);
+        const currentValue = styles[property] ?? selectedElement.boxModel[group][side];
+        const parsed = parseLength(currentValue);
+        return prepareStyleChange(property, `${Math.max(0, parsed.amount + delta)}${parsed.unit}`);
+      })
+      .filter((change): change is StyleChange => change !== null);
+
+    if (nextChanges.length === 0) {
+      return;
+    }
+
+    try {
+      await applyChanges(nextChanges);
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : "Unable to nudge spacing.");
+    }
+  };
   const commitSide = async (group: BoxGroup, side: Side, value: string, linked: boolean) => {
     setError(null);
     const targetSides = linked ? sides : [side];
@@ -149,6 +187,44 @@ export const BoxModelPanel = () => {
           <div className="col-start-3 row-start-3 flex items-center justify-center bg-teal-50">
             {sideLabel("right")} {styles["margin-right"] ?? boxModel.margin.right}
           </div>
+        </div>
+      </section>
+
+      <section className="rounded-lg border border-border bg-panel/80 backdrop-blur-sm p-4 shadow-card">
+        <h3 className="text-sm font-semibold">Spacing nudges</h3>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <button
+            className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-border px-2 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
+            onClick={() => void nudgeGroup("margin", 4)}
+            type="button"
+          >
+            <Plus aria-hidden="true" size={13} />
+            Margin
+          </button>
+          <button
+            className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-border px-2 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
+            onClick={() => void nudgeGroup("margin", -4)}
+            type="button"
+          >
+            <Minus aria-hidden="true" size={13} />
+            Margin
+          </button>
+          <button
+            className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-border px-2 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
+            onClick={() => void nudgeGroup("padding", 4)}
+            type="button"
+          >
+            <Plus aria-hidden="true" size={13} />
+            Padding
+          </button>
+          <button
+            className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-border px-2 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
+            onClick={() => void nudgeGroup("padding", -4)}
+            type="button"
+          >
+            <Minus aria-hidden="true" size={13} />
+            Padding
+          </button>
         </div>
       </section>
 

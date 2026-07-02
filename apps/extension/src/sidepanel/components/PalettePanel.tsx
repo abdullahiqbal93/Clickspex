@@ -1,4 +1,5 @@
 import { Palette } from "lucide-react";
+
 import { usePanelStore } from "../store";
 
 export const PalettePanel = () => {

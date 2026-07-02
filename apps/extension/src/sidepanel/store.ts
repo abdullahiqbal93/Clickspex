@@ -3,13 +3,25 @@ import { create } from "zustand";
 
 import type {
   AccessibilityNote,
+  ElementSearchResult,
   ElementSnapshot,
   PageScanResult,
   StyleChange,
+  StyleTargetState,
   SupportedStyleProperty,
 } from "@ui-buddy/shared";
 
-export type PanelTab = "inspect" | "styles" | "box" | "measure" | "accessibility" | "export";
+export type PanelTab =
+  | "inspect"
+  | "styles"
+  | "box"
+  | "measure"
+  | "motion"
+  | "palette"
+  | "typography"
+  | "assets"
+  | "accessibility"
+  | "export";
 
 export type PanelState = {
   accessibilityNotes: AccessibilityNote[];
@@ -24,9 +36,14 @@ export type PanelState = {
   pickerActive: boolean;
   rulerActive: boolean;
   redoStack: StyleChange[];
+  searchResults: ElementSearchResult[];
   selectedElement: ElementSnapshot | null;
   applyLocalStyleChange: (change: StyleChange) => void;
-  prepareStyleChange: (property: SupportedStyleProperty, afterValue: string) => StyleChange | null;
+  prepareStyleChange: (
+    property: SupportedStyleProperty,
+    afterValue: string,
+    state?: StyleTargetState,
+  ) => StyleChange | null;
   redoLocalChange: () => void;
   resetElementChanges: () => void;
   setActiveTab: (tab: PanelTab) => void;
@@ -38,19 +55,27 @@ export type PanelState = {
   setPageScanLoading: (loading: boolean) => void;
   setPickerActive: (active: boolean) => void;
   setRulerActive: (active: boolean) => void;
+  setSearchResults: (results: ElementSearchResult[]) => void;
   setSelectedElement: (snapshot: ElementSnapshot | null) => void;
   undoLocalChange: () => void;
 };
 
-export const getCurrentStyleRecord = (state: Pick<PanelState, "changes" | "selectedElement">) => {
+export const getCurrentStyleRecord = (
+  state: Pick<PanelState, "changes" | "selectedElement">,
+  targetState: StyleTargetState = "base",
+) => {
   if (state.selectedElement === null) {
     return {};
   }
 
-  const styles: Record<string, string> = { ...state.selectedElement.computedStyles };
+  const styles: Record<string, string> =
+    targetState === "base" ? { ...state.selectedElement.computedStyles } : {};
 
   for (const change of state.changes) {
-    if (change.selector === state.selectedElement.selector) {
+    if (
+      change.selector === state.selectedElement.selector &&
+      (change.state ?? "base") === targetState
+    ) {
       styles[change.property] = change.afterValue;
     }
   }
@@ -71,27 +96,35 @@ export const usePanelStore = create<PanelState>((set, get) => ({
   pickerActive: false,
   rulerActive: false,
   redoStack: [],
+  searchResults: [],
   selectedElement: null,
   applyLocalStyleChange: (change) =>
     set((state) => ({
       changes: [...state.changes, change],
       redoStack: [],
     })),
-  prepareStyleChange: (property, afterValue) => {
+  prepareStyleChange: (property, afterValue, targetState = "base") => {
     const state = get();
 
     if (state.selectedElement === null) {
       return null;
     }
 
-    const currentStyles = getCurrentStyleRecord(state);
+    const currentStyles = getCurrentStyleRecord(state, targetState);
     const beforeValue = currentStyles[property] ?? "";
 
     if (beforeValue === afterValue) {
       return null;
     }
 
-    return createStyleChange(state.selectedElement.selector, property, beforeValue, afterValue);
+    return createStyleChange(
+      state.selectedElement.selector,
+      property,
+      beforeValue,
+      afterValue,
+      undefined,
+      targetState,
+    );
   },
   redoLocalChange: () =>
     set((state) => {
@@ -115,14 +148,15 @@ export const usePanelStore = create<PanelState>((set, get) => ({
   setMeasurementTarget: (measurementTarget) => set({ measurementTarget }),
   setPageScan: (pageScan) => set({ pageScan, pageScanLoading: false }),
   setPageScanLoading: (pageScanLoading) => set({ pageScanLoading }),
-  setPickerActive: (pickerActive) => set({ pickerActive, rulerActive: pickerActive ? false : get().rulerActive }),
-  setRulerActive: (rulerActive) => set({ rulerActive, pickerActive: rulerActive ? false : get().pickerActive }),
+  setPickerActive: (pickerActive) =>
+    set({ pickerActive, rulerActive: pickerActive ? false : get().rulerActive }),
+  setRulerActive: (rulerActive) =>
+    set({ rulerActive, pickerActive: rulerActive ? false : get().pickerActive }),
+  setSearchResults: (searchResults) => set({ searchResults }),
   setSelectedElement: (selectedElement) =>
     set({
       accessibilityNotes: selectedElement === null ? [] : getAccessibilityNotes(selectedElement),
-      changes: [],
       measurementTarget: null,
-      redoStack: [],
       selectedElement,
     }),
   undoLocalChange: () =>

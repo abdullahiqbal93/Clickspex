@@ -1,4 +1,5 @@
 import { Type } from "lucide-react";
+
 import { usePanelStore } from "../store";
 
 export const TypographyPanel = () => {
@@ -26,9 +27,7 @@ export const TypographyPanel = () => {
               <Type size={16} />
               Typography
             </h2>
-            <p className="mt-1 break-all text-xs text-muted">
-              Fonts detected on the current page.
-            </p>
+            <p className="mt-1 break-all text-xs text-muted">Fonts detected on the current page.</p>
           </div>
         </div>
       </section>
@@ -39,23 +38,40 @@ export const TypographyPanel = () => {
         </section>
       ) : (
         scan.fonts.map((font, i) => (
-          <section key={i} className="rounded-lg border border-border bg-panel/80 backdrop-blur-sm p-4 shadow-card space-y-3">
-            <h3 className="text-lg font-semibold truncate" style={{ fontFamily: font.family }} title={font.family}>
+          <section
+            key={i}
+            className="rounded-lg border border-border bg-panel/80 backdrop-blur-sm p-4 shadow-card space-y-3"
+          >
+            <h3
+              className="text-lg font-semibold truncate"
+              style={{ fontFamily: font.family }}
+              title={font.family}
+            >
               {font.family.split(",")[0]}
             </h3>
             <p className="text-[10px] text-muted truncate">{font.family}</p>
             <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-100">
-              <div className="w-full text-[10px] font-medium text-slate-400 uppercase tracking-wide">Weights</div>
-              {font.weights.map(w => (
-                <span key={w} className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded text-xs font-medium">
+              <div className="w-full text-[10px] font-medium text-slate-400 uppercase tracking-wide">
+                Weights
+              </div>
+              {font.weights.map((w) => (
+                <span
+                  key={w}
+                  className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded text-xs font-medium"
+                >
                   {w}
                 </span>
               ))}
             </div>
             <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-100">
-              <div className="w-full text-[10px] font-medium text-slate-400 uppercase tracking-wide">Sizes</div>
-              {font.sizes.map(s => (
-                <span key={s} className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded text-xs font-medium">
+              <div className="w-full text-[10px] font-medium text-slate-400 uppercase tracking-wide">
+                Sizes
+              </div>
+              {font.sizes.map((s) => (
+                <span
+                  key={s}
+                  className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded text-xs font-medium"
+                >
                   {s}
                 </span>
               ))}

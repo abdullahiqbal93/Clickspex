@@ -16,7 +16,7 @@ import {
   SquareMousePointer,
   Type,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { connectSidePanelPort, sendMessageToActiveTab } from "../chrome/messaging";
 
@@ -32,7 +32,19 @@ import { StylePanel } from "./components/StylePanel";
 import { TypographyPanel } from "./components/TypographyPanel";
 import { type PanelTab, usePanelStore } from "./store";
 
-export type PanelTab = "inspect" | "styles" | "box" | "measure" | "motion" | "accessibility" | "export" | "palette" | "typography" | "assets";
+type EyeDropperResult = {
+  sRGBHex: string;
+};
+
+type EyeDropperConstructor = new () => {
+  open: () => Promise<EyeDropperResult>;
+};
+
+declare global {
+  interface Window {
+    EyeDropper?: EyeDropperConstructor;
+  }
+}
 
 const tabs = [
   { id: "inspect", label: "Inspect", icon: Crosshair },
@@ -53,7 +65,6 @@ export const App = () => {
   const gridActive = usePanelStore((state) => state.gridActive);
   const hoveredSelector = usePanelStore((state) => state.hoveredSelector);
   const pickerActive = usePanelStore((state) => state.pickerActive);
-  const rulerActive = usePanelStore((state) => state.rulerActive);
   const selectedElement = usePanelStore((state) => state.selectedElement);
   const setActiveTab = usePanelStore((state) => state.setActiveTab);
   const setError = usePanelStore((state) => state.setError);
@@ -63,6 +74,7 @@ export const App = () => {
   const setPageScanLoading = usePanelStore((state) => state.setPageScanLoading);
   const setPickerActive = usePanelStore((state) => state.setPickerActive);
   const setRulerActive = usePanelStore((state) => state.setRulerActive);
+  const setSearchResults = usePanelStore((state) => state.setSearchResults);
   const setMeasurementTarget = usePanelStore((state) => state.setMeasurementTarget);
   const setSelectedElement = usePanelStore((state) => state.setSelectedElement);
   const undoLocalChange = usePanelStore((state) => state.undoLocalChange);
@@ -78,21 +90,23 @@ export const App = () => {
 
       if (rawMessage.type === "ELEMENT_SELECTED") {
         setSelectedElement(rawMessage.payload);
-        setPickerActive(false);
+        setPickerActive(true);
         setHoveredSelector(null);
         setActiveTab("inspect");
+      }
+
+      if (rawMessage.type === "ELEMENT_UNSELECTED") {
+        setSelectedElement(null);
+        setHoveredSelector(null);
       }
 
       if (rawMessage.type === "ELEMENT_HOVERED") {
         setHoveredSelector(rawMessage.payload.selector);
       }
-
-      if (rawMessage.type === "ELEMENT_UNSELECTED") {
-        setSelectedElement(null);
-      }
-
       if (rawMessage.type === "PICKER_DISABLE") {
         setPickerActive(false);
+        setSelectedElement(null);
+        setHoveredSelector(null);
       }
 
       if (rawMessage.type === "MEASURE_TARGET_SELECTED") {
@@ -108,10 +122,14 @@ export const App = () => {
       if (rawMessage.type === "PAGE_SCAN_RESULT") {
         setPageScan(rawMessage.payload);
       }
+
+      if (rawMessage.type === "ELEMENT_SEARCH_RESULT") {
+        setSearchResults(rawMessage.payload.results);
+      }
     };
 
     port.onMessage.addListener(handleMessage);
-    
+
     setPageScanLoading(true);
     sendMessageToActiveTab({ type: "SCAN_PAGE" }).catch(() => {
       setPageScanLoading(false);
@@ -120,22 +138,37 @@ export const App = () => {
       port.onMessage.removeListener(handleMessage);
       port.disconnect();
     };
-  }, [setActiveTab, setHoveredSelector, setMeasurementTarget, setPickerActive, setSelectedElement]);
+  }, [
+    setActiveTab,
+    setHoveredSelector,
+    setMeasurementTarget,
+    setPageScan,
+    setPageScanLoading,
+    setPickerActive,
+    setRulerActive,
+    setSearchResults,
+    setSelectedElement,
+  ]);
 
-  const togglePicker = async () => {
+  const togglePicker = useCallback(async () => {
     setError(null);
     const nextActive = !pickerActive;
 
     try {
       await sendMessageToActiveTab({ type: nextActive ? "PICKER_ENABLE" : "PICKER_DISABLE" });
       setPickerActive(nextActive);
+
+      if (!nextActive) {
+        setSelectedElement(null);
+        setHoveredSelector(null);
+      }
     } catch (caughtError) {
       setError(
         caughtError instanceof Error ? caughtError.message : "Unable to reach the active tab.",
       );
       setPickerActive(false);
     }
-  };
+  }, [pickerActive, setError, setHoveredSelector, setPickerActive, setSelectedElement]);
 
   const toggleGrid = async () => {
     setError(null);
@@ -143,9 +176,7 @@ export const App = () => {
       await sendMessageToActiveTab({ type: "GRID_TOGGLE" });
       setGridActive(!gridActive);
     } catch (caughtError) {
-      setError(
-        caughtError instanceof Error ? caughtError.message : "Unable to toggle grid.",
-      );
+      setError(caughtError instanceof Error ? caughtError.message : "Unable to toggle grid.");
     }
   };
 
@@ -161,20 +192,19 @@ export const App = () => {
   const [eyedropperFeedback, setEyedropperFeedback] = useState<string | null>(null);
 
   const handleEyedropper = async () => {
-    if (!("EyeDropper" in window)) {
+    const EyeDropper = window.EyeDropper;
+
+    if (EyeDropper === undefined) {
       setError("EyeDropper is not supported in this browser.");
       return;
     }
+
     setError(null);
     try {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
-      const eyeDropper = new (window as any).EyeDropper();
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
+      const eyeDropper = new EyeDropper();
       const result = await eyeDropper.open();
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument
       await navigator.clipboard.writeText(result.sRGBHex);
-      
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
+
       setEyedropperFeedback(result.sRGBHex);
       setTimeout(() => setEyedropperFeedback(null), 2000);
     } catch {
@@ -201,7 +231,7 @@ export const App = () => {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [pickerActive, redoLocalChange, undoLocalChange]);
+  }, [redoLocalChange, togglePicker, undoLocalChange]);
 
   return (
     <main className="min-h-screen bg-canvas text-ink">
@@ -209,7 +239,10 @@ export const App = () => {
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0 flex-1">
             <h1 className="text-sm font-semibold">ui-buddy</h1>
-            <p className="truncate text-xs text-muted" title={selectedElement?.selector ?? hoveredSelector ?? "No element selected"}>
+            <p
+              className="truncate text-xs text-muted"
+              title={selectedElement?.selector ?? hoveredSelector ?? "No element selected"}
+            >
               {selectedElement?.selector ?? hoveredSelector ?? "No element selected"}
             </p>
           </div>
@@ -237,7 +270,9 @@ export const App = () => {
               {eyedropperFeedback ? (
                 <>
                   <Check aria-hidden="true" size={13} />
-                  <span className="text-[10px] font-mono font-bold uppercase">{eyedropperFeedback}</span>
+                  <span className="text-[10px] font-mono font-bold uppercase">
+                    {eyedropperFeedback}
+                  </span>
                 </>
               ) : (
                 <Pipette aria-hidden="true" size={14} />

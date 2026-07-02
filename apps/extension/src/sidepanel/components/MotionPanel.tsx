@@ -1,5 +1,6 @@
 import { PlaySquare } from "lucide-react";
 import { useState } from "react";
+
 import { sendMessageToActiveTab } from "../../chrome/messaging";
 
 export const MotionPanel = () => {
@@ -11,7 +12,7 @@ export const MotionPanel = () => {
     setError(null);
     try {
       await sendMessageToActiveTab({ type: "SET_ANIMATION_SPEED", payload: { speed: newSpeed } });
-    } catch (e) {
+    } catch {
       setError("Failed to communicate with the page.");
     }
   };
@@ -34,7 +35,7 @@ export const MotionPanel = () => {
 
       <section className="rounded-lg border border-slate-200 bg-panel p-4 shadow-panel">
         <h3 className="text-sm font-semibold mb-3">Playback Speed</h3>
-        
+
         {error && <div className="text-xs text-red-600 mb-3">{error}</div>}
 
         <div className="flex items-center gap-2 mb-4">

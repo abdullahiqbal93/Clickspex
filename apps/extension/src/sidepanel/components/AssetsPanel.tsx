@@ -1,4 +1,5 @@
 import { Download, Image as ImageIcon } from "lucide-react";
+
 import { usePanelStore } from "../store";
 
 export const AssetsPanel = () => {
@@ -51,12 +52,24 @@ export const AssetsPanel = () => {
       ) : (
         <div className="grid grid-cols-2 gap-3">
           {scan.assets.map((asset, i) => (
-            <div key={i} className="flex flex-col overflow-hidden rounded-lg border border-border bg-panel/80 backdrop-blur-sm shadow-sm">
+            <div
+              key={i}
+              className="flex flex-col overflow-hidden rounded-lg border border-border bg-panel/80 backdrop-blur-sm shadow-sm"
+            >
               <div className="flex h-24 items-center justify-center bg-slate-100 p-2 relative group">
-                <img src={asset.src} alt={asset.alt} className="max-h-full max-w-full object-contain" />
+                <img
+                  src={asset.src}
+                  alt={asset.alt}
+                  className="max-h-full max-w-full object-contain"
+                />
                 <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button 
-                    onClick={() => void downloadAsset(asset.src, `asset-${i}.${asset.type === 'svg' ? 'svg' : 'png'}`)}
+                  <button
+                    onClick={() =>
+                      void downloadAsset(
+                        asset.src,
+                        `asset-${i}.${asset.type === "svg" ? "svg" : "png"}`,
+                      )
+                    }
                     className="p-2 bg-white rounded-full text-slate-900 hover:scale-110 transition-transform"
                     title="Download"
                   >
@@ -66,8 +79,12 @@ export const AssetsPanel = () => {
               </div>
               <div className="p-2 border-t border-slate-100 bg-white">
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-semibold uppercase text-slate-500">{asset.type}</span>
-                  <span className="text-[10px] text-slate-400">{asset.width}×{asset.height}</span>
+                  <span className="text-[10px] font-semibold uppercase text-slate-500">
+                    {asset.type}
+                  </span>
+                  <span className="text-[10px] text-slate-400">
+                    {asset.width}×{asset.height}
+                  </span>
                 </div>
               </div>
             </div>
