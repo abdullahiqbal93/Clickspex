@@ -1,4 +1,4 @@
-import { contrastRatioFromCssColors } from "@ui-devtools/core";
+import { contrastRatioFromCssColors } from "@ui-buddy/core";
 import { AlertTriangle, CheckCircle2, ShieldCheck } from "lucide-react";
 
 import { usePanelStore } from "../store";

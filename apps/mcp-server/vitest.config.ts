@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 
-import baseConfig from "@ui-devtools/config/vitest";
+import baseConfig from "@ui-buddy/config/vitest";
 import { mergeConfig } from "vitest/config";
 
 const adaptersSourcePath = fileURLToPath(new URL("../../packages/adapters/src", import.meta.url));
@@ -16,11 +16,11 @@ const sharedSourcePath = fileURLToPath(new URL("../../packages/shared/src", impo
 export default mergeConfig(baseConfig, {
   resolve: {
     alias: [
-      { find: "@ui-devtools/core/project", replacement: coreProjectSourcePath },
-      { find: "@ui-devtools/core/styleDiff", replacement: coreStyleDiffSourcePath },
-      { find: "@ui-devtools/adapters", replacement: adaptersSourcePath },
-      { find: "@ui-devtools/core", replacement: coreSourcePath },
-      { find: "@ui-devtools/shared", replacement: sharedSourcePath },
+      { find: "@ui-buddy/core/project", replacement: coreProjectSourcePath },
+      { find: "@ui-buddy/core/styleDiff", replacement: coreStyleDiffSourcePath },
+      { find: "@ui-buddy/adapters", replacement: adaptersSourcePath },
+      { find: "@ui-buddy/core", replacement: coreSourcePath },
+      { find: "@ui-buddy/shared", replacement: sharedSourcePath },
     ],
   },
   test: {

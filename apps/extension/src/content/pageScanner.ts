@@ -1,4 +1,4 @@
-import type { PageAssetInfo, PageColorInfo, PageFontInfo, PageScanResult } from "@ui-devtools/shared";
+import type { PageAssetInfo, PageColorInfo, PageFontInfo, PageScanResult } from "@ui-buddy/shared";
 
 const rgbToHex = (r: number, g: number, b: number): string =>
   "#" + [r, g, b].map((c) => c.toString(16).padStart(2, "0")).join("");

@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 
-import baseConfig from "@ui-devtools/config/vitest";
+import baseConfig from "@ui-buddy/config/vitest";
 import { mergeConfig } from "vitest/config";
 
 const coreProjectSourcePath = fileURLToPath(
@@ -13,8 +13,8 @@ const sharedSourcePath = fileURLToPath(
 export default mergeConfig(baseConfig, {
   resolve: {
     alias: {
-      "@ui-devtools/core/project": coreProjectSourcePath,
-      "@ui-devtools/shared": sharedSourcePath,
+      "@ui-buddy/core/project": coreProjectSourcePath,
+      "@ui-buddy/shared": sharedSourcePath,
     },
   },
   test: {

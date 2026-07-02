@@ -1,7 +1,7 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import { extname, join, relative } from "node:path";
 
-import type { ProjectContext, ProjectFileKind, ProjectFileSummary } from "@ui-devtools/shared";
+import type { ProjectContext, ProjectFileKind, ProjectFileSummary } from "@ui-buddy/shared";
 
 export type DetectedItem = {
   name: string;

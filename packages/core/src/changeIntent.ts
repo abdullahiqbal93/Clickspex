@@ -5,7 +5,7 @@ import type {
   ElementSnapshot,
   StyleChange,
   UIChangeIntent,
-} from "@ui-devtools/shared";
+} from "@ui-buddy/shared";
 
 export type CreateUIChangeIntentInput = {
   pageUrl: string;

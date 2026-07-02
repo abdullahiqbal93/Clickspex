@@ -2,7 +2,7 @@ import {
   SUPPORTED_STYLE_PROPERTIES,
   type StyleChange,
   type SupportedStyleProperty,
-} from "@ui-devtools/shared";
+} from "@ui-buddy/shared";
 
 const INDENT = "  ";
 

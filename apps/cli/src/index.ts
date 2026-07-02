@@ -2,12 +2,12 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import { cssAdapter, scaffoldAdapters, tailwindAdapter } from "@ui-devtools/adapters";
-import { detectProject, scanProjectContext } from "@ui-devtools/core/project";
+import { cssAdapter, scaffoldAdapters, tailwindAdapter } from "@ui-buddy/adapters";
+import { detectProject, scanProjectContext } from "@ui-buddy/core/project";
 import chalk from "chalk";
 import { Command } from "commander";
 
-import type { PatchSuggestion, UIChangeIntent } from "@ui-devtools/shared";
+import type { PatchSuggestion, UIChangeIntent } from "@ui-buddy/shared";
 
 const program = new Command();
 
@@ -69,15 +69,15 @@ const previewPatchSuggestions = async (
   ];
 };
 
-program.name("ui-sync").description("UI DevTools local project utility").version("0.1.0");
+program.name("ui-buddy").description("ui-buddy local project utility").version("0.1.0");
 
 program
   .command("init")
-  .description("initialize a .ui-sync config in the project")
+  .description("initialize a .ui-buddy config in the project")
   .option("--path <path>", "project path", process.cwd())
   .action(async (options: { path: string }) => {
     const rootPath = resolve(options.path);
-    const configDir = resolve(rootPath, ".ui-sync");
+    const configDir = resolve(rootPath, ".ui-buddy");
     await mkdir(configDir, { recursive: true });
     await writeFile(
       resolve(configDir, "config.json"),

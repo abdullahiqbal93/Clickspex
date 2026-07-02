@@ -1,8 +1,8 @@
-import { buildCssRule } from "@ui-devtools/core";
+import { buildCssRule } from "@ui-buddy/core";
 
-import type { StyleChange } from "@ui-devtools/shared";
+import type { StyleChange } from "@ui-buddy/shared";
 
-const STYLE_ELEMENT_ID = "__ui-devtools-styles__";
+const STYLE_ELEMENT_ID = "__ui-buddy-styles__";
 
 const applyChangeToRules = (
   rulesBySelector: Map<string, Record<string, string>>,

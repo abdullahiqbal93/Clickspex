@@ -9,7 +9,7 @@ import type {
   ProjectSourceFile,
   StyleChange,
   UIChangeIntent,
-} from "@ui-devtools/shared";
+} from "@ui-buddy/shared";
 
 type MappingResult = {
   classes: string[];

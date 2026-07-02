@@ -2,7 +2,7 @@ import { defineManifest } from "@crxjs/vite-plugin";
 
 export default defineManifest({
   manifest_version: 3,
-  name: "UI DevTools",
+  name: "ui-buddy",
   description: "Inspect, measure, and prototype UI changes directly in Chrome.",
   version: "0.1.0",
   icons: {
@@ -12,7 +12,7 @@ export default defineManifest({
     "128": "icons/icon-128.png",
   },
   action: {
-    default_title: "Open UI DevTools",
+    default_title: "Open ui-buddy",
   },
   permissions: ["activeTab", "sidePanel", "storage"],
   side_panel: {

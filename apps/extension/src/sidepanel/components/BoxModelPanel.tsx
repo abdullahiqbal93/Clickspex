@@ -4,7 +4,7 @@ import { useState } from "react";
 import { sendMessageToActiveTab } from "../../chrome/messaging";
 import { getCurrentStyleRecord, usePanelStore } from "../store";
 
-import type { StyleChange, SupportedStyleProperty } from "@ui-devtools/shared";
+import type { StyleChange, SupportedStyleProperty } from "@ui-buddy/shared";
 
 type BoxGroup = "margin" | "padding";
 type Side = "top" | "right" | "bottom" | "left";

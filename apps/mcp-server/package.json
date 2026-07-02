@@ -1,5 +1,5 @@
 {
-  "name": "@ui-devtools/mcp-server",
+  "name": "@ui-buddy/mcp-server",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -12,12 +12,12 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
-    "@ui-devtools/adapters": "workspace:*",
-    "@ui-devtools/core": "workspace:*",
-    "@ui-devtools/shared": "workspace:*",
+    "@ui-buddy/adapters": "workspace:*",
+    "@ui-buddy/core": "workspace:*",
+    "@ui-buddy/shared": "workspace:*",
     "zod": "^3.23.0"
   },
   "devDependencies": {
-    "@ui-devtools/config": "workspace:*"
+    "@ui-buddy/config": "workspace:*"
   }
 }

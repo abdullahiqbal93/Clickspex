@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { measureRects } from "./measurement";
 
-import type { RectSnapshot } from "@ui-devtools/shared";
+import type { RectSnapshot } from "@ui-buddy/shared";
 
 const rect = (left: number, top: number, width: number, height: number): RectSnapshot => ({
   x: left,

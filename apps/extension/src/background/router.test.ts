@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { shouldForwardToSidePanel } from "./router";
 
-import type { ExtensionMessage } from "@ui-devtools/shared";
+import type { ExtensionMessage } from "@ui-buddy/shared";
 
 describe("background message router", () => {
   it("forwards content-script selection messages to the side panel", () => {

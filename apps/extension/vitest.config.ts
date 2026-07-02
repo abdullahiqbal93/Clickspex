@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 
-import baseConfig from "@ui-devtools/config/vitest";
+import baseConfig from "@ui-buddy/config/vitest";
 import { mergeConfig } from "vitest/config";
 
 const sharedSourcePath = fileURLToPath(new URL("../../packages/shared/src", import.meta.url));
@@ -10,9 +10,9 @@ const adaptersSourcePath = fileURLToPath(new URL("../../packages/adapters/src", 
 export default mergeConfig(baseConfig, {
   resolve: {
     alias: {
-      "@ui-devtools/adapters": adaptersSourcePath,
-      "@ui-devtools/core": coreSourcePath,
-      "@ui-devtools/shared": sharedSourcePath,
+      "@ui-buddy/adapters": adaptersSourcePath,
+      "@ui-buddy/core": coreSourcePath,
+      "@ui-buddy/shared": sharedSourcePath,
     },
   },
   test: {

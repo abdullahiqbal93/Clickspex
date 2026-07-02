@@ -3,7 +3,7 @@ import { Clipboard, Redo2, RotateCcw, SlidersHorizontal, Undo2 } from "lucide-re
 import { sendMessageToActiveTab } from "../../chrome/messaging";
 import { getCurrentStyleRecord, usePanelStore } from "../store";
 
-import type { SupportedStyleProperty } from "@ui-devtools/shared";
+import type { SupportedStyleProperty } from "@ui-buddy/shared";
 
 type StyleField = {
   property: SupportedStyleProperty;

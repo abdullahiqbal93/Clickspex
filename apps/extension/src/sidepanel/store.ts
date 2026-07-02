@@ -1,4 +1,4 @@
-import { createStyleChange, getAccessibilityNotes } from "@ui-devtools/core";
+import { createStyleChange, getAccessibilityNotes } from "@ui-buddy/core";
 import { create } from "zustand";
 
 import type {
@@ -7,7 +7,7 @@ import type {
   PageScanResult,
   StyleChange,
   SupportedStyleProperty,
-} from "@ui-devtools/shared";
+} from "@ui-buddy/shared";
 
 export type PanelTab = "inspect" | "styles" | "box" | "measure" | "accessibility" | "export";
 

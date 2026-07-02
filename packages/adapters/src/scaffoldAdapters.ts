@@ -1,4 +1,4 @@
-import { createUnsupportedPatchSuggestion } from "@ui-devtools/shared";
+import { createUnsupportedPatchSuggestion } from "@ui-buddy/shared";
 
 import type {
   AdapterDetectionResult,
@@ -8,7 +8,7 @@ import type {
   ProjectContext,
   ProjectSourceFile,
   UIChangeIntent,
-} from "@ui-devtools/shared";
+} from "@ui-buddy/shared";
 
 type ScaffoldDefinition = {
   id: string;

@@ -1,6 +1,6 @@
-import { isExtensionMessage, isRecord, type ExtensionMessage } from "@ui-devtools/shared";
+import { isExtensionMessage, isRecord, type ExtensionMessage } from "@ui-buddy/shared";
 
-export const SIDE_PANEL_PORT_NAME = "ui-devtools-side-panel";
+export const SIDE_PANEL_PORT_NAME = "ui-buddy-side-panel";
 
 export type MessageHandler = (
   message: ExtensionMessage,
@@ -43,11 +43,11 @@ export const sendMessageToActiveTab = async (message: ExtensionMessage): Promise
   const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
   if (activeTab?.id === undefined) {
-    throw new Error("No active tab is available for UI DevTools messaging.");
+    throw new Error("No active tab is available for ui-buddy messaging.");
   }
 
   if (!canReceiveContentScriptMessages(activeTab.url)) {
-    throw new Error("UI DevTools can inspect only http and https pages.");
+    throw new Error("ui-buddy can inspect only http and https pages.");
   }
 
   assertOkMessageResponse(await chrome.tabs.sendMessage(activeTab.id, message));

@@ -1,11 +1,11 @@
 # Architecture
 
-UI DevTools is a pnpm monorepo with browser, shared, Node CLI, and MCP packages. Browser code owns live-page interaction. Shared/core packages own stable data contracts and pure utilities. Local tools consume the same contracts without reaching into Chrome APIs.
+ui-buddy is a pnpm monorepo with browser, shared, Node CLI, and MCP packages. Browser code owns live-page interaction. Shared/core packages own stable data contracts and pure utilities. Local tools consume the same contracts without reaching into Chrome APIs.
 
 ## Packages
 
 - `apps/extension`: Chrome MV3 extension, side panel UI, background service worker, content script, element picker, overlays, and temporary style injection.
-- `apps/cli`: `ui-sync` local project utility for init, project detection, source indexing, patch previews, and example change-intent export.
+- `apps/cli`: `ui-buddy` local project utility for init, project detection, source indexing, patch previews, and example change-intent export.
 - `apps/mcp-server`: read-only MCP stdio server for project scans, framework detection, source indexes, summaries, export generation, and patch previews.
 - `packages/shared`: runtime message guards, `UIChangeIntent`, `PatchSuggestion`, adapter interfaces, and shared snapshot types.
 - `packages/core`: browser-independent utilities for selectors, snapshots, style diffs, contrast, box model extraction, measurements, accessibility notes, project detection, and bounded source indexing.
@@ -32,9 +32,9 @@ The background service worker is deliberately stateless. It keeps only a transie
 
 ## Overlay And Style Isolation
 
-The content script creates a single Shadow DOM host named `__ui-devtools-host__` for visual overlays. Overlay CSS is scoped inside the shadow root, so the inspected page does not receive extension classes or global overlay styles.
+The content script creates a single Shadow DOM host named `__ui-buddy-host__` for visual overlays. Overlay CSS is scoped inside the shadow root, so the inspected page does not receive extension classes or global overlay styles.
 
-Temporary user edits are injected into one page style tag named `__ui-devtools-styles__`. The style injector rewrites rules for the current session, supports undo, redo, and reset, and does not persist changes to the source application.
+Temporary user edits are injected into one page style tag named `__ui-buddy-styles__`. The style injector rewrites rules for the current session, supports undo, redo, and reset, and does not persist changes to the source application.
 
 ## Adapter Boundary
 

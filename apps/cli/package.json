@@ -1,10 +1,10 @@
 {
-  "name": "@ui-devtools/cli",
+  "name": "@ui-buddy/cli",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "bin": {
-    "ui-sync": "./dist/index.js"
+    "ui-buddy": "./dist/index.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
@@ -14,13 +14,13 @@
     "format": "prettier --write . --ignore-path ../../.prettierignore"
   },
   "dependencies": {
-    "@ui-devtools/adapters": "workspace:*",
-    "@ui-devtools/core": "workspace:*",
-    "@ui-devtools/shared": "workspace:*",
+    "@ui-buddy/adapters": "workspace:*",
+    "@ui-buddy/core": "workspace:*",
+    "@ui-buddy/shared": "workspace:*",
     "chalk": "^5.0.0",
     "commander": "^14.0.0"
   },
   "devDependencies": {
-    "@ui-devtools/config": "workspace:*"
+    "@ui-buddy/config": "workspace:*"
   }
 }

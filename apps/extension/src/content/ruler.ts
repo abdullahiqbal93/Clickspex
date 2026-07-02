@@ -13,7 +13,7 @@ export class ManualRulerController {
 
   public constructor() {
     this.host = document.createElement("div");
-    this.host.id = "__ui-devtools-ruler-host__";
+    this.host.id = "__ui-buddy-ruler-host__";
     this.host.style.position = "fixed";
     this.host.style.inset = "0";
     this.host.style.zIndex = "2147483647"; // Max z-index

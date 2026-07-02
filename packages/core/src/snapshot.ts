@@ -3,7 +3,7 @@ import {
   type ElementSnapshot,
   type ParentLayoutInfo,
   type RectSnapshot,
-} from "@ui-devtools/shared";
+} from "@ui-buddy/shared";
 
 import { parseBoxModel } from "./boxModel";
 import { generateUniqueSelector, getDomPath } from "./selector";

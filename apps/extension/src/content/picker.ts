@@ -1,10 +1,10 @@
-import { captureElementSnapshot } from "@ui-devtools/core";
+import { captureElementSnapshot } from "@ui-buddy/core";
 
 import { sendRuntimeMessage } from "../chrome/messaging";
 import { writePageContext } from "../chrome/session";
 
 import type { OverlayController } from "./overlay";
-import type { ElementSnapshot } from "@ui-devtools/shared";
+import type { ElementSnapshot } from "@ui-buddy/shared";
 
 const getPageContext = () => ({
   pageUrl: window.location.href,

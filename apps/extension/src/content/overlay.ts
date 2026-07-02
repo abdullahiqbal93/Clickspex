@@ -1,6 +1,6 @@
-import type { ElementSnapshot, RectSnapshot } from "@ui-devtools/shared";
+import type { ElementSnapshot, RectSnapshot } from "@ui-buddy/shared";
 
-const HOST_ID = "__ui-devtools-host__";
+const HOST_ID = "__ui-buddy-host__";
 
 const px = (v: number): string => `${Math.round(v)}px`;
 

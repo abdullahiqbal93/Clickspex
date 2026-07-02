@@ -2,10 +2,10 @@ import { describe, expect, it, beforeEach } from "vitest";
 
 import { StyleInjector } from "./styleInjector";
 
-import type { StyleChange } from "@ui-devtools/shared";
+import type { StyleChange } from "@ui-buddy/shared";
 
 const styleElement = (): HTMLStyleElement | null =>
-  document.getElementById("__ui-devtools-styles__") as HTMLStyleElement | null;
+  document.getElementById("__ui-buddy-styles__") as HTMLStyleElement | null;
 
 const createChange = (
   property: StyleChange["property"],
@@ -30,7 +30,7 @@ describe("StyleInjector", () => {
     injector.applyChange(createChange("color", "black", "white"));
     injector.applyChange(createChange("font-size", "14px", "16px"));
 
-    expect(document.querySelectorAll("#__ui-devtools-styles__")).toHaveLength(1);
+    expect(document.querySelectorAll("#__ui-buddy-styles__")).toHaveLength(1);
     expect(styleElement()?.textContent).toBe(
       ["#save {", "  color: white;", "  font-size: 16px;", "}"].join("\n"),
     );

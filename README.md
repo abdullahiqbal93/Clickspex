@@ -1,6 +1,6 @@
-# UI DevTools
+# ui-buddy
 
-UI DevTools is a Chrome Manifest V3 extension for inspecting live UI, making temporary visual edits, measuring layout, checking lightweight accessibility signals, and exporting those changes as structured `UIChangeIntent` data.
+ui-buddy is a Chrome Manifest V3 extension for inspecting live UI, making temporary visual edits, measuring layout, checking lightweight accessibility signals, and exporting those changes as structured `UIChangeIntent` data.
 
 The repo is intentionally conservative: the extension can prototype UI changes in the browser, while the CLI and MCP server inspect local projects and generate read-only suggestions. v1 does not automatically edit source files.
 
@@ -14,14 +14,14 @@ The repo is intentionally conservative: the extension can prototype UI changes i
 - Exports for CSS, conservative Tailwind classes, JSON, and Markdown.
 - Source-aware project indexing for components, routes, stylesheets, selectors, classes, ids, and imports.
 - Framework adapter interface with working CSS/Tailwind patch previews and source-aware framework review hints.
-- `ui-sync` CLI for local init, project detection, source indexing, patch previews, and example change-intent export.
+- `ui-buddy` CLI for local init, project detection, source indexing, patch previews, and example change-intent export.
 - Read-only MCP server for project scanning, framework detection, summaries, exports, and patch previews.
 
 ## Workspace
 
 ```text
 apps/extension      Chrome extension and side panel UI
-apps/cli            Local ui-sync CLI
+apps/cli            Local ui-buddy CLI
 apps/mcp-server     Read-only MCP stdio server
 packages/shared     Shared types, message guards, adapter contracts
 packages/core       Pure selector, style, measurement, a11y, and project-detection utilities
@@ -58,13 +58,13 @@ pnpm build
 Development mode:
 
 ```bash
-pnpm --filter @ui-devtools/extension dev
+pnpm --filter @ui-buddy/extension dev
 ```
 
 Production bundle:
 
 ```bash
-pnpm --filter @ui-devtools/extension build
+pnpm --filter @ui-buddy/extension build
 ```
 
 Load `apps/extension/dist` in Chrome via `chrome://extensions` -> Developer mode -> Load unpacked.
@@ -72,7 +72,7 @@ Load `apps/extension/dist` in Chrome via `chrome://extensions` -> Developer mode
 ## CLI
 
 ```bash
-pnpm --filter @ui-devtools/cli build
+pnpm --filter @ui-buddy/cli build
 node apps/cli/dist/index.js init --path .
 node apps/cli/dist/index.js detect --path .
 node apps/cli/dist/index.js index --path .
@@ -83,7 +83,7 @@ node apps/cli/dist/index.js preview-patch --intent ui-change-intent.example.json
 ## MCP Server
 
 ```bash
-pnpm --filter @ui-devtools/mcp-server build
+pnpm --filter @ui-buddy/mcp-server build
 node apps/mcp-server/dist/index.js
 ```
 

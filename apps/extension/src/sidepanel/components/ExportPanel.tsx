@@ -1,5 +1,5 @@
-import { cssAdapter, tailwindAdapter } from "@ui-devtools/adapters";
-import { createUIChangeIntent, summarizeChangeIntentAsMarkdown } from "@ui-devtools/core";
+import { cssAdapter, tailwindAdapter } from "@ui-buddy/adapters";
+import { createUIChangeIntent, summarizeChangeIntentAsMarkdown } from "@ui-buddy/core";
 import { Clipboard, Code2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 

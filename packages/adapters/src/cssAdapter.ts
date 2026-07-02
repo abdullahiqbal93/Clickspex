@@ -1,4 +1,4 @@
-import { buildCssRule, styleChangesToRecord } from "@ui-devtools/core/styleDiff";
+import { buildCssRule, styleChangesToRecord } from "@ui-buddy/core/styleDiff";
 
 import { createUnifiedDiff } from "./diffPreview.js";
 
@@ -10,7 +10,7 @@ import type {
   ProjectContext,
   ProjectSourceFile,
   UIChangeIntent,
-} from "@ui-devtools/shared";
+} from "@ui-buddy/shared";
 
 export const generateCssFromChangeIntent = (changeIntent: UIChangeIntent): string =>
   buildCssRule(changeIntent.target.selector, styleChangesToRecord(changeIntent.changes));

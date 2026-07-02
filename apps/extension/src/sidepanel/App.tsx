@@ -1,4 +1,4 @@
-import { isExtensionMessage } from "@ui-devtools/shared";
+import { isExtensionMessage } from "@ui-buddy/shared";
 import {
   Accessibility,
   Box,
@@ -208,7 +208,7 @@ export const App = () => {
       <header className="border-b border-slate-200 bg-panel px-4 py-3">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <h1 className="text-sm font-semibold">UI DevTools</h1>
+            <h1 className="text-sm font-semibold">ui-buddy</h1>
             <p className="truncate text-xs text-muted" title={selectedElement?.selector ?? hoveredSelector ?? "No element selected"}>
               {selectedElement?.selector ?? hoveredSelector ?? "No element selected"}
             </p>

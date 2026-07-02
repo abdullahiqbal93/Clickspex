@@ -8,4 +8,4 @@ export type {
   FrameworkAdapter,
   PatchSuggestion,
   ProjectContext,
-} from "@ui-devtools/shared";
+} from "@ui-buddy/shared";

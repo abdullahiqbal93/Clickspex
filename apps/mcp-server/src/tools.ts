@@ -1,9 +1,9 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
-import { cssAdapter, scaffoldAdapters, tailwindAdapter } from "@ui-devtools/adapters";
-import { detectProject, scanProjectContext } from "@ui-devtools/core/project";
-import { SUPPORTED_STYLE_PROPERTIES, type UIChangeIntent } from "@ui-devtools/shared";
+import { cssAdapter, scaffoldAdapters, tailwindAdapter } from "@ui-buddy/adapters";
+import { detectProject, scanProjectContext } from "@ui-buddy/core/project";
+import { SUPPORTED_STYLE_PROPERTIES, type UIChangeIntent } from "@ui-buddy/shared";
 import { z } from "zod";
 
 const rectSchema = z.object({

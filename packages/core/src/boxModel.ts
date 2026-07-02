@@ -1,4 +1,4 @@
-import type { BoxModelSnapshot, BoxSideSnapshot } from "@ui-devtools/shared";
+import type { BoxModelSnapshot, BoxSideSnapshot } from "@ui-buddy/shared";
 
 const zeroSides = (): BoxSideSnapshot => ({
   top: "0px",

@@ -1,7 +1,7 @@
 import { Hash, LayoutPanelLeft, MousePointer2, Rows3, Type } from "lucide-react";
 
 import { sendMessageToActiveTab } from "../../chrome/messaging";
-import type { ElementSnapshot } from "@ui-devtools/shared";
+import type { ElementSnapshot } from "@ui-buddy/shared";
 
 type InspectorPanelProps = {
   selectedElement: ElementSnapshot | null;

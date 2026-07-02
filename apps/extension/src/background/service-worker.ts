@@ -1,4 +1,4 @@
-import { isExtensionMessage } from "@ui-devtools/shared";
+import { isExtensionMessage } from "@ui-buddy/shared";
 
 import { SIDE_PANEL_PORT_NAME } from "../chrome/messaging";
 

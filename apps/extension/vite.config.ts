@@ -14,9 +14,9 @@ export default defineConfig({
   plugins: [react(), crx({ manifest })],
   resolve: {
     alias: {
-      "@ui-devtools/adapters": adaptersSourcePath,
-      "@ui-devtools/core": coreSourcePath,
-      "@ui-devtools/shared": sharedSourcePath,
+      "@ui-buddy/adapters": adaptersSourcePath,
+      "@ui-buddy/core": coreSourcePath,
+      "@ui-buddy/shared": sharedSourcePath,
     },
   },
 });

@@ -9,7 +9,7 @@ import {
   type MessageResponse,
 } from "./messaging";
 
-import type { ExtensionMessage } from "@ui-devtools/shared";
+import type { ExtensionMessage } from "@ui-buddy/shared";
 
 type RuntimeListener = Parameters<typeof chrome.runtime.onMessage.addListener>[0];
 type MockTab = { id?: number; url?: string };

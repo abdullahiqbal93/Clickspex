@@ -12,7 +12,7 @@ import {
   handleScanProject,
 } from "./tools.js";
 
-import type { UIChangeIntent } from "@ui-devtools/shared";
+import type { UIChangeIntent } from "@ui-buddy/shared";
 
 type ScanData = { rootPath: string; files: string[] };
 type IndexData = { rootPath: string; files: Array<{ path: string; classNames: string[] }> };
@@ -28,7 +28,7 @@ type DetectionData = { detections: Array<{ name: string }> };
 const tempRoots: string[] = [];
 
 const createTempProject = async (): Promise<string> => {
-  const rootPath = await mkdtemp(join(tmpdir(), "ui-devtools-mcp-"));
+  const rootPath = await mkdtemp(join(tmpdir(), "ui-buddy-mcp-"));
   tempRoots.push(rootPath);
   return rootPath;
 };

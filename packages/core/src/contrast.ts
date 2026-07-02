@@ -1,4 +1,4 @@
-import type { AccessibilityNote, ElementSnapshot } from "@ui-devtools/shared";
+import type { AccessibilityNote, ElementSnapshot } from "@ui-buddy/shared";
 
 export type RgbaColor = {
   r: number;
