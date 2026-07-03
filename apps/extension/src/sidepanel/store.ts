@@ -79,6 +79,7 @@ export type PanelState = {
     responsiveTarget?: StyleResponsiveTarget,
   ) => StyleChange | null;
   resetElementChanges: () => void;
+  resetForNavigation: () => void;
   setActiveTab: (tab: PanelTab) => void;
   setError: (error: string | null) => void;
   setGridActive: (active: boolean) => void;
@@ -212,6 +213,30 @@ export const usePanelStore = create<PanelState>((set, get) => ({
     );
   },
   resetElementChanges: () => set({ changes: [] }),
+  // Wipe everything tied to a specific page. Called when the inspected tab
+  // reloads or navigates so the panel doesn't show stale selections/edits from
+  // a page whose content script (and applied styles) no longer exist.
+  resetForNavigation: () =>
+    set({
+      a11yIssues: null,
+      a11yScanLoading: false,
+      accessibilityNotes: [],
+      assetFetch: null,
+      changes: [],
+      elementCssResult: null,
+      error: null,
+      gridActive: false,
+      historyRedoDepth: 0,
+      historyUndoDepth: 0,
+      hoveredSelector: null,
+      measurementTarget: null,
+      multiSelection: { count: 0, selectors: [] },
+      pickerActive: false,
+      rulerActive: false,
+      searchResults: [],
+      selectedElement: null,
+      tech: null,
+    }),
   setActiveTab: (tab) => set({ activeTab: tab }),
   setError: (error) => set({ error }),
   setGridActive: (gridActive) => set({ gridActive }),

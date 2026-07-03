@@ -15,10 +15,11 @@ export default defineManifest({
     default_title: "Open ui-buddy",
   },
   permissions: ["activeTab", "sidePanel", "storage", "scripting"],
-  // Same scope as the content scripts. Required so source lookup / tech
-  // detection (chrome.scripting MAIN world) and element screenshots
-  // (captureVisibleTab) work without a fresh action-click grant.
-  host_permissions: ["http://*/*", "https://*/*"],
+  // `<all_urls>` is the permission chrome.tabs.captureVisibleTab explicitly
+  // checks for; the http/https patterns alone can leave it dependent on a fresh
+  // activeTab grant, which produced the "<all_urls> or activeTab required"
+  // error. It also covers source lookup / tech detection (scripting MAIN world).
+  host_permissions: ["<all_urls>"],
   side_panel: {
     default_path: "sidepanel.html",
   },

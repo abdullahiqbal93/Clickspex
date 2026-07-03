@@ -13,6 +13,7 @@ declare global {
   interface Window {
     __ui_devtools_anim_listener?: boolean;
     __ui_devtools_anim_speed?: number;
+    __uiBuddyListenerAttached?: boolean;
   }
 }
 
@@ -56,7 +57,13 @@ const picker = new ElementPickerController(overlay, {
 const ruler = new ManualRulerController();
 const grid = new GridController();
 
-addRuntimeMessageListener((message) => {
+// If this script is injected on demand (into a tab that was already open) while
+// the declared content script also runs, guard against registering the message
+// handler twice — a second listener would double-process every command.
+if (window.__uiBuddyListenerAttached !== true) {
+  window.__uiBuddyListenerAttached = true;
+
+  addRuntimeMessageListener((message) => {
   if (message.type === "PICKER_ENABLE") {
     ruler.disable();
     picker.enable("select");
@@ -295,6 +302,16 @@ addRuntimeMessageListener((message) => {
     return;
   }
 
+  if (message.type === "SET_CAPTURE_MODE") {
+    overlay.setCaptureHidden(message.payload.active);
+    return;
+  }
+
+  if (message.type === "APPLY_RAW_CSS") {
+    styleInjector.setRawCss(message.payload.selector, message.payload.css);
+    return;
+  }
+
   if (message.type === "SET_ANIMATION_SPEED") {
     const { speed } = message.payload;
     window.__ui_devtools_anim_speed = speed;
@@ -317,4 +334,5 @@ addRuntimeMessageListener((message) => {
 
     return;
   }
-});
+  });
+}

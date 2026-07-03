@@ -11,16 +11,30 @@ const MAX_DESCENDANTS = 40;
 // Walks same-origin stylesheets and collects the rules that actually match
 // the element, exactly as the site author wrote them.
 
-const stripPseudo = (selector: string): string => {
-  const stripped = selector.replace(/::?[a-zA-Z-]+(\([^)]*\))?/g, "").trim();
-  return stripped.length === 0 ? "*" : stripped;
+const stripPseudo = (selector: string): string =>
+  selector.replace(/::?[a-zA-Z-]+(\([^)]*\))?/g, "").trim();
+
+// Document-scope rules (`:root { --var: ... }`, `:host { ... }`, bare `*`)
+// technically "match" every element but only define global variables or resets.
+// They flood the extracted CSS with noise, so we never attribute them to a
+// specific element.
+const isGlobalScopeSelector = (selector: string): boolean => {
+  const normalized = selector.trim().toLowerCase();
+  return (
+    normalized === "*" ||
+    normalized === ":root" ||
+    normalized === "html:root" ||
+    normalized === ":host" ||
+    normalized.startsWith(":host(") ||
+    normalized.startsWith(":host-context(")
+  );
 };
 
 const selectorMatches = (element: Element, selectorText: string): boolean =>
   selectorText.split(",").some((part) => {
     const selector = part.trim();
 
-    if (selector.length === 0) {
+    if (selector.length === 0 || isGlobalScopeSelector(selector)) {
       return false;
     }
 
@@ -33,10 +47,18 @@ const selectorMatches = (element: Element, selectorText: string): boolean =>
     }
 
     // Retry with pseudo-classes/elements removed so :hover/:focus rules and
-    // ::before styles are still captured.
+    // ::before styles are still captured — but only when a real compound
+    // selector remains. A selector that strips down to "" or "*" (e.g. `:root`,
+    // `:host`, `:focus-visible`) would otherwise match every element.
     if (/:/.test(selector)) {
+      const stripped = stripPseudo(selector);
+
+      if (stripped.length === 0 || stripped === "*") {
+        return false;
+      }
+
       try {
-        return element.matches(stripPseudo(selector));
+        return element.matches(stripped);
       } catch {
         return false;
       }

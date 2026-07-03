@@ -39,28 +39,11 @@ import { usePanelStore } from "../store";
 
 import type {
   AlignEdge,
-  ComponentSourceInfo,
   DomMoveDirection,
   ElementSearchResult,
   ElementSnapshot,
   PageTechInfo,
 } from "@ui-buddy/shared";
-
-const EDITOR_TEMPLATES: Array<{ id: string; label: string; template: string }> = [
-  { id: "vscode", label: "VS Code", template: "vscode://file/{file}:{line}:{column}" },
-  { id: "cursor", label: "Cursor", template: "cursor://file/{file}:{line}:{column}" },
-  {
-    id: "webstorm",
-    label: "WebStorm",
-    template: "jetbrains://web-storm/navigate/reference?path={file}:{line}",
-  },
-];
-
-const buildEditorUrl = (template: string, source: ComponentSourceInfo): string =>
-  template
-    .replaceAll("{file}", source.file ?? "")
-    .replaceAll("{line}", String(source.line ?? 1))
-    .replaceAll("{column}", String(source.column ?? 1));
 
 type InspectorPanelProps = {
   selectedElement: ElementSnapshot | null;
@@ -121,9 +104,6 @@ export const InspectorPanel = ({ selectedElement }: InspectorPanelProps) => {
   const [imageUrl, setImageUrl] = useState("");
   const [query, setQuery] = useState("");
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
-  const [sourceInfo, setSourceInfo] = useState<ComponentSourceInfo | null>(null);
-  const [sourceLookupState, setSourceLookupState] = useState<"idle" | "loading" | "done">("idle");
-  const [editorId, setEditorId] = useState("vscode");
   const [capturing, setCapturing] = useState(false);
   const imageFileInputRef = useRef<HTMLInputElement>(null);
   const searchResults = usePanelStore((state) => state.searchResults);
@@ -132,14 +112,6 @@ export const InspectorPanel = ({ selectedElement }: InspectorPanelProps) => {
   const elementCssResult = usePanelStore((state) => state.elementCssResult);
   const multiSelection = usePanelStore((state) => state.multiSelection);
   const setError = usePanelStore((state) => state.setError);
-
-  useEffect(() => {
-    void chrome.storage.local.get("ubEditorId").then((stored) => {
-      if (typeof stored.ubEditorId === "string") {
-        setEditorId(stored.ubEditorId);
-      }
-    });
-  }, []);
 
   useEffect(() => {
     if (tech !== null) {
@@ -153,8 +125,6 @@ export const InspectorPanel = ({ selectedElement }: InspectorPanelProps) => {
 
   useEffect(() => {
     // Reset per-element results when the selection changes.
-    setSourceInfo(null);
-    setSourceLookupState("idle");
     setCopyFeedback(null);
   }, [selectedElement?.selector, selectedElement?.domPath]);
 
@@ -181,37 +151,6 @@ export const InspectorPanel = ({ selectedElement }: InspectorPanelProps) => {
     }
   };
 
-  const findSource = async () => {
-    setError(null);
-    setSourceLookupState("loading");
-    try {
-      await sendMessageToActiveTab({ type: "MARK_SELECTED_FOR_SOURCE" });
-      const result = await callBackground<ComponentSourceInfo | null>("lookup-source");
-      setSourceInfo(result);
-      setSourceLookupState("done");
-    } catch (caughtError) {
-      setSourceLookupState("done");
-      setError(
-        caughtError instanceof Error ? caughtError.message : "Unable to look up the source.",
-      );
-    }
-  };
-
-  const openInEditor = async () => {
-    if (sourceInfo?.file == null) {
-      return;
-    }
-
-    const editor = EDITOR_TEMPLATES.find((entry) => entry.id === editorId) ?? EDITOR_TEMPLATES[0]!;
-    await chrome.storage.local.set({ ubEditorId: editor.id });
-
-    try {
-      await chrome.tabs.create({ url: buildEditorUrl(editor.template, sourceInfo), active: false });
-    } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : "Unable to open the editor.");
-    }
-  };
-
   const captureElementScreenshot = async () => {
     if (selectedElement === null) {
       return;
@@ -219,11 +158,21 @@ export const InspectorPanel = ({ selectedElement }: InspectorPanelProps) => {
 
     setError(null);
     setCapturing(true);
+    let overlayHidden = false;
     try {
       await sendMessageToActiveTab({ type: "SCROLL_SELECTED_INTO_VIEW" });
       await new Promise((resolve) => setTimeout(resolve, 400));
 
+      // Hide the selection border / hover box so they don't end up in the PNG.
+      await sendMessageToActiveTab({ type: "SET_CAPTURE_MODE", payload: { active: true } });
+      overlayHidden = true;
+      await new Promise((resolve) => setTimeout(resolve, 60));
+
       const dataUrl = await callBackground<string>("capture-tab");
+
+      await sendMessageToActiveTab({ type: "SET_CAPTURE_MODE", payload: { active: false } });
+      overlayHidden = false;
+
       const context = await readPageContext();
       const rect = usePanelStore.getState().selectedElement?.rect ?? selectedElement.rect;
       const image = new Image();
@@ -269,6 +218,13 @@ export const InspectorPanel = ({ selectedElement }: InspectorPanelProps) => {
         caughtError instanceof Error ? caughtError.message : "Unable to capture a screenshot.",
       );
     } finally {
+      if (overlayHidden) {
+        // Make sure the overlay comes back even if capture failed midway.
+        await sendMessageToActiveTab({
+          type: "SET_CAPTURE_MODE",
+          payload: { active: false },
+        }).catch(() => undefined);
+      }
       setCapturing(false);
     }
   };
@@ -630,7 +586,7 @@ export const InspectorPanel = ({ selectedElement }: InspectorPanelProps) => {
 
       <section className="rounded-lg border border-border bg-panel/80 backdrop-blur-sm p-4 shadow-card">
         <div className="flex items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold">Code &amp; Source</h3>
+          <h3 className="text-sm font-semibold">Code</h3>
           {copyFeedback !== null ? (
             <span className="rounded bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
               {copyFeedback} copied
@@ -655,16 +611,6 @@ export const InspectorPanel = ({ selectedElement }: InspectorPanelProps) => {
           >
             <FileCode2 aria-hidden="true" size={13} />
             Get component
-          </button>
-          <button
-            className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-border px-2 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-            disabled={sourceLookupState === "loading"}
-            onClick={() => void findSource()}
-            title="Resolve the source component (works best in dev builds)"
-            type="button"
-          >
-            <Search aria-hidden="true" size={13} />
-            {sourceLookupState === "loading" ? "Finding..." : "Find source"}
           </button>
           <button
             className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-border px-2 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
@@ -722,59 +668,6 @@ ${elementCssResult.css}
             <pre className="max-h-40 overflow-auto rounded-md bg-slate-950 p-2 text-[10px] leading-4 text-slate-50">
               <code>{elementCssResult.css}</code>
             </pre>
-          </div>
-        ) : null}
-
-        {sourceLookupState === "done" ? (
-          <div className="mt-3 rounded-md border border-slate-100 bg-slate-50 p-3">
-            {sourceInfo === null ? (
-              <p className="text-xs leading-5 text-muted">
-                No component metadata on this page. Source lookup works on React/Vue{" "}
-                <span className="font-semibold">development builds</span>. Server-rendered sites
-                (Laravel Blade, WordPress, plain HTML) don&apos;t expose component sources — for
-                those, use the ui-buddy CLI (<code className="font-mono">ui-buddy index</code>) to
-                map selectors to source files.
-              </p>
-            ) : (
-              <div className="space-y-2">
-                <p className="text-xs font-semibold text-slate-900">
-                  {sourceInfo.componentName ?? "Unnamed component"}
-                </p>
-                {sourceInfo.file !== null ? (
-                  <>
-                    <p className="break-all font-mono text-[10px] text-slate-600">
-                      {sourceInfo.file}
-                      {sourceInfo.line !== null ? `:${sourceInfo.line}` : ""}
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <select
-                        aria-label="Editor"
-                        className="h-7 rounded-md border border-border bg-white px-1.5 text-[11px] text-slate-700 outline-none"
-                        onChange={(event) => setEditorId(event.target.value)}
-                        value={editorId}
-                      >
-                        {EDITOR_TEMPLATES.map((editor) => (
-                          <option key={editor.id} value={editor.id}>
-                            {editor.label}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        className="inline-flex h-7 items-center gap-1.5 rounded-md bg-accent px-2.5 text-[11px] font-medium text-white transition hover:bg-blue-700"
-                        onClick={() => void openInEditor()}
-                        type="button"
-                      >
-                        Open in editor
-                      </button>
-                    </div>
-                  </>
-                ) : (
-                  <p className="text-[11px] leading-4 text-muted">
-                    Component name found, but no file location (production build).
-                  </p>
-                )}
-              </div>
-            )}
           </div>
         ) : null}
       </section>

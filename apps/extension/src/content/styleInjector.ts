@@ -126,12 +126,43 @@ const applyChangeToRules = (rulesByTarget: RulesByResponsiveTarget, change: Styl
   }
 };
 
+/**
+ * Force `!important` on any declaration that doesn't already carry it, so raw
+ * CSS reliably wins over the page's own rules (matching the live-preview
+ * behaviour of the structured fields). Comments and empty fragments are dropped.
+ */
+const enforceImportant = (rawCss: string): string =>
+  rawCss
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .split(";")
+    .map((declaration) => declaration.trim())
+    .filter((declaration) => declaration.includes(":"))
+    .map((declaration) =>
+      /!important\s*$/i.test(declaration) ? declaration : `${declaration} !important`,
+    )
+    .map((declaration) => `  ${declaration};`)
+    .join("\n");
+
 export class StyleInjector {
   private readonly appliedChanges: StyleChange[] = [];
   private readonly redoStack: StyleChange[] = [];
+  // Free-form CSS entered in the Styles → Raw CSS editor, keyed by selector.
+  private readonly rawCssBySelector = new Map<string, string>();
 
   public getAppliedChanges(): StyleChange[] {
     return [...this.appliedChanges];
+  }
+
+  public setRawCss(selector: string, css: string): void {
+    const trimmed = css.trim();
+
+    if (trimmed.length === 0) {
+      this.rawCssBySelector.delete(selector);
+    } else {
+      this.rawCssBySelector.set(selector, trimmed);
+    }
+
+    this.render();
   }
 
   public applyChange(change: StyleChange): void {
@@ -165,6 +196,7 @@ export class StyleInjector {
   public reset(): void {
     this.appliedChanges.length = 0;
     this.redoStack.length = 0;
+    this.rawCssBySelector.clear();
     document.getElementById(STYLE_ELEMENT_ID)?.remove();
   }
 
@@ -181,6 +213,16 @@ export class StyleInjector {
     return styleElement;
   }
 
+  private buildRawCss(): string {
+    return Array.from(this.rawCssBySelector.entries())
+      .map(([selector, css]) => {
+        const declarations = enforceImportant(css);
+        return declarations.length === 0 ? "" : `${selector} {\n${declarations}\n}`;
+      })
+      .filter((block) => block.length > 0)
+      .join("\n\n");
+  }
+
   private render(): void {
     const rulesByTarget: RulesByResponsiveTarget = new Map();
 
@@ -188,7 +230,9 @@ export class StyleInjector {
       applyChangeToRules(rulesByTarget, change);
     }
 
-    if (rulesByTarget.size === 0) {
+    const rawCss = this.buildRawCss();
+
+    if (rulesByTarget.size === 0 && rawCss.length === 0) {
       document.getElementById(STYLE_ELEMENT_ID)?.remove();
       return;
     }
@@ -208,6 +252,9 @@ export class StyleInjector {
     }).join("\n\n");
     const animationKeyframes = getAnimationPresetKeyframes(rulesByTarget);
 
-    this.getStyleElement().textContent = [cssRules, ...animationKeyframes].join("\n\n");
+    // Raw CSS goes last so it wins on equal specificity, closest to DevTools.
+    this.getStyleElement().textContent = [cssRules, ...animationKeyframes, rawCss]
+      .filter((block) => block.length > 0)
+      .join("\n\n");
   }
 }

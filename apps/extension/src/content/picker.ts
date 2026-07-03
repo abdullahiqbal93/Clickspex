@@ -49,13 +49,15 @@ type InlineMoveState = {
   position: string;
   top: string;
   transform: string;
+  // Drag offset lives on the independent `translate` property so it composes
+  // with (rather than being overwritten by) any transform/animation the user
+  // applies from the Styles panel.
+  translate: string;
   transition: string;
   zIndex: string;
 };
 
-type InlineMoveStyle = InlineMoveState & {
-  baseTransform: string;
-};
+type InlineMoveStyle = InlineMoveState;
 
 type OriginalDomPosition = {
   nextSibling: ChildNode | null;
@@ -125,11 +127,11 @@ export class ElementPickerController {
       this.selectedSnapshot = sourceSnapshot;
     }
 
-    if (this.active) {
-      return;
-    }
-
     this.active = true;
+
+    // Attach listeners every time (re-adding an identical listener is a no-op
+    // in the browser). This makes enabling idempotent and lets the picker
+    // recover if its listeners were ever detached while `active` stayed true.
     document.addEventListener("pointermove", this.handlePointerMove, true);
     document.addEventListener("click", this.handleClick, true);
     document.addEventListener("dblclick", this.handleDoubleClick, true);
@@ -480,6 +482,7 @@ export class ElementPickerController {
     element.style.left = original.left;
     element.style.top = original.top;
     element.style.transform = original.transform;
+    element.style.translate = original.translate;
     element.style.transition = original.transition;
     element.style.zIndex = original.zIndex;
     this.moveOffsets.delete(element);
@@ -553,6 +556,7 @@ export class ElementPickerController {
       first.position === second.position &&
       first.top === second.top &&
       first.transform === second.transform &&
+      first.translate === second.translate &&
       first.transition === second.transition &&
       first.zIndex === second.zIndex
     );
@@ -583,6 +587,7 @@ export class ElementPickerController {
     element.style.left = state.left;
     element.style.top = state.top;
     element.style.transform = state.transform;
+    element.style.translate = state.translate;
     element.style.transition = state.transition;
     element.style.zIndex = state.zIndex;
   }
@@ -593,6 +598,7 @@ export class ElementPickerController {
       position: element.style.position,
       top: element.style.top,
       transform: element.style.transform,
+      translate: element.style.translate,
       transition: element.style.transition,
       zIndex: element.style.zIndex,
     };
@@ -839,17 +845,12 @@ export class ElementPickerController {
       return existing;
     }
 
-    const computedStyle = window.getComputedStyle(element);
-    const computedTransform = computedStyle.transform.trim();
-    const original = {
-      baseTransform:
-        computedTransform.length > 0 && computedTransform !== "none"
-          ? computedTransform
-          : element.style.transform,
+    const original: InlineMoveStyle = {
       left: element.style.left,
       position: element.style.position,
       top: element.style.top,
       transform: element.style.transform,
+      translate: element.style.translate,
       transition: element.style.transition,
       zIndex: element.style.zIndex,
     };
@@ -864,17 +865,17 @@ export class ElementPickerController {
     options: { disableTransition?: boolean } = {},
   ): void {
     const original = this.rememberMoveStyle(element);
-    const transforms: string[] = [];
 
-    if (original.baseTransform.trim().length > 0 && original.baseTransform !== "none") {
-      transforms.push(original.baseTransform);
-    }
-
+    // Use the standalone `translate` property (not `transform`) for the drag
+    // offset. It composes with the element's own transform, so styles and
+    // animations applied afterwards render at the dragged position instead of
+    // snapping the element back to where it started.
     if (offset.x !== 0 || offset.y !== 0) {
-      transforms.push(`translate3d(${Math.round(offset.x)}px, ${Math.round(offset.y)}px, 0)`);
+      element.style.translate = `${Math.round(offset.x)}px ${Math.round(offset.y)}px`;
+    } else {
+      element.style.translate = original.translate;
     }
 
-    element.style.transform = transforms.length > 0 ? transforms.join(" ") : original.transform;
     element.style.zIndex = element.style.zIndex || "1";
 
     if (options.disableTransition === true) {

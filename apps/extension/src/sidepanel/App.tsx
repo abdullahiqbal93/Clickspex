@@ -87,6 +87,7 @@ export const App = () => {
   const setAssetFetch = usePanelStore((state) => state.setAssetFetch);
   const setElementCssResult = usePanelStore((state) => state.setElementCssResult);
   const setMultiSelection = usePanelStore((state) => state.setMultiSelection);
+  const resetForNavigation = usePanelStore((state) => state.resetForNavigation);
 
   useEffect(() => {
     const port = connectSidePanelPort();
@@ -192,6 +193,44 @@ export const App = () => {
     setSearchResults,
     setSelectedElement,
   ]);
+
+  // Reload the panel with the page: when the inspected tab reloads or the user
+  // switches tabs, drop stale selection/edits and rescan the fresh page.
+  useEffect(() => {
+    const rescanFreshPage = () => {
+      setPageScanLoading(true);
+      sendMessageToActiveTab({ type: "SCAN_PAGE" }).catch(() => setPageScanLoading(false));
+    };
+
+    const handleUpdated = (
+      _tabId: number,
+      changeInfo: chrome.tabs.TabChangeInfo,
+      tab: chrome.tabs.Tab,
+    ) => {
+      if (tab.active !== true) {
+        return;
+      }
+
+      if (changeInfo.status === "loading") {
+        resetForNavigation();
+      } else if (changeInfo.status === "complete") {
+        rescanFreshPage();
+      }
+    };
+
+    const handleActivated = () => {
+      resetForNavigation();
+      rescanFreshPage();
+    };
+
+    chrome.tabs.onUpdated.addListener(handleUpdated);
+    chrome.tabs.onActivated.addListener(handleActivated);
+
+    return () => {
+      chrome.tabs.onUpdated.removeListener(handleUpdated);
+      chrome.tabs.onActivated.removeListener(handleActivated);
+    };
+  }, [resetForNavigation, setPageScanLoading]);
 
   const togglePicker = useCallback(async () => {
     setError(null);

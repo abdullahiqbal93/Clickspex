@@ -14,13 +14,49 @@ chrome.runtime.onInstalled.addListener(() => {
 
 void chrome.storage.session.setAccessLevel({ accessLevel: "TRUSTED_AND_UNTRUSTED_CONTEXTS" });
 
+/**
+ * When the side panel closes we tell the page's content script to stop the
+ * picker and drop any selection. Otherwise the page would keep its hover/select
+ * overlay live and remain clickable even though the panel is gone — the user has
+ * to press "Pick" again to start a new selection.
+ */
+const notifyPanelClosed = (): void => {
+  void chrome.tabs
+    .query({ active: true, currentWindow: true })
+    .then(([tab]) => {
+      if (tab?.id === undefined) {
+        return;
+      }
+
+      const url = tab.url ?? "";
+
+      if (!url.startsWith("http://") && !url.startsWith("https://")) {
+        return;
+      }
+
+      void chrome.tabs.sendMessage(tab.id, { type: "PICKER_DISABLE" }).catch(() => {
+        // The tab has no content script (navigated away / restricted page).
+      });
+    })
+    .catch(() => {
+      /* no active tab */
+    });
+};
+
 chrome.runtime.onConnect.addListener((port) => {
   if (port.name !== SIDE_PANEL_PORT_NAME) {
     return;
   }
 
   sidePanelPorts.add(port);
-  port.onDisconnect.addListener(() => sidePanelPorts.delete(port));
+  port.onDisconnect.addListener(() => {
+    sidePanelPorts.delete(port);
+
+    // Only react to the *last* side-panel context going away.
+    if (sidePanelPorts.size === 0) {
+      notifyPanelClosed();
+    }
+  });
 });
 
 chrome.runtime.onMessage.addListener((rawMessage: unknown) => {
@@ -285,8 +321,29 @@ const handleBackgroundCommand = async (
   command: string,
 ): Promise<{ ok: boolean; data?: unknown; error?: string }> => {
   try {
+    if (command === "inject-content-script") {
+      // Inject the manifest's declared content script into tabs that were
+      // already open when the extension was installed/updated (where the
+      // content script never ran). Uses the hashed filenames from the manifest
+      // so it stays correct across builds.
+      const tabId = await activeTabId();
+      const files = (chrome.runtime.getManifest().content_scripts ?? []).flatMap(
+        (entry) => entry.js ?? [],
+      );
+
+      if (files.length > 0) {
+        await chrome.scripting.executeScript({ target: { tabId }, files });
+      }
+
+      return { ok: true };
+    }
+
     if (command === "capture-tab") {
-      const dataUrl = await chrome.tabs.captureVisibleTab({ format: "png" });
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const dataUrl =
+        tab?.windowId === undefined
+          ? await chrome.tabs.captureVisibleTab({ format: "png" })
+          : await chrome.tabs.captureVisibleTab(tab.windowId, { format: "png" });
       return { ok: true, data: dataUrl };
     }
 

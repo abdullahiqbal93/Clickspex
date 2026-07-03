@@ -59,6 +59,26 @@ export const sendRuntimeMessage = async (message: ExtensionMessage): Promise<voi
 export const connectSidePanelPort = (): chrome.runtime.Port =>
   chrome.runtime.connect({ name: SIDE_PANEL_PORT_NAME });
 
+const isMissingContentScript = (error: unknown): boolean => {
+  const text = error instanceof Error ? error.message : String(error);
+  return text.includes("Receiving end does not exist");
+};
+
+/**
+ * Ask the service worker to inject the declared content script into the active
+ * tab, then give it a moment to register its message listener. Returns false if
+ * injection isn't possible (restricted page, no scripting permission, etc.).
+ */
+const ensureContentScriptInjected = async (): Promise<boolean> => {
+  try {
+    await callBackground("inject-content-script");
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 export const sendMessageToActiveTab = async (message: ExtensionMessage): Promise<void> => {
   const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
@@ -70,20 +90,39 @@ export const sendMessageToActiveTab = async (message: ExtensionMessage): Promise
     throw new Error("ui-buddy can inspect only http and https pages.");
   }
 
-  try {
-    assertOkMessageResponse(await chrome.tabs.sendMessage(activeTab.id, message));
-  } catch (error) {
-    const text = error instanceof Error ? error.message : String(error);
+  const tabId = activeTab.id;
 
-    if (text.includes("Receiving end does not exist")) {
-      throw new Error("ui-buddy can't reach this page. Refresh the tab to reconnect.");
+  try {
+    assertOkMessageResponse(await chrome.tabs.sendMessage(tabId, message));
+  } catch (error) {
+    if (!isMissingContentScript(error)) {
+      throw error;
     }
 
-    throw error;
+    // The content script isn't in this tab yet — common on tabs that were
+    // already open before the extension was installed/updated, or after the
+    // extension reloaded. Inject it on demand and retry once so picking works
+    // without the user having to reload the extension or refresh the tab.
+    if (await ensureContentScriptInjected()) {
+      try {
+        assertOkMessageResponse(await chrome.tabs.sendMessage(tabId, message));
+        return;
+      } catch (retryError) {
+        if (!isMissingContentScript(retryError)) {
+          throw retryError;
+        }
+      }
+    }
+
+    throw new Error("ui-buddy can't reach this page. Refresh the tab to reconnect.");
   }
 };
 
-export type BackgroundCommand = "capture-tab" | "detect-tech" | "lookup-source";
+export type BackgroundCommand =
+  | "capture-tab"
+  | "detect-tech"
+  | "lookup-source"
+  | "inject-content-script";
 
 type BackgroundCommandResponse = { ok: true; data: unknown } | { ok: false; error: string };
 

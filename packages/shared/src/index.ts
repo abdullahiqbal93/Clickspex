@@ -448,6 +448,8 @@ export type ExtensionMessage =
   | { type: "ALIGN_SELECTED"; payload: { alignment: AlignEdge } }
   | { type: "SCROLL_SELECTED_INTO_VIEW" }
   | { type: "MARK_SELECTED_FOR_SOURCE" }
+  | { type: "SET_CAPTURE_MODE"; payload: { active: boolean } }
+  | { type: "APPLY_RAW_CSS"; payload: { selector: string; css: string } }
   | { type: "MULTI_SELECTION_CHANGED"; payload: { count: number; selectors: string[] } }
   | {
       type: "HISTORY_SYNC";
@@ -745,6 +747,18 @@ export const isExtensionMessage = (value: unknown): value is ExtensionMessage =>
 
   if (messageType === "SET_ANIMATION_SPEED") {
     return isRecord(value.payload) && isNumber(value.payload.speed);
+  }
+
+  if (messageType === "SET_CAPTURE_MODE") {
+    return isRecord(value.payload) && typeof value.payload.active === "boolean";
+  }
+
+  if (messageType === "APPLY_RAW_CSS") {
+    return (
+      isRecord(value.payload) &&
+      isString(value.payload.selector) &&
+      isString(value.payload.css)
+    );
   }
 
   return false;

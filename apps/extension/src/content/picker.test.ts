@@ -86,11 +86,11 @@ describe("ElementPickerController", () => {
 
     picker.nudgeSelectedElement(8, -4);
 
-    expect(button.style.transform).toContain("translate3d(8px, -4px, 0)");
+    expect(button.style.translate).toBe("8px -4px");
 
     picker.restoreSelectedElement();
 
-    expect(button.style.transform).toBe("");
+    expect(button.style.translate).toBe("");
   });
 
   it("replaces selected image sources", () => {
@@ -244,7 +244,7 @@ describe("ElementPickerController", () => {
     picker.moveSelectedElement("next");
     picker.restoreSelectedElement();
 
-    expect(second.style.transform).toBe("");
+    expect(second.style.translate).toBe("");
     expect(Array.from(list.children, (child) => child.id)).toEqual(["first", "second", "third"]);
   });
   it("undoes and redoes sibling DOM moves", () => {
@@ -283,13 +283,13 @@ describe("ElementPickerController", () => {
     button.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
 
     picker.nudgeSelectedElement(8, -4);
-    expect(button.style.transform).toContain("translate3d(8px, -4px, 0)");
+    expect(button.style.translate).toBe("8px -4px");
 
     picker.undoMovePosition();
-    expect(button.style.transform).toBe("");
+    expect(button.style.translate).toBe("");
 
     picker.redoMovePosition();
-    expect(button.style.transform).toContain("translate3d(8px, -4px, 0)");
+    expect(button.style.translate).toBe("8px -4px");
   });
 
   it("undoes and redoes mixed DOM moves and nudges one step at a time", () => {
@@ -310,22 +310,22 @@ describe("ElementPickerController", () => {
     picker.nudgeSelectedElement(8, 8);
 
     expect(Array.from(list.children, (child) => child.id)).toEqual(["first", "third", "second"]);
-    expect(second.style.transform).toContain("translate3d(8px, 8px, 0)");
+    expect(second.style.translate).toBe("8px 8px");
 
     picker.undoMovePosition();
     expect(Array.from(list.children, (child) => child.id)).toEqual(["first", "third", "second"]);
-    expect(second.style.transform).toBe("");
+    expect(second.style.translate).toBe("");
 
     picker.undoMovePosition();
     expect(Array.from(list.children, (child) => child.id)).toEqual(["first", "second", "third"]);
 
     picker.redoMovePosition();
     expect(Array.from(list.children, (child) => child.id)).toEqual(["first", "third", "second"]);
-    expect(second.style.transform).toBe("");
+    expect(second.style.translate).toBe("");
 
     picker.redoMovePosition();
     expect(Array.from(list.children, (child) => child.id)).toEqual(["first", "third", "second"]);
-    expect(second.style.transform).toContain("translate3d(8px, 8px, 0)");
+    expect(second.style.translate).toBe("8px 8px");
   });
   it("does not move body-level elements out past the document body", () => {
     document.documentElement.innerHTML =

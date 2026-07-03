@@ -4,6 +4,18 @@ import type { ElementSnapshot, PinCardKind, RectSnapshot } from "@ui-buddy/share
 
 const HOST_ID = "__ui-buddy-host__";
 
+// Computed values that carry no useful information on the pinned styles card.
+const PIN_STYLE_NOISE_VALUES = new Set([
+  "",
+  "none",
+  "auto",
+  "normal",
+  "visible",
+  "static",
+  "0px",
+  "rgba(0, 0, 0, 0)",
+]);
+
 const parseVal = (v: string): number => parseFloat(v) || 0;
 
 export class OverlayController {
@@ -56,6 +68,14 @@ export class OverlayController {
 
   public get hostElement(): HTMLDivElement {
     return this.host;
+  }
+
+  /**
+   * Hide the entire overlay layer (selection border, hover box, tooltip,
+   * guides, pins) so a page screenshot captures only the real element.
+   */
+  public setCaptureHidden(hidden: boolean): void {
+    this.host.style.visibility = hidden ? "hidden" : "";
   }
 
   public showHover(snapshot: ElementSnapshot): void {
@@ -279,8 +299,17 @@ export class OverlayController {
     const fields = [
       "display",
       "position",
+      "top",
+      "right",
+      "bottom",
+      "left",
+      "z-index",
       "width",
       "height",
+      "min-width",
+      "max-width",
+      "min-height",
+      "max-height",
       "margin-top",
       "margin-right",
       "margin-bottom",
@@ -289,16 +318,41 @@ export class OverlayController {
       "padding-right",
       "padding-bottom",
       "padding-left",
+      "flex-direction",
+      "flex-wrap",
+      "justify-content",
+      "align-items",
+      "gap",
       "color",
       "background-color",
+      "font-family",
       "font-size",
       "font-weight",
+      "font-style",
       "line-height",
+      "letter-spacing",
+      "text-align",
+      "text-transform",
+      "border-width",
+      "border-style",
+      "border-color",
+      "border-radius",
       "box-shadow",
+      "opacity",
+      "transform",
+      "filter",
+      "transition",
+      "cursor",
+      "overflow",
     ];
 
     return fields
-      .map((field) => this.createPinRow(field, snapshot.computedStyles[field] ?? ""))
+      .map((field) => {
+        const value = (snapshot.computedStyles[field] ?? "").trim();
+        // Skip empty declarations and default/no-op values so the card only
+        // surfaces styles that actually shape the element.
+        return PIN_STYLE_NOISE_VALUES.has(value) ? null : this.createPinRow(field, value);
+      })
       .filter((row): row is HTMLElement => row !== null);
   }
 

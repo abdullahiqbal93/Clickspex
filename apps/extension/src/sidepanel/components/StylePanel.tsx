@@ -1,13 +1,23 @@
 import { buildCssRulesFromChanges, buildScopedCssRule, escapeCssIdentifier } from "@ui-buddy/core";
 import {
   STYLE_RESPONSIVE_TARGET_DEFINITIONS,
+  type ElementSnapshot,
+  type StyleChange,
   type StyleResponsiveTarget,
   type StyleResponsiveTargetDefinition,
   type StyleTargetState,
   type SupportedStyleProperty,
 } from "@ui-buddy/shared";
-import { ChevronDown, Clipboard, Redo2, RotateCcw, SlidersHorizontal, Undo2 } from "lucide-react";
-import { useRef, useState } from "react";
+import {
+  ChevronDown,
+  Clipboard,
+  Code2,
+  Redo2,
+  RotateCcw,
+  SlidersHorizontal,
+  Undo2,
+} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 import { sendMessageToActiveTab } from "../../chrome/messaging";
 import { getCurrentStyleRecord, usePanelStore } from "../store";
@@ -1027,6 +1037,118 @@ const groupedFields = STYLE_FIELDS.reduce<Record<string, StyleField[]>>((groups,
 const styleFieldGroups = Object.entries(groupedFields);
 const defaultExpandedGroup = styleFieldGroups[0]?.[0];
 
+// Computed values that carry no useful information for an editable CSS block.
+const RAW_CSS_NOISE_VALUES = new Set([
+  "",
+  "none",
+  "auto",
+  "normal",
+  "visible",
+  "static",
+  "0s",
+  "0px",
+  "rgba(0, 0, 0, 0)",
+]);
+
+// Order the seeded declarations the way a developer expects to read them.
+const RAW_CSS_SEED_PROPERTIES: SupportedStyleProperty[] = [
+  "display",
+  "position",
+  "top",
+  "right",
+  "bottom",
+  "left",
+  "z-index",
+  "width",
+  "min-width",
+  "max-width",
+  "height",
+  "min-height",
+  "max-height",
+  "margin-top",
+  "margin-right",
+  "margin-bottom",
+  "margin-left",
+  "padding-top",
+  "padding-right",
+  "padding-bottom",
+  "padding-left",
+  "flex-direction",
+  "flex-wrap",
+  "justify-content",
+  "align-items",
+  "align-content",
+  "align-self",
+  "gap",
+  "flex-grow",
+  "flex-shrink",
+  "flex-basis",
+  "order",
+  "color",
+  "background-color",
+  "font-family",
+  "font-size",
+  "font-weight",
+  "font-style",
+  "line-height",
+  "letter-spacing",
+  "text-align",
+  "text-transform",
+  "text-decoration-line",
+  "border-width",
+  "border-style",
+  "border-color",
+  "border-radius",
+  "box-shadow",
+  "opacity",
+  "transform",
+  "transform-origin",
+  "filter",
+  "transition",
+  "cursor",
+  "overflow",
+];
+
+/**
+ * Build an editable CSS declaration block for the selected element: its current
+ * computed styles (minus default/empty noise), with any already-applied edits
+ * layered on top so what the user sees matches the live page.
+ */
+const buildEditableCssForElement = (
+  snapshot: ElementSnapshot,
+  changes: StyleChange[],
+): string => {
+  const declarations = new Map<string, string>();
+
+  for (const property of RAW_CSS_SEED_PROPERTIES) {
+    const value = (snapshot.computedStyles[property] ?? "").trim();
+
+    if (!RAW_CSS_NOISE_VALUES.has(value)) {
+      declarations.set(property, value);
+    }
+  }
+
+  for (const change of changes) {
+    if (
+      change.selector !== snapshot.selector ||
+      (change.state ?? "base") !== "base" ||
+      (change.responsiveTarget ?? "all") !== "all"
+    ) {
+      continue;
+    }
+
+    if (change.afterValue.trim().length === 0) {
+      declarations.delete(change.property);
+    } else {
+      declarations.set(change.property, change.afterValue.trim());
+    }
+  }
+
+  return Array.from(declarations.entries())
+    .map(([property, value]) => `${property}: ${value};`)
+    .join("\n");
+};
+
 const cssColorToHex = (value: string): string | null => {
   const match = value.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
 
@@ -1065,6 +1187,58 @@ export const StylePanel = () => {
   const setSelectedElement = usePanelStore((state) => state.setSelectedElement);
   // Remember the element-unique selector so scope can be switched back.
   const uniqueSelectorRef = useRef<{ domPath: string; selector: string } | null>(null);
+
+  // ── Raw CSS editor ──────────────────────────────────────────
+  const [rawCss, setRawCss] = useState("");
+  const [rawCssApplied, setRawCssApplied] = useState(false);
+  const seededRawCssRef = useRef("");
+  const selectedSelector = selectedElement?.selector ?? null;
+
+  useEffect(() => {
+    // Seed the editor with the element's current CSS (computed styles + any
+    // applied edits) so the user can see and edit it. Re-seeds per element.
+    const element = usePanelStore.getState().selectedElement;
+    const seeded =
+      selectedSelector === null || element === null
+        ? ""
+        : buildEditableCssForElement(element, usePanelStore.getState().changes);
+
+    seededRawCssRef.current = seeded;
+    setRawCss(seeded);
+  }, [selectedSelector]);
+
+  const applyRawCss = async (cssOverride?: string) => {
+    if (selectedElement === null) {
+      return;
+    }
+
+    const css = cssOverride ?? rawCss;
+    setError(null);
+
+    try {
+      await sendMessageToActiveTab({
+        type: "APPLY_RAW_CSS",
+        payload: { selector: selectedElement.selector, css },
+      });
+      setRawCssApplied(true);
+      window.setTimeout(() => setRawCssApplied(false), 1500);
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : "Unable to apply raw CSS.");
+    }
+  };
+
+  const applyRawCssIfEdited = () => {
+    // Don't push the untouched seed (it would force !important on everything);
+    // only apply once the user has actually changed the CSS.
+    if (rawCss !== seededRawCssRef.current) {
+      void applyRawCss();
+    }
+  };
+
+  const clearRawCss = () => {
+    setRawCss("");
+    void applyRawCss("");
+  };
 
   const classSelector =
     selectedElement !== null && selectedElement.classList.length > 0
@@ -1151,6 +1325,7 @@ export const StylePanel = () => {
     try {
       await sendMessageToActiveTab({ type: "RESET_ELEMENT_CHANGES" });
       resetElementChanges();
+      setRawCss("");
     } catch (caughtError) {
       setError(
         caughtError instanceof Error ? caughtError.message : "Unable to reset visual changes.",
@@ -1352,6 +1527,50 @@ export const StylePanel = () => {
           </div>
         )}
       </div>
+
+      <section className="rounded-lg border border-border bg-panel/80 p-3 shadow-card backdrop-blur-sm">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+            <Code2 aria-hidden="true" size={14} />
+            Raw CSS
+          </div>
+          {rawCssApplied ? (
+            <span className="rounded bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+              Applied
+            </span>
+          ) : null}
+        </div>
+        <p className="mt-1 text-[11px] leading-4 text-muted">
+          Current CSS for{" "}
+          <code className="font-mono text-[10px] text-slate-600">{selectedElement.selector}</code>.
+          Edit or add declarations — applied with <span className="font-mono">!important</span> on
+          Apply (or when you edit and blur).
+        </p>
+        <textarea
+          className="mt-2 h-32 w-full resize-y rounded-md border border-border bg-slate-950 p-2 font-mono text-[11px] leading-4 text-slate-50 outline-none transition focus:border-accent focus:ring-2 focus:ring-blue-900"
+          onBlur={applyRawCssIfEdited}
+          onChange={(event) => setRawCss(event.target.value)}
+          placeholder={"color: #2563eb;\nfont-size: 18px;\nborder-radius: 8px;"}
+          spellCheck={false}
+          value={rawCss}
+        />
+        <div className="mt-2 flex items-center gap-2">
+          <button
+            className="inline-flex h-8 items-center gap-2 rounded-md bg-accent px-3 text-xs font-medium text-white transition hover:bg-blue-700"
+            onClick={() => void applyRawCss()}
+            type="button"
+          >
+            Apply CSS
+          </button>
+          <button
+            className="inline-flex h-8 items-center gap-2 rounded-md border border-border px-3 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
+            onClick={clearRawCss}
+            type="button"
+          >
+            Clear
+          </button>
+        </div>
+      </section>
 
       {styleFieldGroups.map(([group, fields]) => {
         const isExpanded = expandedGroups.has(group);
