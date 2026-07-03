@@ -8,27 +8,27 @@ ui-buddy already covers, in a single extension, what most competitors do as sing
 
 ## 2. Feature comparison
 
-| Capability | VisBug | CSS Scan | Wappalyzer | LocatorJS | WhatFont | Dimensions | ColorZilla | ui-buddy |
-|---|---|---|---|---|---|---|---|---|
-| Hover-inspect styles | ✔ | ✔✔ (instant CSS window) | — | — | fonts only | — | — | ✔ |
-| Copy full CSS of element (+children, pseudo, media queries) | partial | ✔✔ | — | — | — | — | — | partial (changed styles only) |
-| Copy element HTML+CSS as component | — | ✔ | — | — | — | — | — | ✖ |
-| Live visual editing (drag, resize, text, images) | ✔✔ | edit-in-window | — | — | — | — | — | ✔ (move/nudge/text/image/styles) |
-| Design-tool hotkeys / multi-select | ✔✔ | — | — | — | — | — | — | ✖ |
-| Measure distances between elements | ✔ | ✔ | — | — | — | ✔✔ (cursor-based) | — | ✔ |
-| Element→source-code jump (IDE) | — | — | — | ✔✔ | — | — | — | ✖ (CLI hints only) |
-| Framework/tech detection on page | — | — | ✔✔ | ✔ (component names) | — | — | — | ✖ in browser (CLI/MCP only, local project) |
-| Font identification | partial | ✔ | — | — | ✔✔ | — | — | ✔ |
-| Color picker / palette extraction | ✔ | ✔ | — | — | — | — | ✔✔ (history, gradients) | ✔ (+EyeDropper) |
-| CSS→Tailwind conversion | — | ✔ (Pro) | — | — | — | — | — | ✔ (conservative) |
-| Accessibility checks | ✔ (contrast, a11y overlays) | — | — | — | — | — | — | ✔ (contrast, labels, alt) |
-| Structured change export (JSON intent) | — | — | — | — | — | — | — | ✔✔ unique |
-| Source-aware patch preview (CLI/MCP) | — | — | — | — | — | — | — | ✔✔ unique |
-| AI-agent integration (MCP) | — | — | — | — | — | — | — | ✔✔ unique |
+| Capability                                                  | VisBug                      | CSS Scan                | Wappalyzer | LocatorJS           | WhatFont   | Dimensions        | ColorZilla              | ui-buddy                                   |
+| ----------------------------------------------------------- | --------------------------- | ----------------------- | ---------- | ------------------- | ---------- | ----------------- | ----------------------- | ------------------------------------------ |
+| Hover-inspect styles                                        | ✔                           | ✔✔ (instant CSS window) | —          | —                   | fonts only | —                 | —                       | ✔                                          |
+| Copy full CSS of element (+children, pseudo, media queries) | partial                     | ✔✔                      | —          | —                   | —          | —                 | —                       | partial (changed styles only)              |
+| Copy element HTML+CSS as component                          | —                           | ✔                       | —          | —                   | —          | —                 | —                       | ✖                                          |
+| Live visual editing (drag, resize, text, images)            | ✔✔                          | edit-in-window          | —          | —                   | —          | —                 | —                       | ✔ (move/nudge/text/image/styles)           |
+| Design-tool hotkeys / multi-select                          | ✔✔                          | —                       | —          | —                   | —          | —                 | —                       | ✖                                          |
+| Measure distances between elements                          | ✔                           | ✔                       | —          | —                   | —          | ✔✔ (cursor-based) | —                       | ✔                                          |
+| Element→source-code jump (IDE)                              | —                           | —                       | —          | ✔✔                  | —          | —                 | —                       | ✖ (CLI hints only)                         |
+| Framework/tech detection on page                            | —                           | —                       | ✔✔         | ✔ (component names) | —          | —                 | —                       | ✖ in browser (CLI/MCP only, local project) |
+| Font identification                                         | partial                     | ✔                       | —          | —                   | ✔✔         | —                 | —                       | ✔                                          |
+| Color picker / palette extraction                           | ✔                           | ✔                       | —          | —                   | —          | —                 | ✔✔ (history, gradients) | ✔ (+EyeDropper)                            |
+| CSS→Tailwind conversion                                     | —                           | ✔ (Pro)                 | —          | —                   | —          | —                 | —                       | ✔ (conservative)                           |
+| Accessibility checks                                        | ✔ (contrast, a11y overlays) | —                       | —          | —                   | —          | —                 | —                       | ✔ (contrast, labels, alt)                  |
+| Structured change export (JSON intent)                      | —                           | —                       | —          | —                   | —          | —                 | —                       | ✔✔ unique                                  |
+| Source-aware patch preview (CLI/MCP)                        | —                           | —                       | —          | —                   | —          | —                 | —                       | ✔✔ unique                                  |
+| AI-agent integration (MCP)                                  | —                           | —                       | —          | —                   | —          | —                 | —                       | ✔✔ unique                                  |
 
 ## 3. Missing features (ranked)
 
-1. **Copy full computed/authored CSS of any element** — CSS Scan's core value. ui-buddy only exports *changed* styles. Add "Copy element CSS" (all relevant computed styles + optionally children and matched CSS rules via `element.matchedCSSRules`-style extraction from stylesheets).
+1. **Copy full computed/authored CSS of any element** — CSS Scan's core value. ui-buddy only exports _changed_ styles. Add "Copy element CSS" (all relevant computed styles + optionally children and matched CSS rules via `element.matchedCSSRules`-style extraction from stylesheets).
 2. **Element → component/source jump (LocatorJS)** — read React/Vue/Svelte devtools hooks (`__REACT_DEVTOOLS_GLOBAL_HOOK__`, fiber `_debugSource`) to show component name in the inspector and open `vscode://` links. This pairs perfectly with the existing CLI project index: ui-buddy could map a picked element to the indexed source file with far better confidence than class-name matching alone.
 3. **Page tech detection (Wappalyzer-lite)** — the CLI already detects frameworks from package.json; the extension detects nothing on the live page. A lightweight detector (global variables, meta tags, script srcs) would show "React 18 + Tailwind + Next.js" in the panel and would also improve adapter confidence automatically.
 4. **Copy HTML+CSS of a component** — extract subtree markup with inlined relevant styles for handoff to a sandbox or an AI agent.
@@ -51,7 +51,7 @@ ui-buddy already covers, in a single extension, what most competitors do as sing
 
 ## 5. What makes ui-buddy unique — and how to win
 
-The seven competitors are all *read* or *tweak* tools: they end at the clipboard. ui-buddy's pipeline (browser edit → structured intent → project index → source-aware patch preview → MCP) is the only one that closes the loop from "pixel tweak in the browser" to "reviewable diff in the repo". In 2026, with Figma MCP, agentic IDEs, and design-to-code workflows going mainstream, this is exactly the seam the market is moving toward — and none of the incumbent extensions sit on it.
+The seven competitors are all _read_ or _tweak_ tools: they end at the clipboard. ui-buddy's pipeline (browser edit → structured intent → project index → source-aware patch preview → MCP) is the only one that closes the loop from "pixel tweak in the browser" to "reviewable diff in the repo". In 2026, with Figma MCP, agentic IDEs, and design-to-code workflows going mainstream, this is exactly the seam the market is moving toward — and none of the incumbent extensions sit on it.
 
 Positioning: **"The inspector that ends in a pull request."**
 
