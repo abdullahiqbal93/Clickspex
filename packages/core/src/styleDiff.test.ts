@@ -70,6 +70,49 @@ describe("style diff utilities", () => {
       ].join("\n"),
     );
   });
+  it("wraps responsive changes in media queries", () => {
+    const css = buildCssRuleFromChanges(".card", [
+      createStyleChange(".card", "color", "black", "white", "2026-07-01T00:00:00.000Z"),
+      createStyleChange(
+        ".card",
+        "width",
+        "320px",
+        "100%",
+        "2026-07-01T00:00:00.000Z",
+        "base",
+        "mobile",
+      ),
+      createStyleChange(
+        ".card",
+        "transform",
+        "none",
+        "scale(1.02)",
+        "2026-07-01T00:00:00.000Z",
+        "hover",
+        "tablet",
+      ),
+    ]);
+
+    expect(css).toBe(
+      [
+        ".card {",
+        "  color: white;",
+        "}",
+        "",
+        "@media (max-width: 767px) {",
+        "  .card {",
+        "    width: 100%;",
+        "  }",
+        "}",
+        "",
+        "@media (min-width: 768px) and (max-width: 1023px) {",
+        "  .card:hover {",
+        "    transform: scale(1.02);",
+        "  }",
+        "}",
+      ].join("\n"),
+    );
+  });
 
   it("keeps pseudo-state edits out of base after-style merges", () => {
     const merged = mergeStyleChanges({ transform: "none" }, [
@@ -84,6 +127,24 @@ describe("style diff utilities", () => {
     ]);
 
     expect(merged).toEqual({ transform: "none" });
+  });
+  it("keeps responsive edits scoped out of all-screen after-style merges", () => {
+    const changes = [
+      createStyleChange(
+        ".card",
+        "width",
+        "320px",
+        "100%",
+        "2026-07-01T00:00:00.000Z",
+        "base",
+        "mobile",
+      ),
+    ];
+
+    expect(mergeStyleChanges({ width: "320px" }, changes)).toEqual({ width: "320px" });
+    expect(mergeStyleChanges({ width: "320px" }, changes, "base", "mobile")).toEqual({
+      width: "100%",
+    });
   });
   it("builds a CSS rule from changed declarations", () => {
     const css = buildCssRuleFromChanges(".card", [

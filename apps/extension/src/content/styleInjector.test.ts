@@ -12,6 +12,7 @@ const createChange = (
   beforeValue: string,
   afterValue: string,
   state?: StyleChange["state"],
+  responsiveTarget?: StyleChange["responsiveTarget"],
 ): StyleChange => ({
   selector: "#save",
   property,
@@ -19,6 +20,7 @@ const createChange = (
   afterValue,
   timestamp: "2026-07-01T00:00:00.000Z",
   ...(state === undefined ? {} : { state }),
+  ...(responsiveTarget === undefined ? {} : { responsiveTarget }),
 });
 
 describe("StyleInjector", () => {
@@ -80,6 +82,17 @@ describe("StyleInjector", () => {
 
     expect(styleElement()?.textContent).toContain("#save:hover {");
     expect(styleElement()?.textContent).toContain("  transform: scale(1.04) !important;");
+  });
+  it("wraps responsive live edits in media queries", () => {
+    const injector = new StyleInjector();
+
+    injector.applyChange(createChange("width", "320px", "100%", "base", "mobile"));
+
+    expect(styleElement()?.textContent).toBe(
+      ["@media (max-width: 767px) {", "  #save {", "    width: 100% !important;", "  }", "}"].join(
+        "\n",
+      ),
+    );
   });
   it("adds keyframes for built-in animation presets", () => {
     const injector = new StyleInjector();

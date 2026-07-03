@@ -94,6 +94,51 @@ export const STYLE_TARGET_STATES = [
 ] as const;
 
 export type StyleTargetState = (typeof STYLE_TARGET_STATES)[number];
+
+export const STYLE_RESPONSIVE_TARGETS = ["all", "mobile", "tablet", "desktop"] as const;
+
+export type StyleResponsiveTarget = (typeof STYLE_RESPONSIVE_TARGETS)[number];
+
+export type StyleResponsiveTargetDefinition = {
+  target: StyleResponsiveTarget;
+  label: string;
+  shortLabel: string;
+  mediaQuery: string | null;
+  minWidth?: number;
+  maxWidth?: number;
+};
+
+export const STYLE_RESPONSIVE_TARGET_DEFINITIONS: readonly StyleResponsiveTargetDefinition[] = [
+  {
+    target: "all",
+    label: "All screens",
+    shortLabel: "All",
+    mediaQuery: null,
+  },
+  {
+    target: "mobile",
+    label: "Mobile",
+    shortLabel: "Mobile",
+    mediaQuery: "(max-width: 767px)",
+    maxWidth: 767,
+  },
+  {
+    target: "tablet",
+    label: "Tablet",
+    shortLabel: "Tablet",
+    mediaQuery: "(min-width: 768px) and (max-width: 1023px)",
+    minWidth: 768,
+    maxWidth: 1023,
+  },
+  {
+    target: "desktop",
+    label: "Desktop",
+    shortLabel: "Desktop",
+    mediaQuery: "(min-width: 1024px)",
+    minWidth: 1024,
+  },
+];
+
 export const IMPORTANT_COMPUTED_STYLE_PROPERTIES = [
   ...SUPPORTED_STYLE_PROPERTIES,
   "border-top-width",
@@ -164,6 +209,10 @@ export type ElementSnapshot = {
   computedStyles: Record<string, string>;
   boxModel: BoxModelSnapshot;
   parentLayout: ParentLayoutInfo | null;
+  /** First opaque ancestor background, for contrast checks. */
+  effectiveBackgroundColor?: string;
+  /** Alternative unique selectors, most stable first. */
+  fallbackSelectors?: string[];
 };
 
 export type StyleChange = {
@@ -173,6 +222,7 @@ export type StyleChange = {
   afterValue: string;
   timestamp: string;
   state?: StyleTargetState;
+  responsiveTarget?: StyleResponsiveTarget;
 };
 
 export type AccessibilityNote = {
@@ -199,6 +249,7 @@ export type UIChangeIntent = {
     selector: string;
     domPath: string;
     attributes: Record<string, string>;
+    fallbackSelectors?: string[];
   };
   before: {
     styles: Record<string, string>;
@@ -318,6 +369,31 @@ export type PageScanResult = {
   assets: PageAssetInfo[];
 };
 
+export type PageTechInfo = {
+  name: string;
+  category: "framework" | "library" | "styling" | "platform" | "analytics" | "other";
+  evidence: string;
+};
+
+export type A11yIssue = {
+  id: string;
+  selector: string;
+  severity: "info" | "warning" | "error";
+  title: string;
+  message: string;
+};
+
+export const ALIGN_EDGES = ["left", "center-x", "right", "top", "center-y", "bottom"] as const;
+
+export type AlignEdge = (typeof ALIGN_EDGES)[number];
+
+export type ComponentSourceInfo = {
+  file: string | null;
+  line: number | null;
+  column: number | null;
+  componentName: string | null;
+};
+
 export type ElementSearchResult = Pick<
   ElementSnapshot,
   "tagName" | "id" | "classList" | "textPreview" | "selector" | "rect"
@@ -361,7 +437,22 @@ export type ExtensionMessage =
   | { type: "REPLACE_SELECTED_IMAGE"; payload: { src: string } }
   | { type: "START_TEXT_EDIT" }
   | { type: "SET_ANIMATION_SPEED"; payload: { speed: number } }
-  | { type: "PAGE_SCAN_RESULT"; payload: PageScanResult };
+  | { type: "PAGE_SCAN_RESULT"; payload: PageScanResult }
+  | { type: "COPY_ELEMENT_CSS"; payload: { includeChildren: boolean } }
+  | { type: "ELEMENT_CSS_RESULT"; payload: { css: string; html: string | null } }
+  | { type: "A11Y_SCAN" }
+  | { type: "A11Y_SCAN_RESULT"; payload: { issues: A11yIssue[] } }
+  | { type: "FETCH_ASSET"; payload: { src: string } }
+  | { type: "ASSET_FETCHED"; payload: { src: string; dataUrl: string | null; error?: string } }
+  | { type: "UNDO_DELETE_ELEMENT" }
+  | { type: "ALIGN_SELECTED"; payload: { alignment: AlignEdge } }
+  | { type: "SCROLL_SELECTED_INTO_VIEW" }
+  | { type: "MARK_SELECTED_FOR_SOURCE" }
+  | { type: "MULTI_SELECTION_CHANGED"; payload: { count: number; selectors: string[] } }
+  | {
+      type: "HISTORY_SYNC";
+      payload: { changes: StyleChange[]; undoDepth: number; redoDepth: number };
+    };
 
 export type MessageType = ExtensionMessage["type"];
 
@@ -385,6 +476,10 @@ const MESSAGE_TYPES_WITHOUT_PAYLOAD = new Set<MessageType>([
   "UNDO_MOVE_POSITION",
   "REDO_MOVE_POSITION",
   "START_TEXT_EDIT",
+  "A11Y_SCAN",
+  "UNDO_DELETE_ELEMENT",
+  "SCROLL_SELECTED_INTO_VIEW",
+  "MARK_SELECTED_FOR_SOURCE",
 ]);
 
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -406,6 +501,9 @@ export const isSupportedStyleProperty = (value: unknown): value is SupportedStyl
 
 export const isStyleTargetState = (value: unknown): value is StyleTargetState =>
   isString(value) && STYLE_TARGET_STATES.includes(value as StyleTargetState);
+
+export const isStyleResponsiveTarget = (value: unknown): value is StyleResponsiveTarget =>
+  isString(value) && STYLE_RESPONSIVE_TARGETS.includes(value as StyleResponsiveTarget);
 
 export const isRectSnapshot = (value: unknown): value is RectSnapshot => {
   if (!isRecord(value)) {
@@ -470,7 +568,8 @@ export const isStyleChange = (value: unknown): value is StyleChange => {
     isString(value.beforeValue) &&
     isString(value.afterValue) &&
     isString(value.timestamp) &&
-    (value.state === undefined || isStyleTargetState(value.state))
+    (value.state === undefined || isStyleTargetState(value.state)) &&
+    (value.responsiveTarget === undefined || isStyleResponsiveTarget(value.responsiveTarget))
   );
 };
 
@@ -491,6 +590,17 @@ const isElementSearchResult = (value: unknown): value is ElementSearchResult => 
 
 const isPinCardKind = (value: unknown): value is PinCardKind =>
   value === "styles" || value === "audit";
+
+const isA11yIssue = (value: unknown): value is A11yIssue =>
+  isRecord(value) &&
+  isString(value.id) &&
+  isString(value.selector) &&
+  (value.severity === "info" || value.severity === "warning" || value.severity === "error") &&
+  isString(value.title) &&
+  isString(value.message);
+
+const isAlignEdge = (value: unknown): value is AlignEdge =>
+  isString(value) && (ALIGN_EDGES as readonly string[]).includes(value);
 
 const isDomMoveDirection = (value: unknown): value is DomMoveDirection =>
   value === "previous" || value === "next" || value === "out-before" || value === "out-after";
@@ -568,6 +678,61 @@ export const isExtensionMessage = (value: unknown): value is ExtensionMessage =>
 
   if (messageType === "REPLACE_SELECTED_IMAGE") {
     return isRecord(value.payload) && isString(value.payload.src);
+  }
+
+  if (messageType === "COPY_ELEMENT_CSS") {
+    return isRecord(value.payload) && typeof value.payload.includeChildren === "boolean";
+  }
+
+  if (messageType === "ELEMENT_CSS_RESULT") {
+    return (
+      isRecord(value.payload) &&
+      isString(value.payload.css) &&
+      (value.payload.html === null || isString(value.payload.html))
+    );
+  }
+
+  if (messageType === "A11Y_SCAN_RESULT") {
+    return (
+      isRecord(value.payload) &&
+      Array.isArray(value.payload.issues) &&
+      value.payload.issues.every(isA11yIssue)
+    );
+  }
+
+  if (messageType === "FETCH_ASSET") {
+    return isRecord(value.payload) && isString(value.payload.src);
+  }
+
+  if (messageType === "ASSET_FETCHED") {
+    return (
+      isRecord(value.payload) &&
+      isString(value.payload.src) &&
+      (value.payload.dataUrl === null || isString(value.payload.dataUrl)) &&
+      (value.payload.error === undefined || isString(value.payload.error))
+    );
+  }
+
+  if (messageType === "ALIGN_SELECTED") {
+    return isRecord(value.payload) && isAlignEdge(value.payload.alignment);
+  }
+
+  if (messageType === "HISTORY_SYNC") {
+    return (
+      isRecord(value.payload) &&
+      Array.isArray(value.payload.changes) &&
+      value.payload.changes.every(isStyleChange) &&
+      isNumber(value.payload.undoDepth) &&
+      isNumber(value.payload.redoDepth)
+    );
+  }
+
+  if (messageType === "MULTI_SELECTION_CHANGED") {
+    return (
+      isRecord(value.payload) &&
+      isNumber(value.payload.count) &&
+      isStringArray(value.payload.selectors)
+    );
   }
 
   if (messageType === "MEASURE_START") {

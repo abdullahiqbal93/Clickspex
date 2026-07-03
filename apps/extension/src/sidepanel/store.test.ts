@@ -31,12 +31,26 @@ describe("sidepanel store", () => {
     usePanelStore.setState({
       accessibilityNotes: [],
       changes: [],
+      historyRedoDepth: 0,
+      historyUndoDepth: 0,
       measurementTarget: null,
-      redoStack: [],
       selectedElement: null,
     });
   });
 
+  it("layers responsive style overrides above all-screen values", () => {
+    const element = createSnapshot("#hero", { width: "320px" });
+
+    usePanelStore.getState().setSelectedElement(element);
+    const change = usePanelStore.getState().prepareStyleChange("width", "100%", "base", "mobile");
+
+    expect(change).toMatchObject({ responsiveTarget: "mobile" });
+
+    usePanelStore.getState().applyLocalStyleChange(change!);
+
+    expect(getCurrentStyleRecord(usePanelStore.getState()).width).toBe("320px");
+    expect(getCurrentStyleRecord(usePanelStore.getState(), "base", "mobile").width).toBe("100%");
+  });
   it("keeps page style changes when selecting another element", () => {
     const firstElement = createSnapshot("#save", { color: "black" });
     const secondElement = createSnapshot("#cancel", { color: "blue" });

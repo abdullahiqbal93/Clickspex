@@ -1,4 +1,4 @@
-import { getStyleChangeState } from "@ui-buddy/core/styleDiff";
+import { getStyleChangeResponsiveTarget, getStyleChangeState } from "@ui-buddy/core/styleDiff";
 
 import { createUnifiedDiff } from "./diffPreview.js";
 
@@ -10,6 +10,7 @@ import type {
   ProjectContext,
   ProjectSourceFile,
   StyleChange,
+  StyleResponsiveTarget,
   UIChangeIntent,
 } from "@ui-buddy/shared";
 
@@ -49,6 +50,13 @@ const fontWeightScale: Record<string, string> = {
   "600": "font-semibold",
   "700": "font-bold",
   "800": "font-extrabold",
+};
+
+const responsiveVariantByTarget: Record<StyleResponsiveTarget, string | null> = {
+  all: null,
+  mobile: "max-md",
+  tablet: "md:max-lg",
+  desktop: "lg",
 };
 
 const simpleMappings: Record<string, Record<string, string>> = {
@@ -136,6 +144,11 @@ const spacingPrefixByProperty: Record<string, string> = {
 
 const normalizeColor = (value: string): string => value.trim().toLowerCase().replaceAll(" ", "");
 
+const ARBITRARY_LENGTH = /^-?\d+(\.\d+)?(px|rem|em|vh|vw|%)$/;
+const ARBITRARY_COLOR = /^(#[0-9a-fA-F]{3,8}|rgba?\([\d.,\s%/]+\)|hsla?\([\d.,\s%/deg]+\))$/;
+
+const toArbitraryValue = (value: string): string => value.replaceAll(/\s+/g, "");
+
 const mapChangeToClass = (change: StyleChange): string | null => {
   const value = change.afterValue.trim();
   const property = change.property;
@@ -153,7 +166,16 @@ const mapChangeToClass = (change: StyleChange): string | null => {
   if (property in spacingPrefixByProperty) {
     const scale = spacingScale[value];
     const prefix = spacingPrefixByProperty[property];
-    return scale === undefined || prefix === undefined ? null : `${prefix}-${scale}`;
+
+    if (prefix === undefined) {
+      return null;
+    }
+
+    if (scale !== undefined) {
+      return `${prefix}-${scale}`;
+    }
+
+    return ARBITRARY_LENGTH.test(value) ? `${prefix}-[${value}]` : null;
   }
 
   if (property in sizePrefixByProperty) {
@@ -168,11 +190,20 @@ const mapChangeToClass = (change: StyleChange): string | null => {
     }
 
     const scale = spacingScale[value];
-    return scale === undefined || prefix === undefined ? null : `${prefix}-${scale}`;
+
+    if (prefix === undefined) {
+      return null;
+    }
+
+    if (scale !== undefined) {
+      return `${prefix}-${scale}`;
+    }
+
+    return ARBITRARY_LENGTH.test(value) ? `${prefix}-[${value}]` : null;
   }
 
   if (property === "font-size") {
-    return fontSizeScale[value] ?? null;
+    return fontSizeScale[value] ?? (ARBITRARY_LENGTH.test(value) ? `text-[${value}]` : null);
   }
 
   if (property === "font-weight") {
@@ -180,17 +211,33 @@ const mapChangeToClass = (change: StyleChange): string | null => {
   }
 
   if (property === "border-radius") {
-    return radiusScale[value] ?? null;
+    return radiusScale[value] ?? (ARBITRARY_LENGTH.test(value) ? `rounded-[${value}]` : null);
   }
 
   if (property === "color" || property === "background-color") {
     const mapped = colorMappings[normalizeColor(value)];
 
-    if (mapped === undefined) {
-      return null;
+    if (mapped !== undefined) {
+      return property === "color" ? mapped.text : mapped.background;
     }
 
-    return property === "color" ? mapped.text : mapped.background;
+    if (ARBITRARY_COLOR.test(value)) {
+      const prefix = property === "color" ? "text" : "bg";
+      return `${prefix}-[${toArbitraryValue(value)}]`;
+    }
+
+    return null;
+  }
+
+  // Arbitrary-value fallbacks keep the mapping lossless when no scale matches.
+  if (ARBITRARY_LENGTH.test(value)) {
+    if (property === "line-height") {
+      return `leading-[${value}]`;
+    }
+
+    if (property === "letter-spacing") {
+      return `tracking-[${value}]`;
+    }
   }
 
   return null;
@@ -213,7 +260,22 @@ export const generateTailwindClassesFromChangeIntent = (
     }
 
     const state = getStyleChangeState(change);
-    const targetClassName = state === "base" ? className : `${state}:${className}`;
+    const responsiveTarget = getStyleChangeResponsiveTarget(change);
+    const responsiveVariant = responsiveVariantByTarget[responsiveTarget];
+    const variants = [responsiveVariant, state === "base" ? null : state].filter(
+      (variant): variant is string => variant !== null,
+    );
+    const targetClassName =
+      variants.length === 0 ? className : `${variants.join(":")}:${className}`;
+
+    if (responsiveTarget !== "all") {
+      const warning =
+        "Responsive Tailwind prefixes assume default breakpoints: max-md, md:max-lg, and lg.";
+
+      if (!warnings.includes(warning)) {
+        warnings.push(warning);
+      }
+    }
 
     if (!classes.includes(targetClassName)) {
       classes.push(targetClassName);

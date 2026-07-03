@@ -1,12 +1,16 @@
 import {
+  STYLE_RESPONSIVE_TARGET_DEFINITIONS,
   SUPPORTED_STYLE_PROPERTIES,
   type StyleChange,
+  type StyleResponsiveTarget,
+  type StyleResponsiveTargetDefinition,
   type StyleTargetState,
   type SupportedStyleProperty,
 } from "@ui-buddy/shared";
 
 const INDENT = "  ";
 const BASE_STYLE_TARGET_STATE: StyleTargetState = "base";
+const BASE_STYLE_RESPONSIVE_TARGET: StyleResponsiveTarget = "all";
 const STYLE_TARGET_STATE_ORDER: StyleTargetState[] = [
   "base",
   "hover",
@@ -17,15 +21,38 @@ const STYLE_TARGET_STATE_ORDER: StyleTargetState[] = [
   "disabled",
   "checked",
 ];
+const STYLE_RESPONSIVE_TARGET_ORDER = STYLE_RESPONSIVE_TARGET_DEFINITIONS.map(
+  (definition) => definition.target,
+);
+const BASE_RESPONSIVE_TARGET_DEFINITION: StyleResponsiveTargetDefinition = {
+  target: "all",
+  label: "All screens",
+  shortLabel: "All",
+  mediaQuery: null,
+};
 
 export type CssRuleRecord = {
   selector: string;
   state: StyleTargetState;
+  responsiveTarget: StyleResponsiveTarget;
+  mediaQuery: string | null;
   styles: Record<string, string>;
 };
 
 export const getStyleChangeState = (change: Pick<StyleChange, "state">): StyleTargetState =>
   change.state ?? BASE_STYLE_TARGET_STATE;
+
+export const getStyleChangeResponsiveTarget = (
+  change: Pick<StyleChange, "responsiveTarget">,
+): StyleResponsiveTarget => change.responsiveTarget ?? BASE_STYLE_RESPONSIVE_TARGET;
+
+export const getStyleResponsiveTargetDefinition = (target: StyleResponsiveTarget) =>
+  STYLE_RESPONSIVE_TARGET_DEFINITIONS.find((definition) => definition.target === target) ??
+  BASE_RESPONSIVE_TARGET_DEFINITION;
+
+export const buildMediaQueryFromResponsiveTarget = (
+  target: StyleResponsiveTarget = BASE_STYLE_RESPONSIVE_TARGET,
+): string | null => getStyleResponsiveTargetDefinition(target).mediaQuery;
 
 export const buildStyleTargetSelector = (
   selector: string,
@@ -39,6 +66,7 @@ export const createStyleChange = (
   afterValue: string,
   timestamp = new Date().toISOString(),
   state: StyleTargetState = BASE_STYLE_TARGET_STATE,
+  responsiveTarget: StyleResponsiveTarget = BASE_STYLE_RESPONSIVE_TARGET,
 ): StyleChange => ({
   selector,
   property,
@@ -46,6 +74,7 @@ export const createStyleChange = (
   afterValue,
   timestamp,
   ...(state === BASE_STYLE_TARGET_STATE ? {} : { state }),
+  ...(responsiveTarget === BASE_STYLE_RESPONSIVE_TARGET ? {} : { responsiveTarget }),
 });
 
 export const diffStyles = (
@@ -54,6 +83,7 @@ export const diffStyles = (
   after: Record<string, string>,
   timestamp = new Date().toISOString(),
   state: StyleTargetState = BASE_STYLE_TARGET_STATE,
+  responsiveTarget: StyleResponsiveTarget = BASE_STYLE_RESPONSIVE_TARGET,
 ): StyleChange[] =>
   SUPPORTED_STYLE_PROPERTIES.flatMap((property) => {
     const beforeValue = before[property] ?? "";
@@ -63,17 +93,32 @@ export const diffStyles = (
       return [];
     }
 
-    return [createStyleChange(selector, property, beforeValue, afterValue, timestamp, state)];
+    return [
+      createStyleChange(
+        selector,
+        property,
+        beforeValue,
+        afterValue,
+        timestamp,
+        state,
+        responsiveTarget,
+      ),
+    ];
   });
 
 export const styleChangesToRecord = (
   changes: StyleChange[],
   state: StyleTargetState = BASE_STYLE_TARGET_STATE,
+  responsiveTarget: StyleResponsiveTarget = BASE_STYLE_RESPONSIVE_TARGET,
 ): Record<string, string> => {
   const styles: Record<string, string> = {};
 
   for (const change of changes) {
-    if (getStyleChangeState(change) === state && change.afterValue.trim().length > 0) {
+    if (
+      getStyleChangeState(change) === state &&
+      getStyleChangeResponsiveTarget(change) === responsiveTarget &&
+      change.afterValue.trim().length > 0
+    ) {
       styles[change.property] = change.afterValue;
     }
   }
@@ -87,22 +132,30 @@ export const styleChangesToRuleRecords = (
 ): CssRuleRecord[] => {
   const matchingChanges = changes.filter((change) => change.selector === selector);
 
-  return STYLE_TARGET_STATE_ORDER.map((state) => ({
-    selector: buildStyleTargetSelector(selector, state),
-    state,
-    styles: styleChangesToRecord(matchingChanges, state),
-  })).filter((record) => Object.keys(record.styles).length > 0);
+  return STYLE_RESPONSIVE_TARGET_ORDER.flatMap((responsiveTarget) =>
+    STYLE_TARGET_STATE_ORDER.map((state) => ({
+      selector: buildStyleTargetSelector(selector, state),
+      state,
+      responsiveTarget,
+      mediaQuery: buildMediaQueryFromResponsiveTarget(responsiveTarget),
+      styles: styleChangesToRecord(matchingChanges, state, responsiveTarget),
+    })),
+  ).filter((record) => Object.keys(record.styles).length > 0);
 };
 
 export const mergeStyleChanges = (
   base: Record<string, string>,
   changes: StyleChange[],
   state: StyleTargetState = BASE_STYLE_TARGET_STATE,
+  responsiveTarget: StyleResponsiveTarget = BASE_STYLE_RESPONSIVE_TARGET,
 ): Record<string, string> => {
   const merged = { ...base };
 
   for (const change of changes) {
-    if (getStyleChangeState(change) === state) {
+    if (
+      getStyleChangeState(change) === state &&
+      getStyleChangeResponsiveTarget(change) === responsiveTarget
+    ) {
       merged[change.property] = change.afterValue;
     }
   }
@@ -122,12 +175,60 @@ export const buildCssRule = (selector: string, styles: Record<string, string>): 
   return [`${selector} {`, ...declarations, "}"].join("\n");
 };
 
-export const buildCssRulesFromChanges = (selector: string, changes: StyleChange[]): string => {
-  const rules = styleChangesToRuleRecords(selector, changes).map((record) =>
-    buildCssRule(record.selector, record.styles),
+const indentCss = (css: string): string =>
+  css
+    .split("\n")
+    .map((line) => `${INDENT}${line}`)
+    .join("\n");
+
+export const wrapCssForResponsiveTarget = (
+  css: string,
+  responsiveTarget: StyleResponsiveTarget = BASE_STYLE_RESPONSIVE_TARGET,
+): string => {
+  const mediaQuery = buildMediaQueryFromResponsiveTarget(responsiveTarget);
+
+  if (mediaQuery === null) {
+    return css;
+  }
+
+  return [`@media ${mediaQuery} {`, indentCss(css), "}"].join("\n");
+};
+
+export const buildScopedCssRule = (
+  selector: string,
+  styles: Record<string, string>,
+  state: StyleTargetState = BASE_STYLE_TARGET_STATE,
+  responsiveTarget: StyleResponsiveTarget = BASE_STYLE_RESPONSIVE_TARGET,
+): string =>
+  wrapCssForResponsiveTarget(
+    buildCssRule(buildStyleTargetSelector(selector, state), styles),
+    responsiveTarget,
   );
 
-  return rules.length > 0 ? rules.join("\n\n") : buildCssRule(selector, {});
+export const buildCssRulesFromChanges = (selector: string, changes: StyleChange[]): string => {
+  const records = styleChangesToRuleRecords(selector, changes);
+
+  if (records.length === 0) {
+    return buildCssRule(selector, {});
+  }
+
+  const rules: string[] = [];
+
+  for (const responsiveTarget of STYLE_RESPONSIVE_TARGET_ORDER) {
+    const targetRecords = records.filter((record) => record.responsiveTarget === responsiveTarget);
+
+    if (targetRecords.length === 0) {
+      continue;
+    }
+
+    const targetCss = targetRecords
+      .map((record) => buildCssRule(record.selector, record.styles))
+      .join("\n\n");
+
+    rules.push(wrapCssForResponsiveTarget(targetCss, responsiveTarget));
+  }
+
+  return rules.join("\n\n");
 };
 
 export const buildCssRuleFromChanges = (selector: string, changes: StyleChange[]): string =>

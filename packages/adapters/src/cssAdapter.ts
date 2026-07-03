@@ -1,6 +1,7 @@
 import {
   buildCssRule,
   buildCssRulesFromChanges,
+  getStyleChangeResponsiveTarget,
   styleChangesToRuleRecords,
 } from "@ui-buddy/core/styleDiff";
 
@@ -174,10 +175,21 @@ const generateCssPatch = (
     );
   }
 
-  const nextContent = ruleRecords.reduce(
+  const baseRecords = ruleRecords.filter((record) => record.responsiveTarget === "all");
+  const responsiveChanges = changeIntent.changes.filter(
+    (change) => getStyleChangeResponsiveTarget(change) !== "all",
+  );
+  const contentWithBaseRules = baseRecords.reduce(
     (content, record) => upsertCssRule(content, record.selector, record.styles),
     selected.file.content,
   );
+  const nextContent =
+    responsiveChanges.length === 0
+      ? contentWithBaseRules
+      : `${contentWithBaseRules.trimEnd()}\n\n${buildCssRulesFromChanges(
+          changeIntent.target.selector,
+          responsiveChanges,
+        )}\n`;
 
   return [
     {
@@ -188,7 +200,12 @@ const generateCssPatch = (
         "Selected the best indexed stylesheet by matching selectors, ids, and classes from the captured element.",
       filesToChange: [selected.file.path],
       diffPreview: createUnifiedDiff(selected.file.path, selected.file.content, nextContent),
-      warnings: ["Review selector stability and cascade order before applying this patch."],
+      warnings: [
+        "Review selector stability and cascade order before applying this patch.",
+        ...(responsiveChanges.length === 0
+          ? []
+          : ["Responsive media-query rules were appended for manual placement review."]),
+      ],
       manualSteps: ["Apply the diff after confirming this stylesheet owns the selected UI."],
     },
   ];

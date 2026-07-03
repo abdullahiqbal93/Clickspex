@@ -2,14 +2,33 @@ import { createStyleChange, getAccessibilityNotes } from "@ui-buddy/core";
 import { create } from "zustand";
 
 import type {
+  A11yIssue,
   AccessibilityNote,
   ElementSearchResult,
   ElementSnapshot,
   PageScanResult,
+  PageTechInfo,
   StyleChange,
+  StyleResponsiveTarget,
   StyleTargetState,
   SupportedStyleProperty,
 } from "@ui-buddy/shared";
+
+export type ElementCssResult = {
+  css: string;
+  html: string | null;
+};
+
+export type AssetFetchResult = {
+  src: string;
+  dataUrl: string | null;
+  error?: string;
+};
+
+export type MultiSelectionState = {
+  count: number;
+  selectors: string[];
+};
 
 export type PanelTab =
   | "inspect"
@@ -24,27 +43,41 @@ export type PanelTab =
   | "export";
 
 export type PanelState = {
+  a11yIssues: A11yIssue[] | null;
+  a11yScanLoading: boolean;
   accessibilityNotes: AccessibilityNote[];
   activeTab: PanelTab;
+  assetFetch: AssetFetchResult | null;
   changes: StyleChange[];
+  elementCssResult: ElementCssResult | null;
   error: string | null;
   gridActive: boolean;
   hoveredSelector: string | null;
   measurementTarget: ElementSnapshot | null;
+  multiSelection: MultiSelectionState;
   pageScan: PageScanResult | null;
   pageScanLoading: boolean;
+  historyRedoDepth: number;
+  historyUndoDepth: number;
   pickerActive: boolean;
   rulerActive: boolean;
-  redoStack: StyleChange[];
   searchResults: ElementSearchResult[];
   selectedElement: ElementSnapshot | null;
+  tech: PageTechInfo[] | null;
   applyLocalStyleChange: (change: StyleChange) => void;
+  applyHistorySync: (changes: StyleChange[], undoDepth: number, redoDepth: number) => void;
+  setA11yIssues: (issues: A11yIssue[] | null) => void;
+  setA11yScanLoading: (loading: boolean) => void;
+  setAssetFetch: (result: AssetFetchResult | null) => void;
+  setElementCssResult: (result: ElementCssResult | null) => void;
+  setMultiSelection: (state: MultiSelectionState) => void;
+  setTech: (tech: PageTechInfo[] | null) => void;
   prepareStyleChange: (
     property: SupportedStyleProperty,
     afterValue: string,
     state?: StyleTargetState,
+    responsiveTarget?: StyleResponsiveTarget,
   ) => StyleChange | null;
-  redoLocalChange: () => void;
   resetElementChanges: () => void;
   setActiveTab: (tab: PanelTab) => void;
   setError: (error: string | null) => void;
@@ -57,60 +90,111 @@ export type PanelState = {
   setRulerActive: (active: boolean) => void;
   setSearchResults: (results: ElementSearchResult[]) => void;
   setSelectedElement: (snapshot: ElementSnapshot | null) => void;
-  undoLocalChange: () => void;
+};
+
+const applyStyleLayerChange = (
+  styles: Record<string, string>,
+  change: StyleChange,
+  fallback?: Record<string, string>,
+): void => {
+  if (change.afterValue.trim().length === 0) {
+    const fallbackValue = fallback?.[change.property];
+
+    if (fallbackValue === undefined) {
+      delete styles[change.property];
+    } else {
+      styles[change.property] = fallbackValue;
+    }
+    return;
+  }
+
+  styles[change.property] = change.afterValue;
 };
 
 export const getCurrentStyleRecord = (
   state: Pick<PanelState, "changes" | "selectedElement">,
   targetState: StyleTargetState = "base",
+  targetResponsiveTarget: StyleResponsiveTarget = "all",
 ) => {
   if (state.selectedElement === null) {
     return {};
   }
 
-  const styles: Record<string, string> =
+  const baseStyles: Record<string, string> =
     targetState === "base" ? { ...state.selectedElement.computedStyles } : {};
+  const responsiveOverrides: Record<string, string> = {};
 
   for (const change of state.changes) {
     if (
-      change.selector === state.selectedElement.selector &&
-      (change.state ?? "base") === targetState
+      change.selector !== state.selectedElement.selector ||
+      (change.state ?? "base") !== targetState
     ) {
-      styles[change.property] = change.afterValue;
+      continue;
+    }
+
+    const changeResponsiveTarget = change.responsiveTarget ?? "all";
+
+    if (changeResponsiveTarget === "all") {
+      applyStyleLayerChange(
+        baseStyles,
+        change,
+        targetState === "base" ? state.selectedElement.computedStyles : undefined,
+      );
+      continue;
+    }
+
+    if (changeResponsiveTarget === targetResponsiveTarget) {
+      applyStyleLayerChange(responsiveOverrides, change);
     }
   }
 
-  return styles;
+  return targetResponsiveTarget === "all" ? baseStyles : { ...baseStyles, ...responsiveOverrides };
 };
 
 export const usePanelStore = create<PanelState>((set, get) => ({
+  a11yIssues: null,
+  a11yScanLoading: false,
   accessibilityNotes: [],
   activeTab: "inspect",
+  assetFetch: null,
   changes: [],
+  elementCssResult: null,
   error: null,
   gridActive: false,
   hoveredSelector: null,
   measurementTarget: null,
+  multiSelection: { count: 0, selectors: [] },
   pageScan: null,
   pageScanLoading: false,
+  historyRedoDepth: 0,
+  historyUndoDepth: 0,
   pickerActive: false,
   rulerActive: false,
-  redoStack: [],
   searchResults: [],
   selectedElement: null,
+  tech: null,
+  setA11yIssues: (a11yIssues) => set({ a11yIssues, a11yScanLoading: false }),
+  setA11yScanLoading: (a11yScanLoading) => set({ a11yScanLoading }),
+  setAssetFetch: (assetFetch) => set({ assetFetch }),
+  setElementCssResult: (elementCssResult) => set({ elementCssResult }),
+  setMultiSelection: (multiSelection) => set({ multiSelection }),
+  setTech: (tech) => set({ tech }),
   applyLocalStyleChange: (change) =>
     set((state) => ({
       changes: [...state.changes, change],
-      redoStack: [],
+      historyUndoDepth: state.historyUndoDepth + 1,
+      historyRedoDepth: 0,
     })),
-  prepareStyleChange: (property, afterValue, targetState = "base") => {
+  applyHistorySync: (changes, undoDepth, redoDepth) =>
+    set({ changes, historyUndoDepth: undoDepth, historyRedoDepth: redoDepth }),
+  prepareStyleChange: (property, afterValue, targetState = "base", responsiveTarget = "all") => {
     const state = get();
 
     if (state.selectedElement === null) {
       return null;
     }
 
-    const currentStyles = getCurrentStyleRecord(state, targetState);
+    const currentStyles = getCurrentStyleRecord(state, targetState, responsiveTarget);
     const beforeValue = currentStyles[property] ?? "";
 
     if (beforeValue === afterValue) {
@@ -124,23 +208,10 @@ export const usePanelStore = create<PanelState>((set, get) => ({
       afterValue,
       undefined,
       targetState,
+      responsiveTarget,
     );
   },
-  redoLocalChange: () =>
-    set((state) => {
-      const redoStack = state.redoStack.slice(0, -1);
-      const change = state.redoStack.at(-1);
-
-      if (change === undefined) {
-        return state;
-      }
-
-      return {
-        changes: [...state.changes, change],
-        redoStack,
-      };
-    }),
-  resetElementChanges: () => set({ changes: [], redoStack: [] }),
+  resetElementChanges: () => set({ changes: [] }),
   setActiveTab: (tab) => set({ activeTab: tab }),
   setError: (error) => set({ error }),
   setGridActive: (gridActive) => set({ gridActive }),
@@ -156,21 +227,8 @@ export const usePanelStore = create<PanelState>((set, get) => ({
   setSelectedElement: (selectedElement) =>
     set({
       accessibilityNotes: selectedElement === null ? [] : getAccessibilityNotes(selectedElement),
+      elementCssResult: null,
       measurementTarget: null,
       selectedElement,
-    }),
-  undoLocalChange: () =>
-    set((state) => {
-      const changes = state.changes.slice(0, -1);
-      const change = state.changes.at(-1);
-
-      if (change === undefined) {
-        return state;
-      }
-
-      return {
-        changes,
-        redoStack: [...state.redoStack, change],
-      };
     }),
 }));

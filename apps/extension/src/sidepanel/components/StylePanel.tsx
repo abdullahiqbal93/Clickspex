@@ -1,13 +1,18 @@
-import { buildCssRule, buildCssRulesFromChanges, buildStyleTargetSelector } from "@ui-buddy/core";
+import { buildCssRulesFromChanges, buildScopedCssRule, escapeCssIdentifier } from "@ui-buddy/core";
+import {
+  STYLE_RESPONSIVE_TARGET_DEFINITIONS,
+  type StyleResponsiveTarget,
+  type StyleResponsiveTargetDefinition,
+  type StyleTargetState,
+  type SupportedStyleProperty,
+} from "@ui-buddy/shared";
 import { ChevronDown, Clipboard, Redo2, RotateCcw, SlidersHorizontal, Undo2 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { sendMessageToActiveTab } from "../../chrome/messaging";
 import { getCurrentStyleRecord, usePanelStore } from "../store";
 
 import { CommitInput } from "./CommitInput";
-
-import type { StyleTargetState, SupportedStyleProperty } from "@ui-buddy/shared";
 
 type StylePreset = {
   label: string;
@@ -44,6 +49,33 @@ const STYLE_STATE_OPTIONS: StyleStateOption[] = [
   { state: "disabled", label: ":disabled" },
   { state: "checked", label: ":checked" },
 ];
+
+const DEFAULT_RESPONSIVE_TARGET_DEFINITION: StyleResponsiveTargetDefinition = {
+  target: "all",
+  label: "All screens",
+  shortLabel: "All",
+  mediaQuery: null,
+};
+
+const BREAKPOINT_RANGE_LABELS: Record<StyleResponsiveTarget, string> = {
+  all: "Always",
+  mobile: "<=767px",
+  tablet: "768-1023px",
+  desktop: ">=1024px",
+};
+
+const getResponsiveTargetTitle = (target: StyleResponsiveTarget): string => {
+  const definition = STYLE_RESPONSIVE_TARGET_DEFINITIONS.find((item) => item.target === target);
+  const range = BREAKPOINT_RANGE_LABELS[target];
+
+  if (definition?.mediaQuery === null) {
+    return "Apply without a media query";
+  }
+
+  return definition === undefined
+    ? range
+    : `${definition.label} ${range} - @media ${definition.mediaQuery}`;
+};
 
 const FONT_WEIGHT_OPTIONS = [
   "",
@@ -1013,23 +1045,68 @@ const cssColorToHex = (value: string): string | null => {
 
 export const StylePanel = () => {
   const changes = usePanelStore((state) => state.changes);
-  const redoStack = usePanelStore((state) => state.redoStack);
+  const historyUndoDepth = usePanelStore((state) => state.historyUndoDepth);
+  const historyRedoDepth = usePanelStore((state) => state.historyRedoDepth);
   const selectedElement = usePanelStore((state) => state.selectedElement);
   const [styleTargetState, setStyleTargetState] = useState<StyleTargetState>("base");
+  const [styleResponsiveTarget, setStyleResponsiveTarget] = useState<StyleResponsiveTarget>("all");
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(
     () => new Set(defaultExpandedGroup === undefined ? [] : [defaultExpandedGroup]),
   );
-  const styles = getCurrentStyleRecord({ changes, selectedElement }, styleTargetState);
+  const styles = getCurrentStyleRecord(
+    { changes, selectedElement },
+    styleTargetState,
+    styleResponsiveTarget,
+  );
   const prepareStyleChange = usePanelStore((state) => state.prepareStyleChange);
   const applyLocalStyleChange = usePanelStore((state) => state.applyLocalStyleChange);
   const resetElementChanges = usePanelStore((state) => state.resetElementChanges);
-  const undoLocalChange = usePanelStore((state) => state.undoLocalChange);
-  const redoLocalChange = usePanelStore((state) => state.redoLocalChange);
   const setError = usePanelStore((state) => state.setError);
+  const setSelectedElement = usePanelStore((state) => state.setSelectedElement);
+  // Remember the element-unique selector so scope can be switched back.
+  const uniqueSelectorRef = useRef<{ domPath: string; selector: string } | null>(null);
+
+  const classSelector =
+    selectedElement !== null && selectedElement.classList.length > 0
+      ? `${selectedElement.tagName}${selectedElement.classList
+          .map((className) => `.${escapeCssIdentifier(className)}`)
+          .join("")}`
+      : null;
+  const isClassScope =
+    selectedElement !== null &&
+    classSelector !== null &&
+    selectedElement.selector === classSelector;
+
+  const setSelectorScope = (scope: "unique" | "class") => {
+    if (selectedElement === null || classSelector === null) {
+      return;
+    }
+
+    if (scope === "class" && !isClassScope) {
+      uniqueSelectorRef.current = {
+        domPath: selectedElement.domPath,
+        selector: selectedElement.selector,
+      };
+      setSelectedElement({ ...selectedElement, selector: classSelector });
+    }
+
+    if (scope === "unique" && isClassScope) {
+      const remembered =
+        uniqueSelectorRef.current?.domPath === selectedElement.domPath
+          ? uniqueSelectorRef.current.selector
+          : (selectedElement.fallbackSelectors?.[0] ?? selectedElement.selector);
+      setSelectedElement({ ...selectedElement, selector: remembered });
+    }
+  };
 
   const commitChange = async (property: SupportedStyleProperty, afterValue: string) => {
     setError(null);
-    const change = prepareStyleChange(property, afterValue, styleTargetState);
+    const change = prepareStyleChange(
+      property,
+      afterValue,
+      styleTargetState,
+      styleResponsiveTarget,
+    );
 
     if (change === null) {
       return;
@@ -1048,13 +1125,8 @@ export const StylePanel = () => {
   const undoChange = async () => {
     setError(null);
 
-    if (changes.length === 0) {
-      return;
-    }
-
     try {
       await sendMessageToActiveTab({ type: "UNDO_CHANGE" });
-      undoLocalChange();
     } catch (caughtError) {
       setError(
         caughtError instanceof Error ? caughtError.message : "Unable to undo visual change.",
@@ -1065,13 +1137,8 @@ export const StylePanel = () => {
   const redoChange = async () => {
     setError(null);
 
-    if (redoStack.length === 0) {
-      return;
-    }
-
     try {
       await sendMessageToActiveTab({ type: "REDO_CHANGE" });
-      redoLocalChange();
     } catch (caughtError) {
       setError(
         caughtError instanceof Error ? caughtError.message : "Unable to redo visual change.",
@@ -1140,9 +1207,11 @@ export const StylePanel = () => {
     }
 
     await writeCssToClipboard(
-      buildCssRule(
-        buildStyleTargetSelector(selectedElement.selector, styleTargetState),
+      buildScopedCssRule(
+        selectedElement.selector,
         declarations,
+        styleTargetState,
+        styleResponsiveTarget,
       ),
     );
   };
@@ -1161,6 +1230,11 @@ export const StylePanel = () => {
     });
   };
 
+  const activeResponsiveDefinition =
+    STYLE_RESPONSIVE_TARGET_DEFINITIONS.find(
+      (definition) => definition.target === styleResponsiveTarget,
+    ) ?? DEFAULT_RESPONSIVE_TARGET_DEFINITION;
+
   return (
     <div className="space-y-3">
       <div className="rounded-lg border border-border bg-panel/80 p-3 shadow-card backdrop-blur-sm">
@@ -1172,18 +1246,18 @@ export const StylePanel = () => {
           <div className="flex items-center gap-2">
             <button
               className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-              disabled={changes.length === 0}
+              disabled={historyUndoDepth === 0}
               onClick={() => void undoChange()}
-              title="Undo"
+              title="Undo (all change types)"
               type="button"
             >
               <Undo2 aria-hidden="true" size={14} />
             </button>
             <button
               className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-              disabled={redoStack.length === 0}
+              disabled={historyRedoDepth === 0}
               onClick={() => void redoChange()}
-              title="Redo"
+              title="Redo (all change types)"
               type="button"
             >
               <Redo2 aria-hidden="true" size={14} />
@@ -1207,6 +1281,32 @@ export const StylePanel = () => {
             </button>
           </div>
         </div>
+        {classSelector !== null ? (
+          <div className="mt-3 flex items-center gap-1 rounded-md border border-border bg-slate-50 p-1">
+            <button
+              className={`h-7 flex-1 truncate rounded px-2 text-[11px] font-medium transition ${
+                !isClassScope
+                  ? "bg-white text-accent shadow-sm"
+                  : "text-slate-600 hover:bg-white/70"
+              }`}
+              onClick={() => setSelectorScope("unique")}
+              title="Changes apply to this element only"
+              type="button"
+            >
+              This element
+            </button>
+            <button
+              className={`h-7 flex-1 truncate rounded px-2 text-[11px] font-medium transition ${
+                isClassScope ? "bg-white text-accent shadow-sm" : "text-slate-600 hover:bg-white/70"
+              }`}
+              onClick={() => setSelectorScope("class")}
+              title={`Changes apply to every ${classSelector}`}
+              type="button"
+            >
+              All {classSelector}
+            </button>
+          </div>
+        ) : null}
         <div className="mt-3 flex overflow-x-auto rounded-md border border-border bg-slate-50 p-1">
           {STYLE_STATE_OPTIONS.map((option) => (
             <button
@@ -1223,6 +1323,34 @@ export const StylePanel = () => {
             </button>
           ))}
         </div>
+        <div className="mt-2 flex overflow-x-auto rounded-md border border-border bg-slate-50 p-1">
+          {STYLE_RESPONSIVE_TARGET_DEFINITIONS.map((definition) => (
+            <button
+              className={`flex h-9 min-w-[78px] shrink-0 flex-col items-center justify-center rounded px-2 text-[11px] font-medium transition ${
+                styleResponsiveTarget === definition.target
+                  ? "bg-white text-accent shadow-sm"
+                  : "text-slate-600 hover:bg-white/70 hover:text-slate-900"
+              }`}
+              key={definition.target}
+              onClick={() => setStyleResponsiveTarget(definition.target)}
+              title={getResponsiveTargetTitle(definition.target)}
+              type="button"
+            >
+              <span>{definition.shortLabel}</span>
+              <span className="text-[9px] font-normal text-slate-400">
+                {BREAKPOINT_RANGE_LABELS[definition.target]}
+              </span>
+            </button>
+          ))}
+        </div>
+        {activeResponsiveDefinition.mediaQuery === null ? null : (
+          <div className="mt-2 flex min-w-0 items-center justify-between gap-2 rounded-md border border-blue-100 bg-blue-50 px-2.5 py-2 text-[11px] text-blue-900">
+            <span className="shrink-0 font-medium">{activeResponsiveDefinition.label}</span>
+            <code className="min-w-0 truncate rounded bg-white/70 px-1.5 py-0.5 font-mono text-[10px] text-blue-800">
+              @media {activeResponsiveDefinition.mediaQuery}
+            </code>
+          </div>
+        )}
       </div>
 
       {styleFieldGroups.map(([group, fields]) => {
@@ -1263,7 +1391,7 @@ export const StylePanel = () => {
                 {fields.map((field) => {
                   const value = styles[field.property] ?? "";
                   const trimmedValue = value.trim();
-                  const inputId = `style-${field.property}`;
+                  const inputId = `style-${styleResponsiveTarget}-${styleTargetState}-${field.property}`;
                   const selectOptionsSource = field.options;
                   const guidance = getFieldGuidance(field.property);
                   const suggestionValues = getSuggestionValues(field, guidance);

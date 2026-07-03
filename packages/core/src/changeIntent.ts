@@ -1,4 +1,9 @@
-import { getStyleChangeState, mergeStyleChanges } from "./styleDiff";
+import {
+  getStyleChangeResponsiveTarget,
+  getStyleChangeState,
+  getStyleResponsiveTargetDefinition,
+  mergeStyleChanges,
+} from "./styleDiff";
 
 import type {
   AccessibilityNote,
@@ -56,6 +61,10 @@ export const createUIChangeIntent = ({
     intentTarget.textPreview = target.textPreview;
   }
 
+  if (target.fallbackSelectors !== undefined && target.fallbackSelectors.length > 0) {
+    intentTarget.fallbackSelectors = target.fallbackSelectors;
+  }
+
   const intent: UIChangeIntent = {
     id,
     timestamp,
@@ -89,8 +98,11 @@ export const summarizeChangeIntentAsMarkdown = (changeIntent: UIChangeIntent): s
   const changes = changeIntent.changes
     .map((change) => {
       const state = getStyleChangeState(change);
+      const responsiveTarget = getStyleChangeResponsiveTarget(change);
+      const responsiveDefinition = getStyleResponsiveTargetDefinition(responsiveTarget);
+      const responsiveLabel = responsiveTarget === "all" ? "" : `[${responsiveDefinition.label}] `;
       const stateLabel = state === "base" ? "" : `:${state} `;
-      return `- ${stateLabel}${change.property}: ${change.beforeValue} -> ${change.afterValue}`;
+      return `- ${responsiveLabel}${stateLabel}${change.property}: ${change.beforeValue} -> ${change.afterValue}`;
     })
     .join("\n");
 

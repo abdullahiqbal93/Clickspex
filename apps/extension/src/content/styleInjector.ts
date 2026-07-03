@@ -1,6 +1,13 @@
-import { buildStyleTargetSelector } from "@ui-buddy/core";
-
-import type { StyleChange } from "@ui-buddy/shared";
+import {
+  buildMediaQueryFromResponsiveTarget,
+  buildStyleTargetSelector,
+  getStyleChangeResponsiveTarget,
+} from "@ui-buddy/core";
+import {
+  STYLE_RESPONSIVE_TARGET_DEFINITIONS,
+  type StyleChange,
+  type StyleResponsiveTarget,
+} from "@ui-buddy/shared";
 
 // Live preview rules use !important so temporary edits reliably win over the
 // page's own (often more specific or inline) styles. Exported CSS stays clean.
@@ -14,6 +21,25 @@ const buildImportantCssRule = (selector: string, styles: Record<string, string>)
   }
 
   return [`${selector} {`, ...declarations, "}"].join("\n");
+};
+
+const indentCss = (css: string): string =>
+  css
+    .split("\n")
+    .map((line) => `  ${line}`)
+    .join("\n");
+
+const wrapImportantCssForResponsiveTarget = (
+  css: string,
+  responsiveTarget: StyleResponsiveTarget,
+): string => {
+  const mediaQuery = buildMediaQueryFromResponsiveTarget(responsiveTarget);
+
+  if (mediaQuery === null) {
+    return css;
+  }
+
+  return [`@media ${mediaQuery} {`, indentCss(css), "}"].join("\n");
 };
 
 const STYLE_ELEMENT_ID = "__ui-buddy-styles__";
@@ -37,20 +63,22 @@ const ANIMATION_PRESET_KEYFRAMES: Record<string, string> = {
 }`,
 };
 
-const getAnimationPresetKeyframes = (
-  rulesBySelector: Map<string, Record<string, string>>,
-): string[] => {
+type RulesByResponsiveTarget = Map<StyleResponsiveTarget, Map<string, Record<string, string>>>;
+
+const getAnimationPresetKeyframes = (rulesByTarget: RulesByResponsiveTarget): string[] => {
   const keyframes = new Set<string>();
 
-  for (const styles of rulesBySelector.values()) {
-    const animationValues = [styles.animation, styles["animation-name"]].filter(
-      (value): value is string => value !== undefined,
-    );
+  for (const rulesBySelector of rulesByTarget.values()) {
+    for (const styles of rulesBySelector.values()) {
+      const animationValues = [styles.animation, styles["animation-name"]].filter(
+        (value): value is string => value !== undefined,
+      );
 
-    for (const value of animationValues) {
-      for (const [name, css] of Object.entries(ANIMATION_PRESET_KEYFRAMES)) {
-        if (value.includes(name)) {
-          keyframes.add(css);
+      for (const value of animationValues) {
+        for (const [name, css] of Object.entries(ANIMATION_PRESET_KEYFRAMES)) {
+          if (value.includes(name)) {
+            keyframes.add(css);
+          }
         }
       }
     }
@@ -59,11 +87,25 @@ const getAnimationPresetKeyframes = (
   return [...keyframes];
 };
 
-const applyChangeToRules = (
-  rulesBySelector: Map<string, Record<string, string>>,
-  change: StyleChange,
-): void => {
+const getRulesForResponsiveTarget = (
+  rulesByTarget: RulesByResponsiveTarget,
+  responsiveTarget: StyleResponsiveTarget,
+): Map<string, Record<string, string>> => {
+  const existing = rulesByTarget.get(responsiveTarget);
+
+  if (existing !== undefined) {
+    return existing;
+  }
+
+  const next = new Map<string, Record<string, string>>();
+  rulesByTarget.set(responsiveTarget, next);
+  return next;
+};
+
+const applyChangeToRules = (rulesByTarget: RulesByResponsiveTarget, change: StyleChange): void => {
   const selector = buildStyleTargetSelector(change.selector, change.state ?? "base");
+  const responsiveTarget = getStyleChangeResponsiveTarget(change);
+  const rulesBySelector = getRulesForResponsiveTarget(rulesByTarget, responsiveTarget);
   const existing = rulesBySelector.get(selector) ?? {};
   const nextStyles = { ...existing };
 
@@ -78,11 +120,19 @@ const applyChangeToRules = (
   } else {
     rulesBySelector.set(selector, nextStyles);
   }
+
+  if (rulesBySelector.size === 0) {
+    rulesByTarget.delete(responsiveTarget);
+  }
 };
 
 export class StyleInjector {
   private readonly appliedChanges: StyleChange[] = [];
   private readonly redoStack: StyleChange[] = [];
+
+  public getAppliedChanges(): StyleChange[] {
+    return [...this.appliedChanges];
+  }
 
   public applyChange(change: StyleChange): void {
     this.appliedChanges.push(change);
@@ -132,21 +182,31 @@ export class StyleInjector {
   }
 
   private render(): void {
-    const rulesBySelector = new Map<string, Record<string, string>>();
+    const rulesByTarget: RulesByResponsiveTarget = new Map();
 
     for (const change of this.appliedChanges) {
-      applyChangeToRules(rulesBySelector, change);
+      applyChangeToRules(rulesByTarget, change);
     }
 
-    if (rulesBySelector.size === 0) {
+    if (rulesByTarget.size === 0) {
       document.getElementById(STYLE_ELEMENT_ID)?.remove();
       return;
     }
 
-    const cssRules = Array.from(rulesBySelector.entries())
-      .map(([selector, styles]) => buildImportantCssRule(selector, styles))
-      .join("\n\n");
-    const animationKeyframes = getAnimationPresetKeyframes(rulesBySelector);
+    const cssRules = STYLE_RESPONSIVE_TARGET_DEFINITIONS.flatMap((definition) => {
+      const rulesBySelector = rulesByTarget.get(definition.target);
+
+      if (rulesBySelector === undefined || rulesBySelector.size === 0) {
+        return [];
+      }
+
+      const targetCss = Array.from(rulesBySelector.entries())
+        .map(([selector, styles]) => buildImportantCssRule(selector, styles))
+        .join("\n\n");
+
+      return [wrapImportantCssForResponsiveTarget(targetCss, definition.target)];
+    }).join("\n\n");
+    const animationKeyframes = getAnimationPresetKeyframes(rulesByTarget);
 
     this.getStyleElement().textContent = [cssRules, ...animationKeyframes].join("\n\n");
   }

@@ -152,6 +152,22 @@ describe("CSS adapter", () => {
       ].join("\n"),
     );
   });
+  it("exports responsive declarations as media-query CSS rules", () => {
+    const intent = createIntent([
+      {
+        selector: "#save",
+        property: "width",
+        beforeValue: "320px",
+        afterValue: "100%",
+        timestamp: "2026-07-01T00:00:00.000Z",
+        responsiveTarget: "mobile",
+      },
+    ]);
+
+    expect(cssAdapter.generateExport(intent).content).toBe(
+      ["@media (max-width: 767px) {", "  #save {", "    width: 100%;", "  }", "}"].join("\n"),
+    );
+  });
   it("previews source-aware stylesheet diffs when indexed source is available", async () => {
     const intent = createIntent([
       {
@@ -217,11 +233,8 @@ describe("Tailwind adapter", () => {
 
     const result = generateTailwindClassesFromChangeIntent(intent);
 
-    expect(result.classes).toEqual(["text-base", "pl-4"]);
-    expect(result.warnings).toEqual([
-      "No conservative Tailwind mapping for font-size: 13px",
-      "No conservative Tailwind mapping for line-height: 21px",
-    ]);
+    expect(result.classes).toEqual(["text-base", "pl-4", "text-[13px]", "leading-[21px]"]);
+    expect(result.warnings).toEqual([]);
   });
 
   it("prefixes mapped Tailwind utilities with pseudo-state variants", () => {
@@ -239,6 +252,34 @@ describe("Tailwind adapter", () => {
     const result = generateTailwindClassesFromChangeIntent(intent);
 
     expect(result.classes).toEqual(["hover:flex"]);
+  });
+  it("prefixes mapped Tailwind utilities with responsive and pseudo variants", () => {
+    const intent = createIntent([
+      {
+        selector: "#save",
+        property: "display",
+        beforeValue: "block",
+        afterValue: "flex",
+        timestamp: "2026-07-01T00:00:00.000Z",
+        state: "hover",
+        responsiveTarget: "desktop",
+      },
+      {
+        selector: "#save",
+        property: "width",
+        beforeValue: "320px",
+        afterValue: "100%",
+        timestamp: "2026-07-01T00:00:00.000Z",
+        responsiveTarget: "mobile",
+      },
+    ]);
+
+    const result = generateTailwindClassesFromChangeIntent(intent);
+
+    expect(result.classes).toEqual(["lg:hover:flex", "max-md:w-full"]);
+    expect(result.warnings).toEqual([
+      "Responsive Tailwind prefixes assume default breakpoints: max-md, md:max-lg, and lg.",
+    ]);
   });
   it("detects Tailwind from dependency, config, and source evidence", async () => {
     await expect(Promise.resolve(tailwindAdapter.detect(projectContext))).resolves.toMatchObject({
