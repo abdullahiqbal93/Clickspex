@@ -6,7 +6,8 @@ import {
 } from "@ui-buddy/shared";
 
 import { parseBoxModel } from "./boxModel";
-import { generateUniqueSelector, getDomPath } from "./selector";
+import { parseCssColor } from "./contrast";
+import { generateSelectorCandidates, generateUniqueSelector, getDomPath } from "./selector";
 
 export const rectToSnapshot = (rect: DOMRect | DOMRectReadOnly): RectSnapshot => ({
   x: rect.x,
@@ -70,6 +71,33 @@ const getParentLayoutInfo = (element: Element): ParentLayoutInfo | null => {
   };
 };
 
+/**
+ * Walk up the tree to the first fully opaque background color. Returns null
+ * when nothing opaque is found (e.g. transparent page over browser default).
+ */
+export const getEffectiveBackgroundColor = (element: Element): string | null => {
+  const view = element.ownerDocument.defaultView;
+
+  if (view === null) {
+    return null;
+  }
+
+  let current: Element | null = element;
+
+  while (current !== null) {
+    const value = view.getComputedStyle(current).getPropertyValue("background-color").trim();
+    const parsed = parseCssColor(value);
+
+    if (parsed !== null && parsed.a >= 1) {
+      return value;
+    }
+
+    current = current.parentElement;
+  }
+
+  return null;
+};
+
 export const captureElementSnapshot = (element: Element): ElementSnapshot => {
   const view = element.ownerDocument.defaultView;
 
@@ -78,6 +106,7 @@ export const captureElementSnapshot = (element: Element): ElementSnapshot => {
   }
 
   const computedStyles = view.getComputedStyle(element);
+  const effectiveBackground = getEffectiveBackgroundColor(element);
 
   return {
     tagName: element.tagName.toLowerCase(),
@@ -91,5 +120,7 @@ export const captureElementSnapshot = (element: Element): ElementSnapshot => {
     computedStyles: getImportantComputedStyles(computedStyles),
     boxModel: parseBoxModel(computedStyles),
     parentLayout: getParentLayoutInfo(element),
+    ...(effectiveBackground === null ? {} : { effectiveBackgroundColor: effectiveBackground }),
+    fallbackSelectors: generateSelectorCandidates(element),
   };
 };

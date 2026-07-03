@@ -12,6 +12,7 @@ export class OverlayController {
   private readonly hoverBox: HTMLDivElement;
   private readonly selectedBox: HTMLDivElement;
   private readonly measurementLayer: HTMLDivElement;
+  private readonly multiSelectLayer: HTMLDivElement;
   private readonly pinnedLayer: HTMLDivElement;
   private readonly tooltip: HTMLDivElement;
   private readonly pinnedCards = new Map<string, HTMLDivElement>();
@@ -26,6 +27,7 @@ export class OverlayController {
       this.hoverBox = this.getOrCreateBox("hover-box");
       this.selectedBox = this.getOrCreateBox("selected-box");
       this.measurementLayer = this.getOrCreateBox("measure-layer");
+      this.multiSelectLayer = this.getOrCreateBox("multi-select-layer");
       this.pinnedLayer = this.getOrCreateBox("pinned-layer");
       this.tooltip = this.getOrCreateBox("tooltip");
       return;
@@ -38,12 +40,14 @@ export class OverlayController {
     this.hoverBox = this.createBox(documentRef, "hover-box");
     this.selectedBox = this.createBox(documentRef, "selected-box");
     this.measurementLayer = this.createBox(documentRef, "measure-layer");
+    this.multiSelectLayer = this.createBox(documentRef, "multi-select-layer");
     this.pinnedLayer = this.createBox(documentRef, "pinned-layer");
     this.tooltip = this.createBox(documentRef, "tooltip");
     this.shadowRootRef.append(
       this.hoverBox,
       this.selectedBox,
       this.measurementLayer,
+      this.multiSelectLayer,
       this.pinnedLayer,
       this.tooltip,
     );
@@ -79,6 +83,26 @@ export class OverlayController {
 
   public clearSelected(): void {
     this.selectedBox.hidden = true;
+  }
+
+  public showMultiSelected(rects: Array<DOMRect | DOMRectReadOnly>): void {
+    this.multiSelectLayer.replaceChildren();
+    this.multiSelectLayer.hidden = rects.length === 0;
+
+    for (const rect of rects) {
+      const box = this.host.ownerDocument.createElement("div");
+      box.dataset.multiBox = "true";
+      box.style.left = `${rect.left}px`;
+      box.style.top = `${rect.top}px`;
+      box.style.width = `${rect.width}px`;
+      box.style.height = `${rect.height}px`;
+      this.multiSelectLayer.append(box);
+    }
+  }
+
+  public clearMultiSelected(): void {
+    this.multiSelectLayer.replaceChildren();
+    this.multiSelectLayer.hidden = true;
   }
 
   public clearMeasurement(): void {
@@ -148,7 +172,12 @@ export class OverlayController {
 
     if (horizontalGap !== null) {
       elements.push(
-        this.createLine("horizontal", horizontalGap.start, hY, horizontalGap.end - horizontalGap.start),
+        this.createLine(
+          "horizontal",
+          horizontalGap.start,
+          hY,
+          horizontalGap.end - horizontalGap.start,
+        ),
         this.createLabel(
           `${Math.round(horizontalGap.end - horizontalGap.start)}px`,
           (horizontalGap.start + horizontalGap.end) / 2,
@@ -518,6 +547,8 @@ export class OverlayController {
       [data-overlay="hover-box"] { overflow:visible; }
       [data-overlay="selected-box"] { border:2px solid #2563eb; background:rgb(37 99 235/.08); }
       [data-overlay="measure-layer"] { inset:0; }
+      [data-overlay="multi-select-layer"] { inset:0; }
+      [data-multi-box] { position:fixed; border:2px dashed #9333ea; background:rgb(147 51 234/.08); border-radius:2px; }
       [data-overlay="pinned-layer"] { inset:0; pointer-events:none; }
       [data-pin-card] {
         position:fixed; width:min(320px, calc(100vw - 32px)); max-height:55vh; overflow:hidden;

@@ -1,10 +1,15 @@
-import { captureElementSnapshot } from "@ui-buddy/core";
+import { captureElementSnapshot, generateUniqueSelector } from "@ui-buddy/core";
 
 import { sendRuntimeMessage } from "../chrome/messaging";
 import { writePageContext } from "../chrome/session";
 
 import type { OverlayController } from "./overlay";
-import type { DomMoveDirection, ElementSearchResult, ElementSnapshot } from "@ui-buddy/shared";
+import type {
+  AlignEdge,
+  DomMoveDirection,
+  ElementSearchResult,
+  ElementSnapshot,
+} from "@ui-buddy/shared";
 
 const getPageContext = () => ({
   pageUrl: window.location.href,
@@ -25,6 +30,8 @@ type PickerMode = "select" | "measure";
 
 type PickerCallbacks = {
   onElementSelected?: () => void;
+  /** A new undoable page action (move/nudge/align or delete) was recorded. */
+  onActionRecorded?: (kind: "move" | "delete") => void;
 };
 
 type DisableOptions = {
@@ -89,10 +96,22 @@ export class ElementPickerController {
   private suppressNextClick = false;
   private moveDragStartState: MovePositionSnapshot | null = null;
   private readonly moveOffsets = new WeakMap<HTMLElement, MoveOffset>();
-  private readonly moveRedoHistory = new WeakMap<Element, MoveHistoryEntry[]>();
-  private readonly moveUndoHistory = new WeakMap<Element, MoveHistoryEntry[]>();
+  // Global (page-wide) stacks so undo/redo works across elements.
+  private readonly moveRedoHistory: MoveHistoryEntry[] = [];
+  private readonly moveUndoHistory: MoveHistoryEntry[] = [];
   private readonly originalDomPositions = new WeakMap<Element, OriginalDomPosition>();
   private readonly originalMoveStyles = new WeakMap<HTMLElement, InlineMoveStyle>();
+  private extraSelections: Element[] = [];
+  private readonly deletedElements: Array<{
+    element: HTMLElement;
+    display: string;
+    visibility: string;
+  }> = [];
+  private readonly deletedRedoElements: Array<{
+    element: HTMLElement;
+    display: string;
+    visibility: string;
+  }> = [];
 
   public constructor(
     private readonly overlay: OverlayController,
@@ -154,6 +173,15 @@ export class ElementPickerController {
     this.selectedSnapshot = null;
     this.overlay.clearSelected();
 
+    if (this.extraSelections.length > 0) {
+      this.extraSelections = [];
+      this.overlay.clearMultiSelected();
+      void sendRuntimeMessage({
+        type: "MULTI_SELECTION_CHANGED",
+        payload: { count: 0, selectors: [] },
+      });
+    }
+
     if (notifyPanel && hadSelection) {
       void sendRuntimeMessage({ type: "ELEMENT_UNSELECTED" });
     }
@@ -207,6 +235,125 @@ export class ElementPickerController {
 
   public redoMovePosition(): void {
     this.applyMoveHistory("redo");
+  }
+
+  public getSelectedElementNode(): Element | null {
+    return this.selectedElementNode;
+  }
+
+  public scrollSelectedIntoView(): void {
+    if (this.selectedElementNode === null) {
+      return;
+    }
+
+    this.selectedElementNode.scrollIntoView({ block: "center", inline: "nearest" });
+    this.refreshSelectedSnapshot();
+  }
+
+  public markSelectedForSource(): void {
+    this.selectedElementNode?.setAttribute("data-ub-source-target", "1");
+  }
+
+  public undoDeleteElement(): void {
+    const entry = this.deletedElements.pop();
+
+    if (entry === undefined || !entry.element.isConnected) {
+      return;
+    }
+
+    entry.element.style.display = entry.display;
+    entry.element.style.visibility = entry.visibility;
+    this.deletedRedoElements.push(entry);
+    this.selectElement(entry.element);
+  }
+
+  public redoDeleteElement(): void {
+    const entry = this.deletedRedoElements.pop();
+
+    if (entry === undefined || !entry.element.isConnected) {
+      return;
+    }
+
+    this.deletedElements.push(entry);
+    entry.element.style.display = "none";
+    entry.element.style.visibility = "hidden";
+
+    if (this.selectedElementNode === entry.element) {
+      this.clearSelection();
+    }
+  }
+
+  private toggleExtraSelection(element: Element): void {
+    const index = this.extraSelections.indexOf(element);
+
+    if (index >= 0) {
+      this.extraSelections.splice(index, 1);
+    } else {
+      this.extraSelections.push(element);
+    }
+
+    this.syncMultiSelection();
+  }
+
+  private syncMultiSelection(): void {
+    this.extraSelections = this.extraSelections.filter((element) => element.isConnected);
+    this.overlay.showMultiSelected(
+      this.extraSelections.map((element) => element.getBoundingClientRect()),
+    );
+
+    const selectors = this.extraSelections.map((element) => generateUniqueSelector(element));
+    void sendRuntimeMessage({
+      type: "MULTI_SELECTION_CHANGED",
+      payload: {
+        count: this.extraSelections.length + (this.selectedElementNode === null ? 0 : 1),
+        selectors,
+      },
+    });
+  }
+
+  public alignSelected(alignment: AlignEdge): void {
+    const primary = this.selectedElementNode;
+
+    if (primary === null || this.extraSelections.length === 0) {
+      return;
+    }
+
+    const reference = primary.getBoundingClientRect();
+
+    for (const element of this.extraSelections) {
+      if (!(element instanceof HTMLElement) || !element.isConnected) {
+        continue;
+      }
+
+      const rect = element.getBoundingClientRect();
+      let deltaX = 0;
+      let deltaY = 0;
+
+      if (alignment === "left") {
+        deltaX = reference.left - rect.left;
+      } else if (alignment === "right") {
+        deltaX = reference.right - rect.right;
+      } else if (alignment === "center-x") {
+        deltaX = reference.left + reference.width / 2 - (rect.left + rect.width / 2);
+      } else if (alignment === "top") {
+        deltaY = reference.top - rect.top;
+      } else if (alignment === "bottom") {
+        deltaY = reference.bottom - rect.bottom;
+      } else {
+        deltaY = reference.top + reference.height / 2 - (rect.top + rect.height / 2);
+      }
+
+      if (deltaX === 0 && deltaY === 0) {
+        continue;
+      }
+
+      const before = this.captureMovePositionSnapshot(element);
+      const current = this.moveOffsets.get(element) ?? { x: 0, y: 0 };
+      this.applyMoveOffset(element, { x: current.x + deltaX, y: current.y + deltaY });
+      this.recordMoveHistory(element, before, this.captureMovePositionSnapshot(element));
+    }
+
+    this.syncMultiSelection();
   }
   public moveSelectedElement(direction: DomMoveDirection): void {
     const element = this.selectedElementNode;
@@ -340,15 +487,8 @@ export class ElementPickerController {
     return true;
   }
   private applyMoveHistory(direction: "undo" | "redo"): void {
-    const element = this.selectedElementNode;
-
-    if (element === null) {
-      return;
-    }
-
-    const sourceStack =
-      direction === "undo" ? this.moveUndoHistory.get(element) : this.moveRedoHistory.get(element);
-    const historyEntry = sourceStack?.pop();
+    const sourceStack = direction === "undo" ? this.moveUndoHistory : this.moveRedoHistory;
+    const historyEntry = sourceStack.pop();
 
     if (historyEntry === undefined) {
       return;
@@ -357,14 +497,11 @@ export class ElementPickerController {
     const targetSnapshot = direction === "undo" ? historyEntry.before : historyEntry.after;
 
     if (!this.applyMovePositionSnapshot(historyEntry.element, targetSnapshot)) {
-      sourceStack?.push(historyEntry);
+      // The element left the document; drop the entry.
       return;
     }
 
-    const destinationStack =
-      direction === "undo"
-        ? this.getMoveHistoryStack(this.moveRedoHistory, historyEntry.element)
-        : this.getMoveHistoryStack(this.moveUndoHistory, historyEntry.element);
+    const destinationStack = direction === "undo" ? this.moveRedoHistory : this.moveUndoHistory;
     destinationStack.push(historyEntry);
     this.trimMoveHistory(destinationStack);
     this.refreshMovePositionSnapshot();
@@ -474,23 +611,10 @@ export class ElementPickerController {
   }
 
   private clearMoveHistory(element: Element): void {
-    this.moveRedoHistory.delete(element);
-    this.moveUndoHistory.delete(element);
-  }
-
-  private getMoveHistoryStack(
-    history: WeakMap<Element, MoveHistoryEntry[]>,
-    element: Element,
-  ): MoveHistoryEntry[] {
-    const existingStack = history.get(element);
-
-    if (existingStack !== undefined) {
-      return existingStack;
-    }
-
-    const stack: MoveHistoryEntry[] = [];
-    history.set(element, stack);
-    return stack;
+    const keptUndo = this.moveUndoHistory.filter((entry) => entry.element !== element);
+    const keptRedo = this.moveRedoHistory.filter((entry) => entry.element !== element);
+    this.moveUndoHistory.splice(0, this.moveUndoHistory.length, ...keptUndo);
+    this.moveRedoHistory.splice(0, this.moveRedoHistory.length, ...keptRedo);
   }
 
   private recordMoveHistory(
@@ -502,10 +626,10 @@ export class ElementPickerController {
       return;
     }
 
-    const undoStack = this.getMoveHistoryStack(this.moveUndoHistory, element);
-    undoStack.push({ after, before, element });
-    this.trimMoveHistory(undoStack);
-    this.moveRedoHistory.delete(element);
+    this.moveUndoHistory.push({ after, before, element });
+    this.trimMoveHistory(this.moveUndoHistory);
+    this.moveRedoHistory.length = 0;
+    this.callbacks.onActionRecorded?.("move");
   }
 
   private refreshMovePositionSnapshot(): void {
@@ -873,6 +997,14 @@ export class ElementPickerController {
       if (this.selectedElementNode !== null && this.selectedElementNode.isConnected) {
         this.overlay.showSelected(this.selectedElementNode.getBoundingClientRect());
       }
+
+      if (this.extraSelections.length > 0) {
+        this.overlay.showMultiSelected(
+          this.extraSelections
+            .filter((element) => element.isConnected)
+            .map((element) => element.getBoundingClientRect()),
+        );
+      }
     });
   };
 
@@ -975,6 +1107,16 @@ export class ElementPickerController {
     event.preventDefault();
     event.stopPropagation();
 
+    if (
+      this.mode === "select" &&
+      event.shiftKey &&
+      this.selectedElementNode !== null &&
+      event.target !== this.selectedElementNode
+    ) {
+      this.toggleExtraSelection(event.target as Element);
+      return;
+    }
+
     this.selectElement(event.target as Element, { pinMeasurement: event.shiftKey });
   };
 
@@ -1057,8 +1199,15 @@ export class ElementPickerController {
 
       const el = this.selectedElementNode as HTMLElement;
       // We hide it rather than removing it so we don't break the page permanently during testing
+      this.deletedElements.push({
+        element: el,
+        display: el.style.display,
+        visibility: el.style.visibility,
+      });
+      this.deletedRedoElements.length = 0;
       el.style.display = "none";
       el.style.visibility = "hidden";
+      this.callbacks.onActionRecorded?.("delete");
 
       this.clearSelection();
     }

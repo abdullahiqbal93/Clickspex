@@ -80,6 +80,24 @@ const candidateSelectorsFor = (element: Element): string[] => {
   return candidates;
 };
 
+/** Unique selector candidates for an element, most stable first (capped at 4). */
+export const generateSelectorCandidates = (element: Element): string[] => {
+  const ownerDocument = element.ownerDocument;
+  const unique: string[] = [];
+
+  for (const candidate of candidateSelectorsFor(element)) {
+    if (unique.length >= 4) {
+      break;
+    }
+
+    if (isUniqueSelector(ownerDocument, candidate) && !unique.includes(candidate)) {
+      unique.push(candidate);
+    }
+  }
+
+  return unique;
+};
+
 export const generateUniqueSelector = (element: Element): string => {
   const ownerDocument = element.ownerDocument;
 

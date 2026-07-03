@@ -24,7 +24,11 @@ const isPageContext = (value: unknown): value is PageContext => {
 };
 
 export const writePageContext = async (context: PageContext): Promise<void> => {
-  await chrome.storage.session.set({ [PAGE_CONTEXT_KEY]: context });
+  try {
+    await chrome.storage.session.set({ [PAGE_CONTEXT_KEY]: context });
+  } catch {
+    // The extension was reloaded while this page kept the old content script.
+  }
 };
 
 export const readPageContext = async (): Promise<PageContext | null> => {

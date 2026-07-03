@@ -40,11 +40,7 @@ export const scanPage = (): PageScanResult => {
 
     const styles = window.getComputedStyle(el);
 
-    if (
-      styles.display === "none" ||
-      styles.visibility === "hidden" ||
-      styles.opacity === "0"
-    ) {
+    if (styles.display === "none" || styles.visibility === "hidden" || styles.opacity === "0") {
       continue;
     }
 

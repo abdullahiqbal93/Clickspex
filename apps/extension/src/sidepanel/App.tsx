@@ -6,15 +6,18 @@ import {
   Code2,
   Crosshair,
   Grid3X3,
+  HelpCircle,
   Image,
   Paintbrush,
   Palette,
   Pipette,
   PlaySquare,
+  Redo2,
   RefreshCcw,
   Ruler,
   SquareMousePointer,
   Type,
+  Undo2,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
@@ -77,8 +80,13 @@ export const App = () => {
   const setSearchResults = usePanelStore((state) => state.setSearchResults);
   const setMeasurementTarget = usePanelStore((state) => state.setMeasurementTarget);
   const setSelectedElement = usePanelStore((state) => state.setSelectedElement);
-  const undoLocalChange = usePanelStore((state) => state.undoLocalChange);
-  const redoLocalChange = usePanelStore((state) => state.redoLocalChange);
+  const historyUndoDepth = usePanelStore((state) => state.historyUndoDepth);
+  const historyRedoDepth = usePanelStore((state) => state.historyRedoDepth);
+  const applyHistorySync = usePanelStore((state) => state.applyHistorySync);
+  const setA11yIssues = usePanelStore((state) => state.setA11yIssues);
+  const setAssetFetch = usePanelStore((state) => state.setAssetFetch);
+  const setElementCssResult = usePanelStore((state) => state.setElementCssResult);
+  const setMultiSelection = usePanelStore((state) => state.setMultiSelection);
 
   useEffect(() => {
     const port = connectSidePanelPort();
@@ -132,6 +140,30 @@ export const App = () => {
       if (rawMessage.type === "ELEMENT_SEARCH_RESULT") {
         setSearchResults(rawMessage.payload.results);
       }
+
+      if (rawMessage.type === "ELEMENT_CSS_RESULT") {
+        setElementCssResult(rawMessage.payload);
+      }
+
+      if (rawMessage.type === "A11Y_SCAN_RESULT") {
+        setA11yIssues(rawMessage.payload.issues);
+      }
+
+      if (rawMessage.type === "ASSET_FETCHED") {
+        setAssetFetch(rawMessage.payload);
+      }
+
+      if (rawMessage.type === "MULTI_SELECTION_CHANGED") {
+        setMultiSelection(rawMessage.payload);
+      }
+
+      if (rawMessage.type === "HISTORY_SYNC") {
+        applyHistorySync(
+          rawMessage.payload.changes,
+          rawMessage.payload.undoDepth,
+          rawMessage.payload.redoDepth,
+        );
+      }
     };
 
     port.onMessage.addListener(handleMessage);
@@ -145,9 +177,14 @@ export const App = () => {
       port.disconnect();
     };
   }, [
+    applyHistorySync,
+    setA11yIssues,
     setActiveTab,
+    setAssetFetch,
+    setElementCssResult,
     setHoveredSelector,
     setMeasurementTarget,
+    setMultiSelection,
     setPageScan,
     setPageScanLoading,
     setPickerActive,
@@ -196,6 +233,19 @@ export const App = () => {
   };
 
   const [eyedropperFeedback, setEyedropperFeedback] = useState<string | null>(null);
+  const [showHelp, setShowHelp] = useState(false);
+
+  const hotkeys: Array<[string, string]> = [
+    ["Alt+Shift+P", "Toggle element picker"],
+    ["Alt+Arrows", "Walk parent / child / siblings"],
+    ["Shift+Click", "Add element to multi-selection"],
+    ["Double-click", "Edit text inline"],
+    ["Delete", "Hide element (Ctrl+Z restores it)"],
+    ["Escape", "Deselect, then stop picking"],
+    ["Ctrl/Cmd+Z", "Undo any change (styles, moves, deletes)"],
+    ["Ctrl/Cmd+Shift+Z", "Redo"],
+    ["Shift+Click (measure)", "Pin a measurement"],
+  ];
 
   const handleEyedropper = async () => {
     const EyeDropper = window.EyeDropper;
@@ -211,12 +261,45 @@ export const App = () => {
       const result = await eyeDropper.open();
       await navigator.clipboard.writeText(result.sRGBHex);
 
+      // Keep a persistent history for the Palette tab.
+      try {
+        const stored = await chrome.storage.local.get("ubColorHistory");
+        const history: string[] = Array.isArray(stored.ubColorHistory)
+          ? (stored.ubColorHistory as string[])
+          : [];
+        const nextHistory = [
+          result.sRGBHex,
+          ...history.filter((color) => color !== result.sRGBHex),
+        ].slice(0, 24);
+        await chrome.storage.local.set({ ubColorHistory: nextHistory });
+      } catch {
+        // History is best-effort only.
+      }
+
       setEyedropperFeedback(result.sRGBHex);
       setTimeout(() => setEyedropperFeedback(null), 2000);
     } catch {
       // User canceled or error
     }
   };
+
+  const undoAll = useCallback(async () => {
+    setError(null);
+    try {
+      await sendMessageToActiveTab({ type: "UNDO_CHANGE" });
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : "Unable to undo.");
+    }
+  }, [setError]);
+
+  const redoAll = useCallback(async () => {
+    setError(null);
+    try {
+      await sendMessageToActiveTab({ type: "REDO_CHANGE" });
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : "Unable to redo.");
+    }
+  }, [setError]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -227,17 +310,15 @@ export const App = () => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
         e.preventDefault();
         if (e.shiftKey) {
-          sendMessageToActiveTab({ type: "REDO_CHANGE" });
-          redoLocalChange();
+          void redoAll();
         } else {
-          sendMessageToActiveTab({ type: "UNDO_CHANGE" });
-          undoLocalChange();
+          void undoAll();
         }
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [redoLocalChange, togglePicker, undoLocalChange]);
+  }, [redoAll, togglePicker, undoAll]);
 
   return (
     <main className="min-h-screen bg-canvas text-ink">
@@ -252,7 +333,54 @@ export const App = () => {
               {selectedElement?.selector ?? hoveredSelector ?? "No element selected"}
             </p>
           </div>
-          <div className="flex shrink-0 items-center gap-1.5">
+          <div className="relative flex shrink-0 items-center gap-1.5">
+            <button
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-panel text-slate-600 transition hover:bg-slate-50 hover:text-ink disabled:cursor-not-allowed disabled:opacity-35"
+              disabled={historyUndoDepth === 0}
+              onClick={() => void undoAll()}
+              title="Undo last change (styles, moves, deletes) — Ctrl+Z"
+              type="button"
+            >
+              <Undo2 aria-hidden="true" size={14} />
+            </button>
+            <button
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-panel text-slate-600 transition hover:bg-slate-50 hover:text-ink disabled:cursor-not-allowed disabled:opacity-35"
+              disabled={historyRedoDepth === 0}
+              onClick={() => void redoAll()}
+              title="Redo — Ctrl+Shift+Z"
+              type="button"
+            >
+              <Redo2 aria-hidden="true" size={14} />
+            </button>
+            <button
+              className={`inline-flex h-8 w-8 items-center justify-center rounded-md border transition ${
+                showHelp
+                  ? "border-accent bg-blue-50 text-accent"
+                  : "border-slate-200 bg-panel text-slate-600 hover:bg-slate-50 hover:text-ink"
+              }`}
+              onClick={() => setShowHelp((current) => !current)}
+              title="Keyboard shortcuts"
+              type="button"
+            >
+              <HelpCircle aria-hidden="true" size={14} />
+            </button>
+            {showHelp ? (
+              <div className="absolute right-0 top-10 z-50 w-72 rounded-lg border border-slate-200 bg-white p-3 shadow-xl">
+                <p className="text-xs font-semibold text-slate-900">Keyboard shortcuts</p>
+                <dl className="mt-2 space-y-1.5">
+                  {hotkeys.map(([keys, description]) => (
+                    <div className="flex items-start justify-between gap-2" key={keys}>
+                      <dt className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-slate-700">
+                        {keys}
+                      </dt>
+                      <dd className="text-right text-[11px] leading-4 text-slate-600">
+                        {description}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            ) : null}
             {["palette", "typography", "assets"].includes(activeTab) && (
               <button
                 className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-panel text-slate-600 transition hover:bg-slate-50 hover:text-ink"

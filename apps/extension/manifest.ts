@@ -14,7 +14,11 @@ export default defineManifest({
   action: {
     default_title: "Open ui-buddy",
   },
-  permissions: ["activeTab", "sidePanel", "storage"],
+  permissions: ["activeTab", "sidePanel", "storage", "scripting"],
+  // Same scope as the content scripts. Required so source lookup / tech
+  // detection (chrome.scripting MAIN world) and element screenshots
+  // (captureVisibleTab) work without a fresh action-click grant.
+  host_permissions: ["http://*/*", "https://*/*"],
   side_panel: {
     default_path: "sidepanel.html",
   },

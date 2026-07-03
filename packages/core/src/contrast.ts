@@ -61,9 +61,7 @@ const parseRgbColor = (value: string): RgbaColor | null => {
   // Modern space syntax: rgb(0 0 0) / rgb(0 0 0 / 50%)
   const modernMatch =
     legacyMatch ??
-    value
-      .trim()
-      .match(/^rgba?\(\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*(?:\/\s*([\d.]+%?)\s*)?\)$/i);
+    value.trim().match(/^rgba?\(\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*(?:\/\s*([\d.]+%?)\s*)?\)$/i);
 
   if (modernMatch === null) {
     return null;
@@ -170,9 +168,15 @@ export const getAccessibilityNotes = (snapshot: ElementSnapshot): AccessibilityN
     }
   }
 
+  const directBackground = snapshot.computedStyles["background-color"] ?? "";
+  const parsedDirect = parseCssColor(directBackground);
+  const backgroundForContrast =
+    parsedDirect !== null && parsedDirect.a >= 1
+      ? directBackground
+      : (snapshot.effectiveBackgroundColor ?? directBackground);
   const ratio = contrastRatioFromCssColors(
     snapshot.computedStyles.color ?? "",
-    snapshot.computedStyles["background-color"] ?? "",
+    backgroundForContrast,
   );
 
   if (ratio !== null && ratio < 4.5 && snapshot.textPreview.length > 0) {

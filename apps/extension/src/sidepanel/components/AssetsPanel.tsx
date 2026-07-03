@@ -1,10 +1,41 @@
 import { Download, Image as ImageIcon } from "lucide-react";
+import { useEffect, useRef } from "react";
 
+import { sendMessageToActiveTab } from "../../chrome/messaging";
 import { usePanelStore } from "../store";
 
 export const AssetsPanel = () => {
   const scan = usePanelStore((state) => state.pageScan);
   const loading = usePanelStore((state) => state.pageScanLoading);
+  const assetFetch = usePanelStore((state) => state.assetFetch);
+  const setAssetFetch = usePanelStore((state) => state.setAssetFetch);
+  const setError = usePanelStore((state) => state.setError);
+  const pendingDownloads = useRef(new Map<string, string>());
+
+  useEffect(() => {
+    if (assetFetch === null) {
+      return;
+    }
+
+    const filename = pendingDownloads.current.get(assetFetch.src);
+
+    if (filename === undefined) {
+      return;
+    }
+
+    pendingDownloads.current.delete(assetFetch.src);
+    setAssetFetch(null);
+
+    if (assetFetch.dataUrl === null) {
+      setError(assetFetch.error ?? "Unable to download this asset (cross-origin).");
+      return;
+    }
+
+    const anchor = document.createElement("a");
+    anchor.href = assetFetch.dataUrl;
+    anchor.download = filename;
+    anchor.click();
+  }, [assetFetch, setAssetFetch, setError]);
 
   if (loading || !scan) {
     return (
@@ -19,13 +50,25 @@ export const AssetsPanel = () => {
   }
 
   const downloadAsset = async (url: string, filename: string) => {
+    // data: URLs download directly; remote URLs are fetched by the content
+    // script in the page context, which has the page's origin privileges.
+    if (url.startsWith("data:")) {
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename;
+      anchor.click();
+      return;
+    }
+
+    setError(null);
+    pendingDownloads.current.set(url, filename);
     try {
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      a.click();
-    } catch {
-      // ignore
+      await sendMessageToActiveTab({ type: "FETCH_ASSET", payload: { src: url } });
+    } catch (caughtError) {
+      pendingDownloads.current.delete(url);
+      setError(
+        caughtError instanceof Error ? caughtError.message : "Unable to download the asset.",
+      );
     }
   };
 

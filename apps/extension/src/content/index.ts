@@ -1,5 +1,7 @@
 import { addRuntimeMessageListener, sendRuntimeMessage } from "../chrome/messaging";
 
+import { runA11yAudit } from "./a11yAudit";
+import { extractElementCss } from "./cssExtractor";
 import { GridController } from "./grid";
 import { OverlayController } from "./overlay";
 import { scanPage } from "./pageScanner";
@@ -16,7 +18,41 @@ declare global {
 
 const overlay = new OverlayController();
 const styleInjector = new StyleInjector();
-const picker = new ElementPickerController(overlay);
+
+// ── Unified page-action history ─────────────────────────────
+// One ordered log across style edits, moves/nudges/aligns, and deletes so a
+// single undo/redo covers everything the user did to the page.
+type PageActionKind = "style" | "move" | "delete";
+
+const ACTION_LOG_LIMIT = 200;
+const actionUndoLog: PageActionKind[] = [];
+const actionRedoLog: PageActionKind[] = [];
+
+const sendHistorySync = (): void => {
+  void sendRuntimeMessage({
+    type: "HISTORY_SYNC",
+    payload: {
+      changes: styleInjector.getAppliedChanges(),
+      undoDepth: actionUndoLog.length,
+      redoDepth: actionRedoLog.length,
+    },
+  });
+};
+
+const recordPageAction = (kind: PageActionKind): void => {
+  actionUndoLog.push(kind);
+
+  if (actionUndoLog.length > ACTION_LOG_LIMIT) {
+    actionUndoLog.shift();
+  }
+
+  actionRedoLog.length = 0;
+  sendHistorySync();
+};
+
+const picker = new ElementPickerController(overlay, {
+  onActionRecorded: recordPageAction,
+});
 const ruler = new ManualRulerController();
 const grid = new GridController();
 
@@ -39,21 +75,56 @@ addRuntimeMessageListener((message) => {
 
   if (message.type === "APPLY_STYLE_CHANGE") {
     styleInjector.applyChange(message.payload);
+    recordPageAction("style");
     return;
   }
 
   if (message.type === "RESET_ELEMENT_CHANGES") {
     styleInjector.reset();
+    // Style entries leave the log; move/delete history stays untouched.
+    const keptUndo = actionUndoLog.filter((kind) => kind !== "style");
+    const keptRedo = actionRedoLog.filter((kind) => kind !== "style");
+    actionUndoLog.splice(0, actionUndoLog.length, ...keptUndo);
+    actionRedoLog.splice(0, actionRedoLog.length, ...keptRedo);
+    sendHistorySync();
     return;
   }
 
   if (message.type === "UNDO_CHANGE") {
-    styleInjector.undo();
+    const kind = actionUndoLog.pop();
+
+    if (kind !== undefined) {
+      actionRedoLog.push(kind);
+
+      if (kind === "style") {
+        styleInjector.undo();
+      } else if (kind === "move") {
+        picker.undoMovePosition();
+      } else {
+        picker.undoDeleteElement();
+      }
+    }
+
+    sendHistorySync();
     return;
   }
 
   if (message.type === "REDO_CHANGE") {
-    styleInjector.redo();
+    const kind = actionRedoLog.pop();
+
+    if (kind !== undefined) {
+      actionUndoLog.push(kind);
+
+      if (kind === "style") {
+        styleInjector.redo();
+      } else if (kind === "move") {
+        picker.redoMovePosition();
+      } else {
+        picker.redoDeleteElement();
+      }
+    }
+
+    sendHistorySync();
     return;
   }
 
@@ -135,16 +206,6 @@ addRuntimeMessageListener((message) => {
     return;
   }
 
-  if (message.type === "UNDO_MOVE_POSITION") {
-    picker.undoMovePosition();
-    return;
-  }
-
-  if (message.type === "REDO_MOVE_POSITION") {
-    picker.redoMovePosition();
-    return;
-  }
-
   if (message.type === "MOVE_SELECTED_ELEMENT") {
     picker.moveSelectedElement(message.payload.direction);
     return;
@@ -162,6 +223,75 @@ addRuntimeMessageListener((message) => {
 
   if (message.type === "START_TEXT_EDIT") {
     picker.startTextEdit();
+    return;
+  }
+
+  if (message.type === "COPY_ELEMENT_CSS") {
+    const element = picker.getSelectedElementNode();
+
+    if (element !== null) {
+      const result = extractElementCss(element, message.payload.includeChildren);
+      void sendRuntimeMessage({ type: "ELEMENT_CSS_RESULT", payload: result });
+    }
+    return;
+  }
+
+  if (message.type === "A11Y_SCAN") {
+    try {
+      const issues = runA11yAudit();
+      void sendRuntimeMessage({ type: "A11Y_SCAN_RESULT", payload: { issues } });
+    } catch (error) {
+      console.error("ui-buddy accessibility scan failed:", error);
+      void sendRuntimeMessage({ type: "A11Y_SCAN_RESULT", payload: { issues: [] } });
+    }
+    return;
+  }
+
+  if (message.type === "FETCH_ASSET") {
+    const { src } = message.payload;
+    void (async () => {
+      try {
+        const response = await fetch(src);
+        const blob = await response.blob();
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.addEventListener("error", () => reject(new Error("Unable to read asset.")));
+          reader.addEventListener("load", () => {
+            if (typeof reader.result === "string") {
+              resolve(reader.result);
+            } else {
+              reject(new Error("Unable to read asset."));
+            }
+          });
+          reader.readAsDataURL(blob);
+        });
+        void sendRuntimeMessage({ type: "ASSET_FETCHED", payload: { src, dataUrl } });
+      } catch (error) {
+        void sendRuntimeMessage({
+          type: "ASSET_FETCHED",
+          payload: {
+            src,
+            dataUrl: null,
+            error: error instanceof Error ? error.message : "Unable to fetch asset.",
+          },
+        });
+      }
+    })();
+    return;
+  }
+
+  if (message.type === "ALIGN_SELECTED") {
+    picker.alignSelected(message.payload.alignment);
+    return;
+  }
+
+  if (message.type === "SCROLL_SELECTED_INTO_VIEW") {
+    picker.scrollSelectedIntoView();
+    return;
+  }
+
+  if (message.type === "MARK_SELECTED_FOR_SOURCE") {
+    picker.markSelectedForSource();
     return;
   }
 
