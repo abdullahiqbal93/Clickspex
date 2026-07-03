@@ -7,12 +7,13 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   handleDetectFramework,
   handleGenerateExport,
+  handleGenerateSessionExport,
   handleIndexProject,
   handlePreviewPatchSuggestions,
   handleScanProject,
 } from "./tools.js";
 
-import type { UIChangeIntent } from "@ui-buddy/shared";
+import type { UIChangeIntent, UIChangeSession } from "@ui-buddy/shared";
 
 type ScanData = { rootPath: string; files: string[] };
 type IndexData = { rootPath: string; files: Array<{ path: string; classNames: string[] }> };
@@ -178,6 +179,56 @@ describe("MCP tool handlers", () => {
     expect(patchData.find((patch) => patch.adapterId === "tailwind")?.diffPreview).toContain(
       'className="btn px-2 text-base"',
     );
+  });
+
+  it("generates exports for every element in a change session", () => {
+    const session: UIChangeSession = {
+      id: "mcp-session",
+      timestamp: "2026-07-01T00:00:00.000Z",
+      pageUrl: "https://example.test",
+      viewport: { width: 1280, height: 720, devicePixelRatio: 1 },
+      elements: [
+        changeIntent,
+        {
+          ...changeIntent,
+          id: "mcp-intent-2",
+          target: { ...changeIntent.target, id: "cancel", selector: "#cancel" },
+          changes: [
+            {
+              selector: "#cancel",
+              property: "color",
+              beforeValue: "#000000",
+              afterValue: "#ffffff",
+              timestamp: "2026-07-01T00:00:00.000Z",
+            },
+          ],
+        },
+      ],
+      structuralEdits: [
+        {
+          id: "edit-1",
+          kind: "delete",
+          timestamp: "2026-07-01T00:00:00.000Z",
+          target: { tagName: "div", classList: [], selector: "#gone", domPath: "#gone" },
+          summary: "Hid element",
+          details: {},
+        },
+      ],
+      stats: { editedElements: 2, styleChanges: 2, structuralEdits: 1 },
+    };
+
+    const result = handleGenerateSessionExport({ session });
+    const data = result.data as {
+      stats: { editedElements: number };
+      elements: Array<{ selector: string; css: { content: string } }>;
+      structuralEdits: Array<{ selector: string }>;
+    };
+
+    expect(result.ok).toBe(true);
+    expect(data.stats.editedElements).toBe(2);
+    expect(data.elements.map((element) => element.selector)).toEqual(["#save", "#cancel"]);
+    expect(data.elements[0]?.css.content).toContain("font-size: 16px;");
+    expect(data.structuralEdits[0]?.selector).toBe("#gone");
   });
 
   it("returns structured errors for invalid input", async () => {

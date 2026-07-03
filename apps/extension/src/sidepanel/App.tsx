@@ -82,7 +82,7 @@ export const App = () => {
   const setSelectedElement = usePanelStore((state) => state.setSelectedElement);
   const historyUndoDepth = usePanelStore((state) => state.historyUndoDepth);
   const historyRedoDepth = usePanelStore((state) => state.historyRedoDepth);
-  const applyHistorySync = usePanelStore((state) => state.applyHistorySync);
+  const applySessionSync = usePanelStore((state) => state.applySessionSync);
   const setA11yIssues = usePanelStore((state) => state.setA11yIssues);
   const setAssetFetch = usePanelStore((state) => state.setAssetFetch);
   const setElementCssResult = usePanelStore((state) => state.setElementCssResult);
@@ -158,12 +158,8 @@ export const App = () => {
         setMultiSelection(rawMessage.payload);
       }
 
-      if (rawMessage.type === "HISTORY_SYNC") {
-        applyHistorySync(
-          rawMessage.payload.changes,
-          rawMessage.payload.undoDepth,
-          rawMessage.payload.redoDepth,
-        );
+      if (rawMessage.type === "SESSION_SYNC") {
+        applySessionSync(rawMessage.payload);
       }
     };
 
@@ -178,7 +174,7 @@ export const App = () => {
       port.disconnect();
     };
   }, [
-    applyHistorySync,
+    applySessionSync,
     setA11yIssues,
     setActiveTab,
     setAssetFetch,

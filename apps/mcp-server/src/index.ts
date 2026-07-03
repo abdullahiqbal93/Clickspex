@@ -3,17 +3,27 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 
 import {
   changeIntentInputSchema,
+  generateSessionExportInputSchema,
   handleDetectFramework,
   handleGenerateExport,
+  handleGenerateSessionExport,
   handleIndexProject,
   handlePreviewPatchSuggestions,
+  handlePreviewSession,
   handleReadProjectSummary,
   handleScanProject,
   patchPreviewInputSchema,
   pathInputSchema,
+  previewSessionInputSchema,
 } from "./tools.js";
 
-import type { ChangeIntentInput, PathInput, PatchPreviewInput } from "./tools.js";
+import type {
+  ChangeIntentInput,
+  GenerateSessionExportInput,
+  PathInput,
+  PatchPreviewInput,
+  PreviewSessionInput,
+} from "./tools.js";
 
 const toContent = (result: unknown) => ({
   content: [
@@ -66,6 +76,20 @@ server.tool(
   "Accept a UIChangeIntent JSON object plus optional projectPath and return PatchSuggestion objects.",
   patchPreviewInputSchema.shape,
   async (input: PatchPreviewInput) => toContent(await handlePreviewPatchSuggestions(input)),
+);
+
+server.tool(
+  "generate_export_from_session",
+  "Accept a UIChangeSession JSON object and return per-element CSS/Tailwind exports plus structural edits.",
+  generateSessionExportInputSchema.shape,
+  (input: GenerateSessionExportInput) => toContent(handleGenerateSessionExport(input)),
+);
+
+server.tool(
+  "preview_session_patches",
+  "Accept a UIChangeSession JSON object plus optional projectPath and return PatchSuggestion objects for every edited element.",
+  previewSessionInputSchema.shape,
+  async (input: PreviewSessionInput) => toContent(await handlePreviewSession(input)),
 );
 
 const transport = new StdioServerTransport();

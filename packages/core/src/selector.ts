@@ -107,6 +107,33 @@ export const generateUniqueSelector = (element: Element): string => {
     }
   }
 
+  // Before resorting to a positional path, try anchoring on the nearest
+  // ancestor that is itself uniquely selectable (ids first). A descendant
+  // selector like `#panel button.save` is far more stable than
+  // `a > button.save:nth-of-type(1)` and survives sibling/DOM shuffles.
+  const targetSimple = buildSimpleSelector(element, false);
+  let ancestor: Element | null = element.parentElement;
+
+  while (ancestor !== null) {
+    const [anchor] = generateSelectorCandidates(ancestor);
+
+    if (anchor !== undefined) {
+      const descendant = `${anchor} ${targetSimple}`;
+
+      if (isUniqueSelector(ownerDocument, descendant)) {
+        return descendant;
+      }
+
+      const directChild = `${anchor} > ${targetSimple}`;
+
+      if (isUniqueSelector(ownerDocument, directChild)) {
+        return directChild;
+      }
+    }
+
+    ancestor = ancestor.parentElement;
+  }
+
   const path: string[] = [];
   let current: Element | null = element;
 

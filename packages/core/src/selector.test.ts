@@ -34,6 +34,20 @@ describe("generateUniqueSelector", () => {
     expect(document.querySelector(selector)).toBe(button);
   });
 
+  it("anchors on a stable ancestor id instead of a positional path", () => {
+    document.body.innerHTML = `
+      <div id="panel"><a><button class="cta">Buy</button></a></div>
+      <div><a><button class="cta">Other</button></a></div>
+    `;
+
+    const target = getElement<HTMLButtonElement>("#panel button.cta");
+    const selector = generateUniqueSelector(target);
+
+    expect(selector).toBe("#panel button.cta");
+    expect(document.querySelector(selector)).toBe(target);
+    expect(selector).not.toContain(":nth-of-type(");
+  });
+
   it("falls back to an nth-of-type path for repeated sibling elements", () => {
     document.body.innerHTML = `
       <section class="toolbar">

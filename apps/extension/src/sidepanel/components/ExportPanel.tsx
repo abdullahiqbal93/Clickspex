@@ -1,10 +1,16 @@
 import { cssAdapter, tailwindAdapter } from "@ui-buddy/adapters";
-import { createUIChangeIntent, summarizeChangeIntentAsMarkdown } from "@ui-buddy/core";
-import { AlertTriangle, Clipboard, Code2, Download } from "lucide-react";
+import {
+  createUIChangeSession,
+  summarizeSessionAsMarkdown,
+  type SessionElementInput,
+} from "@ui-buddy/core";
+import { AlertTriangle, Boxes, Clipboard, Code2, Download, Layers } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { readPageContext, type PageContext } from "../../chrome/session";
 import { usePanelStore } from "../store";
+
+import type { ElementSnapshot } from "@ui-buddy/shared";
 
 const fallbackPageContext = (): PageContext => ({
   pageUrl: "about:blank",
@@ -14,6 +20,39 @@ const fallbackPageContext = (): PageContext => ({
     devicePixelRatio: 1,
   },
 });
+
+const EMPTY_BOX_SIDE = { top: "0px", right: "0px", bottom: "0px", left: "0px" };
+
+/** Placeholder snapshot for a selector we never captured a baseline for. */
+const minimalSnapshot = (selector: string): ElementSnapshot => ({
+  tagName: selector.split(/[.#[:> ]/)[0] || "div",
+  id: "",
+  classList: [],
+  textPreview: "",
+  attributes: {},
+  selector,
+  domPath: selector,
+  rect: { x: 0, y: 0, width: 0, height: 0, top: 0, right: 0, bottom: 0, left: 0 },
+  computedStyles: {},
+  boxModel: {
+    margin: EMPTY_BOX_SIDE,
+    border: EMPTY_BOX_SIDE,
+    padding: EMPTY_BOX_SIDE,
+    content: { width: "0px", height: "0px" },
+  },
+  parentLayout: null,
+});
+
+const formatRawCssRule = (selector: string, css: string): string => {
+  const declarations = css
+    .split(";")
+    .map((declaration) => declaration.trim())
+    .filter((declaration) => declaration.length > 0)
+    .map((declaration) => `  ${declaration};`)
+    .join("\n");
+
+  return declarations.length === 0 ? "" : `${selector} {\n${declarations}\n}`;
+};
 
 type ExportBlockProps = {
   title: string;
@@ -79,6 +118,9 @@ export const ExportPanel = () => {
   const [pageContext, setPageContext] = useState<PageContext | null>(null);
   const accessibilityNotes = usePanelStore((state) => state.accessibilityNotes);
   const changes = usePanelStore((state) => state.changes);
+  const rawCssEntries = usePanelStore((state) => state.rawCssEntries);
+  const structuralEdits = usePanelStore((state) => state.structuralEdits);
+  const snapshotBySelector = usePanelStore((state) => state.snapshotBySelector);
   const selectedElement = usePanelStore((state) => state.selectedElement);
 
   useEffect(() => {
@@ -99,78 +141,163 @@ export const ExportPanel = () => {
     return () => {
       disposed = true;
     };
-  }, [selectedElement]);
+  }, [changes, rawCssEntries, structuralEdits]);
 
-  const changeIntent = useMemo(() => {
-    if (selectedElement === null) {
-      return null;
-    }
-
+  const session = useMemo(() => {
     const context = pageContext ?? fallbackPageContext();
-    return createUIChangeIntent({
+
+    const selectors = new Set<string>();
+    changes.forEach((change) => selectors.add(change.selector));
+    rawCssEntries.forEach((entry) => selectors.add(entry.selector));
+
+    const elements: SessionElementInput[] = Array.from(selectors).map((selector) => {
+      const snapshot =
+        snapshotBySelector[selector] ??
+        (selectedElement?.selector === selector ? selectedElement : undefined) ??
+        minimalSnapshot(selector);
+      const rawCss = rawCssEntries.find((entry) => entry.selector === selector)?.css;
+
+      return {
+        target: snapshot,
+        changes: changes.filter((change) => change.selector === selector),
+        accessibilityNotes: selectedElement?.selector === selector ? accessibilityNotes : [],
+        ...(rawCss !== undefined && rawCss.trim().length > 0 ? { rawCss } : {}),
+      };
+    });
+
+    return createUIChangeSession({
       pageUrl: context.pageUrl,
       viewport: context.viewport,
-      target: selectedElement,
-      changes,
-      accessibilityNotes,
+      elements,
+      structuralEdits,
     });
-  }, [accessibilityNotes, changes, pageContext, selectedElement]);
+  }, [
+    accessibilityNotes,
+    changes,
+    pageContext,
+    rawCssEntries,
+    selectedElement,
+    snapshotBySelector,
+    structuralEdits,
+  ]);
 
-  if (selectedElement === null || changeIntent === null) {
+  const hasContent = session.elements.length > 0 || session.structuralEdits.length > 0;
+
+  if (!hasContent) {
     return (
       <div className="rounded-lg border border-border bg-panel/80 backdrop-blur-sm p-4 shadow-card">
         <div className="flex items-center gap-2 text-sm font-semibold">
           <Code2 aria-hidden="true" size={16} />
           Export
         </div>
-        <p className="mt-2 text-xs text-muted">Idle</p>
+        <p className="mt-2 text-xs text-muted">
+          Idle — edit any elements (styles, raw CSS, moves, text, images) and the whole session
+          shows up here.
+        </p>
       </div>
     );
   }
 
-  const cssExport = cssAdapter.generateExport(changeIntent);
-  const tailwindExport = tailwindAdapter.generateExport(changeIntent);
-  const jsonExport = JSON.stringify(changeIntent, null, 2);
-  const markdownExport = summarizeChangeIntentAsMarkdown(changeIntent);
+  const sessionCss = session.elements
+    .map((intent) => {
+      const base = cssAdapter.generateExport(intent).content;
+      const raw =
+        intent.rawCss !== undefined ? formatRawCssRule(intent.target.selector, intent.rawCss) : "";
+      return [base, raw].filter((part) => part.trim().length > 0).join("\n\n");
+    })
+    .filter((part) => part.trim().length > 0)
+    .join("\n\n");
+
+  const sessionTailwind = session.elements
+    .map((intent) => {
+      const classes = tailwindAdapter.generateExport(intent).content.trim();
+      return classes.length === 0 ? "" : `/* ${intent.target.selector} */\n${classes}`;
+    })
+    .filter((part) => part.length > 0)
+    .join("\n\n");
+
+  const jsonExport = JSON.stringify(session, null, 2);
+  const markdownExport = summarizeSessionAsMarkdown(session);
+
+  const positionalSelectors = session.elements
+    .map((intent) => intent.target.selector)
+    .filter((selector) => selector.includes(":nth-of-type("));
 
   return (
     <div className="space-y-3">
       <section className="rounded-lg border border-border bg-panel/80 backdrop-blur-sm p-4 shadow-card">
-        <h2 className="text-sm font-semibold">Export</h2>
+        <h2 className="flex items-center gap-2 text-sm font-semibold">
+          <Layers aria-hidden="true" size={16} />
+          Export session
+        </h2>
         <p className="mt-1 text-xs leading-5 text-muted">
-          Tailwind suggestions are value-based approximations. CLI and MCP tools can turn exported
-          JSON into source-aware patch previews for review.
+          The full session — every edited element and structural change — as one bundle. CLI and MCP
+          tools can turn the JSON into source-aware patch previews for review.
         </p>
+        <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+          <div className="rounded-md border border-slate-100 bg-slate-50 p-2">
+            <p className="text-lg font-semibold text-slate-900">{session.stats.editedElements}</p>
+            <p className="text-[10px] uppercase tracking-wide text-slate-500">Elements</p>
+          </div>
+          <div className="rounded-md border border-slate-100 bg-slate-50 p-2">
+            <p className="text-lg font-semibold text-slate-900">{session.stats.styleChanges}</p>
+            <p className="text-[10px] uppercase tracking-wide text-slate-500">Style edits</p>
+          </div>
+          <div className="rounded-md border border-slate-100 bg-slate-50 p-2">
+            <p className="text-lg font-semibold text-slate-900">{session.stats.structuralEdits}</p>
+            <p className="text-[10px] uppercase tracking-wide text-slate-500">Structural</p>
+          </div>
+        </div>
       </section>
-      {changeIntent.target.selector.includes(":nth-of-type(") ? (
+
+      {positionalSelectors.length > 0 ? (
         <section className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-900">
           <AlertTriangle aria-hidden="true" className="mt-0.5 shrink-0" size={14} />
           <div className="text-xs leading-5">
-            <p className="font-semibold">Positional selector</p>
+            <p className="font-semibold">Positional selectors</p>
             <p>
-              This selector relies on :nth-of-type and may break when the page structure changes.
-              {changeIntent.target.fallbackSelectors !== undefined &&
-              changeIntent.target.fallbackSelectors.length > 0
-                ? ` Alternatives: ${changeIntent.target.fallbackSelectors.join(", ")}`
-                : ""}
+              {positionalSelectors.length} element(s) rely on :nth-of-type and may break when the
+              page structure changes. Prefer stable ids or class names before applying to source.
             </p>
           </div>
         </section>
       ) : null}
+
+      {session.structuralEdits.length > 0 ? (
+        <section className="rounded-lg border border-border bg-panel/80 backdrop-blur-sm p-4 shadow-card">
+          <h3 className="flex items-center gap-2 text-sm font-semibold">
+            <Boxes aria-hidden="true" size={15} />
+            Structural edits
+          </h3>
+          <ul className="mt-3 space-y-2">
+            {session.structuralEdits.map((edit) => (
+              <li
+                className="rounded-md border border-slate-100 bg-slate-50 px-3 py-2 text-xs"
+                key={edit.id}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-700">
+                    {edit.kind}
+                  </span>
+                  <span className="text-slate-800">{edit.summary}</span>
+                </div>
+                <p className="mt-1 truncate font-mono text-[10px] text-slate-500">
+                  {edit.target.selector}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      <ExportBlock content={sessionCss} filename="ui-buddy-session.css" title="CSS" />
       <ExportBlock
-        content={cssExport.content}
-        filename="ui-buddy-changes.css"
-        title="CSS"
-        warnings={cssExport.warnings}
-      />
-      <ExportBlock
-        content={tailwindExport.content}
-        filename="ui-buddy-tailwind.txt"
+        content={sessionTailwind}
+        filename="ui-buddy-session-tailwind.txt"
         title="Tailwind"
-        warnings={tailwindExport.warnings}
       />
-      <ExportBlock content={jsonExport} filename="ui-change-intent.json" title="JSON" />
-      <ExportBlock content={markdownExport} filename="ui-buddy-changes.md" title="Markdown" />
+      <ExportBlock content={jsonExport} filename="ui-change-session.json" title="JSON (session)" />
+      <ExportBlock content={markdownExport} filename="ui-buddy-session.md" title="Markdown" />
     </div>
   );
 };

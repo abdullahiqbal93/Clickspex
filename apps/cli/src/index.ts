@@ -7,7 +7,7 @@ import { detectProject, scanProjectContext } from "@ui-buddy/core/project";
 import chalk from "chalk";
 import { Command } from "commander";
 
-import type { PatchSuggestion, UIChangeIntent } from "@ui-buddy/shared";
+import type { PatchSuggestion, UIChangeIntent, UIChangeSession } from "@ui-buddy/shared";
 
 const program = new Command();
 
@@ -53,6 +53,38 @@ const exampleIntent = (): UIChangeIntent => ({
 const readChangeIntent = async (path: string): Promise<UIChangeIntent> => {
   const raw = await readFile(resolve(path), "utf8");
   return JSON.parse(raw) as UIChangeIntent;
+};
+
+const readChangeSession = async (path: string): Promise<UIChangeSession> => {
+  const raw = await readFile(resolve(path), "utf8");
+  return JSON.parse(raw) as UIChangeSession;
+};
+
+type SessionElementSuggestions = {
+  selector: string;
+  suggestions: PatchSuggestion[];
+};
+
+const previewSessionPatches = async (
+  session: UIChangeSession,
+  projectPath: string,
+): Promise<SessionElementSuggestions[]> => {
+  const projectContext = await scanProjectContext(projectPath, { includeSource: true });
+  const results: SessionElementSuggestions[] = [];
+
+  for (const intent of session.elements) {
+    const suggestions = [
+      ...(await cssAdapter.generatePatch(intent, projectContext)),
+      ...(await tailwindAdapter.generatePatch(intent, projectContext)),
+      ...(await Promise.all(
+        scaffoldAdapters.map((adapter) => adapter.generatePatch(intent, projectContext)),
+      ).then((patches) => patches.flat())),
+    ];
+
+    results.push({ selector: intent.target.selector, suggestions });
+  }
+
+  return results;
 };
 
 const previewPatchSuggestions = async (
@@ -135,6 +167,42 @@ program
     const changeIntent = await readChangeIntent(options.intent);
     const suggestions = await previewPatchSuggestions(changeIntent, projectPath);
     const output = `${JSON.stringify({ projectPath, suggestions }, null, 2)}\n`;
+
+    if (options.output === undefined) {
+      process.stdout.write(output);
+      return;
+    }
+
+    const outputPath = resolve(options.output);
+    await writeFile(outputPath, output, "utf8");
+    process.stdout.write(`${chalk.green("wrote")} ${outputPath}\n`);
+  });
+
+program
+  .command("preview-session")
+  .description("preview source-aware patch suggestions for a whole UIChangeSession JSON file")
+  .requiredOption("--session <path>", "UIChangeSession JSON file")
+  .option("--project <path>", "project path", process.cwd())
+  .option("--output <path>", "write suggestions JSON to this file")
+  .action(async (options: { session: string; project: string; output?: string }) => {
+    const projectPath = resolve(options.project);
+    const session = await readChangeSession(options.session);
+    const elements = await previewSessionPatches(session, projectPath);
+    const output = `${JSON.stringify(
+      {
+        projectPath,
+        sessionId: session.id,
+        stats: session.stats,
+        elements,
+        structuralEdits: session.structuralEdits.map((edit) => ({
+          kind: edit.kind,
+          selector: edit.target.selector,
+          summary: edit.summary,
+        })),
+      },
+      null,
+      2,
+    )}\n`;
 
     if (options.output === undefined) {
       process.stdout.write(output);

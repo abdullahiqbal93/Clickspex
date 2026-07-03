@@ -1,5 +1,7 @@
 import { addRuntimeMessageListener, sendRuntimeMessage } from "../chrome/messaging";
 
+import type { StructuralEdit } from "@ui-buddy/shared";
+
 import { runA11yAudit } from "./a11yAudit";
 import { extractElementCss } from "./cssExtractor";
 import { GridController } from "./grid";
@@ -21,41 +23,96 @@ const overlay = new OverlayController();
 const styleInjector = new StyleInjector();
 
 // ── Unified page-action history ─────────────────────────────
-// One ordered log across style edits, moves/nudges/aligns, and deletes so a
-// single undo/redo covers everything the user did to the page.
-type PageActionKind = "style" | "move" | "delete";
+// One ordered log across style edits, raw CSS, moves, deletes, text, and image
+// edits so a single undo/redo covers everything the user did to the page — and
+// so the full session (not just the last-selected element) can be exported.
+type PageAction =
+  | { kind: "style" }
+  | { kind: "raw-css" }
+  | { kind: StructuralEdit["kind"]; edit: StructuralEdit };
 
 const ACTION_LOG_LIMIT = 200;
-const actionUndoLog: PageActionKind[] = [];
-const actionRedoLog: PageActionKind[] = [];
+const actionUndoLog: PageAction[] = [];
+const actionRedoLog: PageAction[] = [];
 
-const sendHistorySync = (): void => {
+const collectStructuralEdits = (): StructuralEdit[] =>
+  actionUndoLog.flatMap((action) => ("edit" in action ? [action.edit] : []));
+
+const sendSessionSync = (): void => {
   void sendRuntimeMessage({
-    type: "HISTORY_SYNC",
+    type: "SESSION_SYNC",
     payload: {
-      changes: styleInjector.getAppliedChanges(),
+      styleChanges: styleInjector.getAppliedChanges(),
+      rawCss: styleInjector.getRawCssEntries(),
+      structuralEdits: collectStructuralEdits(),
       undoDepth: actionUndoLog.length,
       redoDepth: actionRedoLog.length,
     },
   });
 };
 
-const recordPageAction = (kind: PageActionKind): void => {
-  actionUndoLog.push(kind);
+const recordPageAction = (action: PageAction): void => {
+  actionUndoLog.push(action);
 
   if (actionUndoLog.length > ACTION_LOG_LIMIT) {
     actionUndoLog.shift();
   }
 
   actionRedoLog.length = 0;
-  sendHistorySync();
+  sendSessionSync();
 };
 
 const picker = new ElementPickerController(overlay, {
-  onActionRecorded: recordPageAction,
+  onStructuralEdit: (edit) => recordPageAction({ kind: edit.kind, edit }),
 });
 const ruler = new ManualRulerController();
 const grid = new GridController();
+
+const undoPageAction = (action: PageAction): void => {
+  switch (action.kind) {
+    case "style":
+      styleInjector.undo();
+      break;
+    case "raw-css":
+      styleInjector.undoRawCss();
+      break;
+    case "move":
+      picker.undoMovePosition();
+      break;
+    case "delete":
+      picker.undoDeleteElement();
+      break;
+    case "text":
+      picker.undoTextEdit();
+      break;
+    case "image":
+      picker.undoImageEdit();
+      break;
+  }
+};
+
+const redoPageAction = (action: PageAction): void => {
+  switch (action.kind) {
+    case "style":
+      styleInjector.redo();
+      break;
+    case "raw-css":
+      styleInjector.redoRawCss();
+      break;
+    case "move":
+      picker.redoMovePosition();
+      break;
+    case "delete":
+      picker.redoDeleteElement();
+      break;
+    case "text":
+      picker.redoTextEdit();
+      break;
+    case "image":
+      picker.redoImageEdit();
+      break;
+  }
+};
 
 // If this script is injected on demand (into a tab that was already open) while
 // the declared content script also runs, guard against registering the message
@@ -81,57 +138,50 @@ if (window.__uiBuddyListenerAttached !== true) {
   }
 
   if (message.type === "APPLY_STYLE_CHANGE") {
-    styleInjector.applyChange(message.payload);
-    recordPageAction("style");
+    if (styleInjector.applyChange(message.payload)) {
+      recordPageAction({ kind: "style" });
+    } else {
+      // Coalesced into the previous change (continuous drag): no new undo step,
+      // but the panel still needs the updated value.
+      sendSessionSync();
+    }
     return;
   }
 
   if (message.type === "RESET_ELEMENT_CHANGES") {
     styleInjector.reset();
-    // Style entries leave the log; move/delete history stays untouched.
-    const keptUndo = actionUndoLog.filter((kind) => kind !== "style");
-    const keptRedo = actionRedoLog.filter((kind) => kind !== "style");
+    // Style + raw CSS entries leave the log; structural history stays untouched.
+    const keep = (action: PageAction): boolean =>
+      action.kind !== "style" && action.kind !== "raw-css";
+    const keptUndo = actionUndoLog.filter(keep);
+    const keptRedo = actionRedoLog.filter(keep);
     actionUndoLog.splice(0, actionUndoLog.length, ...keptUndo);
     actionRedoLog.splice(0, actionRedoLog.length, ...keptRedo);
-    sendHistorySync();
+    sendSessionSync();
     return;
   }
 
   if (message.type === "UNDO_CHANGE") {
-    const kind = actionUndoLog.pop();
+    const action = actionUndoLog.pop();
 
-    if (kind !== undefined) {
-      actionRedoLog.push(kind);
-
-      if (kind === "style") {
-        styleInjector.undo();
-      } else if (kind === "move") {
-        picker.undoMovePosition();
-      } else {
-        picker.undoDeleteElement();
-      }
+    if (action !== undefined) {
+      actionRedoLog.push(action);
+      undoPageAction(action);
     }
 
-    sendHistorySync();
+    sendSessionSync();
     return;
   }
 
   if (message.type === "REDO_CHANGE") {
-    const kind = actionRedoLog.pop();
+    const action = actionRedoLog.pop();
 
-    if (kind !== undefined) {
-      actionUndoLog.push(kind);
-
-      if (kind === "style") {
-        styleInjector.redo();
-      } else if (kind === "move") {
-        picker.redoMovePosition();
-      } else {
-        picker.redoDeleteElement();
-      }
+    if (action !== undefined) {
+      actionUndoLog.push(action);
+      redoPageAction(action);
     }
 
-    sendHistorySync();
+    sendSessionSync();
     return;
   }
 
@@ -308,7 +358,9 @@ if (window.__uiBuddyListenerAttached !== true) {
   }
 
   if (message.type === "APPLY_RAW_CSS") {
-    styleInjector.setRawCss(message.payload.selector, message.payload.css);
+    if (styleInjector.applyRawCss(message.payload.selector, message.payload.css)) {
+      recordPageAction({ kind: "raw-css" });
+    }
     return;
   }
 

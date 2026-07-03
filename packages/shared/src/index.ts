@@ -265,6 +265,54 @@ export type UIChangeIntent = {
   accessibilityNotes: AccessibilityNote[];
   visualIntent?: string;
   frameworkHints?: string[];
+  /** Free-form CSS the user authored for this element in the Raw CSS editor. */
+  rawCss?: string;
+};
+
+/** A non-declarative edit made in the browser (DOM move, delete, text, image). */
+export type StructuralEditKind = "move" | "delete" | "text" | "image";
+
+export type StructuralEditTarget = {
+  tagName: string;
+  id?: string;
+  classList: string[];
+  selector: string;
+  domPath: string;
+  fallbackSelectors?: string[];
+};
+
+export type StructuralEdit = {
+  id: string;
+  kind: StructuralEditKind;
+  timestamp: string;
+  target: StructuralEditTarget;
+  /** Human-readable one-line summary, e.g. "Moved before previous sibling". */
+  summary: string;
+  /** Kind-specific data (direction, before/after text, image src, etc.). */
+  details: Record<string, string>;
+};
+
+/**
+ * A complete browser editing session: every edited element (with its style
+ * changes and raw CSS) plus every structural edit, so the full set of changes
+ * can be exported and mapped to source — not just the last-selected element.
+ */
+export type UIChangeSession = {
+  id: string;
+  timestamp: string;
+  pageUrl: string;
+  viewport: {
+    width: number;
+    height: number;
+    devicePixelRatio: number;
+  };
+  elements: UIChangeIntent[];
+  structuralEdits: StructuralEdit[];
+  stats: {
+    editedElements: number;
+    styleChanges: number;
+    structuralEdits: number;
+  };
 };
 
 export type PatchSuggestion = {
@@ -452,8 +500,14 @@ export type ExtensionMessage =
   | { type: "APPLY_RAW_CSS"; payload: { selector: string; css: string } }
   | { type: "MULTI_SELECTION_CHANGED"; payload: { count: number; selectors: string[] } }
   | {
-      type: "HISTORY_SYNC";
-      payload: { changes: StyleChange[]; undoDepth: number; redoDepth: number };
+      type: "SESSION_SYNC";
+      payload: {
+        styleChanges: StyleChange[];
+        rawCss: Array<{ selector: string; css: string }>;
+        structuralEdits: StructuralEdit[];
+        undoDepth: number;
+        redoDepth: number;
+      };
     };
 
 export type MessageType = ExtensionMessage["type"];
@@ -572,6 +626,29 @@ export const isStyleChange = (value: unknown): value is StyleChange => {
     isString(value.timestamp) &&
     (value.state === undefined || isStyleTargetState(value.state)) &&
     (value.responsiveTarget === undefined || isStyleResponsiveTarget(value.responsiveTarget))
+  );
+};
+
+const STRUCTURAL_EDIT_KINDS: readonly StructuralEditKind[] = ["move", "delete", "text", "image"];
+
+export const isStructuralEdit = (value: unknown): value is StructuralEdit => {
+  if (!isRecord(value) || !isRecord(value.target) || !isRecord(value.details)) {
+    return false;
+  }
+
+  const target = value.target;
+
+  return (
+    isString(value.id) &&
+    isString(value.kind) &&
+    (STRUCTURAL_EDIT_KINDS as readonly string[]).includes(value.kind) &&
+    isString(value.timestamp) &&
+    isString(value.summary) &&
+    isString(target.tagName) &&
+    isStringArray(target.classList) &&
+    isString(target.selector) &&
+    isString(target.domPath) &&
+    Object.values(value.details).every(isString)
   );
 };
 
@@ -719,13 +796,20 @@ export const isExtensionMessage = (value: unknown): value is ExtensionMessage =>
     return isRecord(value.payload) && isAlignEdge(value.payload.alignment);
   }
 
-  if (messageType === "HISTORY_SYNC") {
+  if (messageType === "SESSION_SYNC") {
+    const payload = value.payload;
     return (
-      isRecord(value.payload) &&
-      Array.isArray(value.payload.changes) &&
-      value.payload.changes.every(isStyleChange) &&
-      isNumber(value.payload.undoDepth) &&
-      isNumber(value.payload.redoDepth)
+      isRecord(payload) &&
+      Array.isArray(payload.styleChanges) &&
+      payload.styleChanges.every(isStyleChange) &&
+      Array.isArray(payload.rawCss) &&
+      payload.rawCss.every(
+        (entry) => isRecord(entry) && isString(entry.selector) && isString(entry.css),
+      ) &&
+      Array.isArray(payload.structuralEdits) &&
+      payload.structuralEdits.every(isStructuralEdit) &&
+      isNumber(payload.undoDepth) &&
+      isNumber(payload.redoDepth)
     );
   }
 

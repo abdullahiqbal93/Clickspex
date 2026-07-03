@@ -4,9 +4,11 @@ import { join, resolve } from "node:path";
 import { cssAdapter, scaffoldAdapters, tailwindAdapter } from "@ui-buddy/adapters";
 import { detectProject, scanProjectContext } from "@ui-buddy/core/project";
 import {
+  STYLE_RESPONSIVE_TARGETS,
   STYLE_TARGET_STATES,
   SUPPORTED_STYLE_PROPERTIES,
   type UIChangeIntent,
+  type UIChangeSession,
 } from "@ui-buddy/shared";
 import { z } from "zod";
 
@@ -44,6 +46,8 @@ const styleChangeSchema = z.object({
   // Optional pseudo-state (hover/focus/...). Without this field zod silently
   // strips `state`, so pseudo-state changes were exported as base styles.
   state: z.enum(STYLE_TARGET_STATES).optional(),
+  // Same reasoning for responsive breakpoint targets.
+  responsiveTarget: z.enum(STYLE_RESPONSIVE_TARGETS).optional(),
 });
 
 const accessibilityNoteSchema = z.object({
@@ -56,32 +60,36 @@ const accessibilityNoteSchema = z.object({
 export const pathInputSchema = z.object({ path: z.string().min(1) });
 export type PathInput = z.infer<typeof pathInputSchema>;
 
-export const changeIntentInputSchema = z.object({
-  changeIntent: z.object({
-    id: z.string(),
-    timestamp: z.string(),
-    pageUrl: z.string(),
-    viewport: z.object({ width: z.number(), height: z.number(), devicePixelRatio: z.number() }),
-    target: z.object({
-      tagName: z.string(),
-      id: z.string().optional(),
-      classList: z.array(z.string()),
-      textPreview: z.string().optional(),
-      selector: z.string(),
-      domPath: z.string(),
-      attributes: z.record(z.string()),
-    }),
-    before: z.object({ styles: z.record(z.string()), rect: rectSchema, boxModel: boxModelSchema }),
-    after: z.object({
-      styles: z.record(z.string()),
-      rect: rectSchema.optional(),
-      boxModel: boxModelSchema.optional(),
-    }),
-    changes: z.array(styleChangeSchema),
-    accessibilityNotes: z.array(accessibilityNoteSchema),
-    visualIntent: z.string().optional(),
-    frameworkHints: z.array(z.string()).optional(),
+const changeIntentObjectSchema = z.object({
+  id: z.string(),
+  timestamp: z.string(),
+  pageUrl: z.string(),
+  viewport: z.object({ width: z.number(), height: z.number(), devicePixelRatio: z.number() }),
+  target: z.object({
+    tagName: z.string(),
+    id: z.string().optional(),
+    classList: z.array(z.string()),
+    textPreview: z.string().optional(),
+    selector: z.string(),
+    domPath: z.string(),
+    attributes: z.record(z.string()),
+    fallbackSelectors: z.array(z.string()).optional(),
   }),
+  before: z.object({ styles: z.record(z.string()), rect: rectSchema, boxModel: boxModelSchema }),
+  after: z.object({
+    styles: z.record(z.string()),
+    rect: rectSchema.optional(),
+    boxModel: boxModelSchema.optional(),
+  }),
+  changes: z.array(styleChangeSchema),
+  accessibilityNotes: z.array(accessibilityNoteSchema),
+  visualIntent: z.string().optional(),
+  frameworkHints: z.array(z.string()).optional(),
+  rawCss: z.string().optional(),
+});
+
+export const changeIntentInputSchema = z.object({
+  changeIntent: changeIntentObjectSchema,
 });
 export type ChangeIntentInput = z.infer<typeof changeIntentInputSchema>;
 
@@ -89,6 +97,44 @@ export const patchPreviewInputSchema = changeIntentInputSchema.extend({
   projectPath: z.string().min(1).optional(),
 });
 export type PatchPreviewInput = z.infer<typeof patchPreviewInputSchema>;
+
+const structuralEditSchema = z.object({
+  id: z.string(),
+  kind: z.enum(["move", "delete", "text", "image"]),
+  timestamp: z.string(),
+  target: z.object({
+    tagName: z.string(),
+    id: z.string().optional(),
+    classList: z.array(z.string()),
+    selector: z.string(),
+    domPath: z.string(),
+    fallbackSelectors: z.array(z.string()).optional(),
+  }),
+  summary: z.string(),
+  details: z.record(z.string()),
+});
+
+const sessionObjectSchema = z.object({
+  id: z.string(),
+  timestamp: z.string(),
+  pageUrl: z.string(),
+  viewport: z.object({ width: z.number(), height: z.number(), devicePixelRatio: z.number() }),
+  elements: z.array(changeIntentObjectSchema),
+  structuralEdits: z.array(structuralEditSchema),
+  stats: z.object({
+    editedElements: z.number(),
+    styleChanges: z.number(),
+    structuralEdits: z.number(),
+  }),
+});
+
+export const generateSessionExportInputSchema = z.object({ session: sessionObjectSchema });
+export type GenerateSessionExportInput = z.infer<typeof generateSessionExportInputSchema>;
+
+export const previewSessionInputSchema = generateSessionExportInputSchema.extend({
+  projectPath: z.string().min(1).optional(),
+});
+export type PreviewSessionInput = z.infer<typeof previewSessionInputSchema>;
 
 type ToolResult = {
   ok: boolean;
@@ -255,5 +301,70 @@ export const handlePreviewPatchSuggestions = async (
     };
   } catch (error) {
     return structuredError("preview_patch_suggestions_failed", error);
+  }
+};
+
+export const handleGenerateSessionExport = (input: GenerateSessionExportInput): ToolResult => {
+  try {
+    const parsed = generateSessionExportInputSchema.parse(input);
+    const session = parsed.session as unknown as UIChangeSession;
+
+    return {
+      ok: true,
+      data: {
+        sessionId: session.id,
+        stats: session.stats,
+        elements: session.elements.map((intent) => ({
+          selector: intent.target.selector,
+          css: cssAdapter.generateExport(intent),
+          tailwind: tailwindAdapter.generateExport(intent),
+          rawCss: intent.rawCss ?? null,
+        })),
+        structuralEdits: session.structuralEdits,
+      },
+    };
+  } catch (error) {
+    return structuredError("generate_session_export_failed", error);
+  }
+};
+
+export const handlePreviewSession = async (input: PreviewSessionInput): Promise<ToolResult> => {
+  try {
+    const parsed = previewSessionInputSchema.parse(input);
+    const session = parsed.session as unknown as UIChangeSession;
+    const projectContext =
+      parsed.projectPath === undefined
+        ? undefined
+        : await scanProjectContext(resolve(parsed.projectPath), { includeSource: true });
+
+    const elements: Array<{ selector: string; suggestions: unknown[] }> = [];
+
+    for (const intent of session.elements) {
+      const suggestions = [
+        ...(await cssAdapter.generatePatch(intent, projectContext)),
+        ...(await tailwindAdapter.generatePatch(intent, projectContext)),
+        ...(await Promise.all(
+          scaffoldAdapters.map((adapter) => adapter.generatePatch(intent, projectContext)),
+        ).then((patches) => patches.flat())),
+      ];
+
+      elements.push({ selector: intent.target.selector, suggestions });
+    }
+
+    return {
+      ok: true,
+      data: {
+        sessionId: session.id,
+        stats: session.stats,
+        elements,
+        structuralEdits: session.structuralEdits.map((edit) => ({
+          kind: edit.kind,
+          selector: edit.target.selector,
+          summary: edit.summary,
+        })),
+      },
+    };
+  } catch (error) {
+    return structuredError("preview_session_failed", error);
   }
 };

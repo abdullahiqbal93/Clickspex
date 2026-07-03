@@ -77,6 +77,38 @@ export const createStyleChange = (
   ...(responsiveTarget === BASE_STYLE_RESPONSIVE_TARGET ? {} : { responsiveTarget }),
 });
 
+/**
+ * Time window within which two edits of the same property are treated as one
+ * continuous action (e.g. dragging a color picker or slider). Keeps a single
+ * change with the final value instead of one entry per intermediate value.
+ */
+export const STYLE_CHANGE_COALESCE_WINDOW_MS = 600;
+
+/**
+ * True when `next` should collapse into `previous` — same target property, and
+ * committed within the coalesce window. Lets a slider drag record one change
+ * (and undo as one step) rather than dozens.
+ */
+export const canCoalesceStyleChange = (previous: StyleChange, next: StyleChange): boolean => {
+  if (
+    previous.selector !== next.selector ||
+    previous.property !== next.property ||
+    getStyleChangeState(previous) !== getStyleChangeState(next) ||
+    getStyleChangeResponsiveTarget(previous) !== getStyleChangeResponsiveTarget(next)
+  ) {
+    return false;
+  }
+
+  const previousTime = Date.parse(previous.timestamp);
+  const nextTime = Date.parse(next.timestamp);
+
+  if (Number.isNaN(previousTime) || Number.isNaN(nextTime)) {
+    return true;
+  }
+
+  return nextTime >= previousTime && nextTime - previousTime <= STYLE_CHANGE_COALESCE_WINDOW_MS;
+};
+
 export const diffStyles = (
   selector: string,
   before: Record<string, string>,

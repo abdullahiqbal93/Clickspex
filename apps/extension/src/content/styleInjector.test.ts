@@ -13,12 +13,13 @@ const createChange = (
   afterValue: string,
   state?: StyleChange["state"],
   responsiveTarget?: StyleChange["responsiveTarget"],
+  timestamp = "2026-07-01T00:00:00.000Z",
 ): StyleChange => ({
   selector: "#save",
   property,
   beforeValue,
   afterValue,
-  timestamp: "2026-07-01T00:00:00.000Z",
+  timestamp,
   ...(state === undefined ? {} : { state }),
   ...(responsiveTarget === undefined ? {} : { responsiveTarget }),
 });
@@ -43,8 +44,14 @@ describe("StyleInjector", () => {
   it("undoes back through the applied change history and removes stale rules", () => {
     const injector = new StyleInjector();
 
-    injector.applyChange(createChange("color", "black", "white"));
-    injector.applyChange(createChange("color", "white", "red"));
+    // Timestamps two seconds apart so they are treated as two deliberate edits,
+    // not one continuous drag.
+    injector.applyChange(
+      createChange("color", "black", "white", undefined, undefined, "2026-07-01T00:00:00.000Z"),
+    );
+    injector.applyChange(
+      createChange("color", "white", "red", undefined, undefined, "2026-07-01T00:00:02.000Z"),
+    );
 
     expect(styleElement()?.textContent).toContain("color: red !important;");
 
@@ -54,6 +61,26 @@ describe("StyleInjector", () => {
 
     injector.undo();
 
+    expect(styleElement()).toBeNull();
+  });
+
+  it("coalesces rapid same-property edits into one undo step", () => {
+    const injector = new StyleInjector();
+
+    const first = injector.applyChange(
+      createChange("color", "black", "white", undefined, undefined, "2026-07-01T00:00:00.000Z"),
+    );
+    // 200ms later — within the coalesce window, like a slider drag.
+    const second = injector.applyChange(
+      createChange("color", "white", "red", undefined, undefined, "2026-07-01T00:00:00.200Z"),
+    );
+
+    expect(first).toBe(true);
+    expect(second).toBe(false);
+    expect(styleElement()?.textContent).toContain("color: red !important;");
+
+    // A single undo reverts the whole drag rather than one intermediate value.
+    injector.undo();
     expect(styleElement()).toBeNull();
   });
 

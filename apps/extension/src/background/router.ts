@@ -13,7 +13,7 @@ const CONTENT_TO_PANEL_MESSAGES = new Set<ExtensionMessage["type"]>([
   "A11Y_SCAN_RESULT",
   "ASSET_FETCHED",
   "MULTI_SELECTION_CHANGED",
-  "HISTORY_SYNC",
+  "SESSION_SYNC",
 ]);
 
 export const shouldForwardToSidePanel = (message: ExtensionMessage): boolean =>

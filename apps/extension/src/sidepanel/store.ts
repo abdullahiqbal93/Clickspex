@@ -1,4 +1,4 @@
-import { createStyleChange, getAccessibilityNotes } from "@ui-buddy/core";
+import { canCoalesceStyleChange, createStyleChange, getAccessibilityNotes } from "@ui-buddy/core";
 import { create } from "zustand";
 
 import type {
@@ -8,11 +8,22 @@ import type {
   ElementSnapshot,
   PageScanResult,
   PageTechInfo,
+  StructuralEdit,
   StyleChange,
   StyleResponsiveTarget,
   StyleTargetState,
   SupportedStyleProperty,
 } from "@ui-buddy/shared";
+
+export type RawCssEntry = { selector: string; css: string };
+
+export type SessionSyncPayload = {
+  styleChanges: StyleChange[];
+  rawCss: RawCssEntry[];
+  structuralEdits: StructuralEdit[];
+  undoDepth: number;
+  redoDepth: number;
+};
 
 export type ElementCssResult = {
   css: string;
@@ -61,11 +72,15 @@ export type PanelState = {
   historyUndoDepth: number;
   pickerActive: boolean;
   rulerActive: boolean;
+  rawCssEntries: RawCssEntry[];
+  structuralEdits: StructuralEdit[];
+  /** Baseline (pre-edit) snapshot of every element selected this session. */
+  snapshotBySelector: Record<string, ElementSnapshot>;
   searchResults: ElementSearchResult[];
   selectedElement: ElementSnapshot | null;
   tech: PageTechInfo[] | null;
   applyLocalStyleChange: (change: StyleChange) => void;
-  applyHistorySync: (changes: StyleChange[], undoDepth: number, redoDepth: number) => void;
+  applySessionSync: (payload: SessionSyncPayload) => void;
   setA11yIssues: (issues: A11yIssue[] | null) => void;
   setA11yScanLoading: (loading: boolean) => void;
   setAssetFetch: (result: AssetFetchResult | null) => void;
@@ -171,6 +186,9 @@ export const usePanelStore = create<PanelState>((set, get) => ({
   historyUndoDepth: 0,
   pickerActive: false,
   rulerActive: false,
+  rawCssEntries: [],
+  structuralEdits: [],
+  snapshotBySelector: {},
   searchResults: [],
   selectedElement: null,
   tech: null,
@@ -181,13 +199,31 @@ export const usePanelStore = create<PanelState>((set, get) => ({
   setMultiSelection: (multiSelection) => set({ multiSelection }),
   setTech: (tech) => set({ tech }),
   applyLocalStyleChange: (change) =>
-    set((state) => ({
-      changes: [...state.changes, change],
-      historyUndoDepth: state.historyUndoDepth + 1,
-      historyRedoDepth: 0,
-    })),
-  applyHistorySync: (changes, undoDepth, redoDepth) =>
-    set({ changes, historyUndoDepth: undoDepth, historyRedoDepth: redoDepth }),
+    set((state) => {
+      const last = state.changes[state.changes.length - 1];
+
+      // Mirror the injector: collapse a continuous drag into one entry so the
+      // change count and undo depth stay accurate before SESSION_SYNC arrives.
+      if (last !== undefined && canCoalesceStyleChange(last, change)) {
+        const changes = state.changes.slice(0, -1);
+        changes.push({ ...last, afterValue: change.afterValue, timestamp: change.timestamp });
+        return { changes, historyRedoDepth: 0 };
+      }
+
+      return {
+        changes: [...state.changes, change],
+        historyUndoDepth: state.historyUndoDepth + 1,
+        historyRedoDepth: 0,
+      };
+    }),
+  applySessionSync: (payload) =>
+    set({
+      changes: payload.styleChanges,
+      rawCssEntries: payload.rawCss,
+      structuralEdits: payload.structuralEdits,
+      historyUndoDepth: payload.undoDepth,
+      historyRedoDepth: payload.redoDepth,
+    }),
   prepareStyleChange: (property, afterValue, targetState = "base", responsiveTarget = "all") => {
     const state = get();
 
@@ -212,7 +248,7 @@ export const usePanelStore = create<PanelState>((set, get) => ({
       responsiveTarget,
     );
   },
-  resetElementChanges: () => set({ changes: [] }),
+  resetElementChanges: () => set({ changes: [], rawCssEntries: [] }),
   // Wipe everything tied to a specific page. Called when the inspected tab
   // reloads or navigates so the panel doesn't show stale selections/edits from
   // a page whose content script (and applied styles) no longer exist.
@@ -233,6 +269,9 @@ export const usePanelStore = create<PanelState>((set, get) => ({
       multiSelection: { count: 0, selectors: [] },
       pickerActive: false,
       rulerActive: false,
+      rawCssEntries: [],
+      structuralEdits: [],
+      snapshotBySelector: {},
       searchResults: [],
       selectedElement: null,
       tech: null,
@@ -250,10 +289,21 @@ export const usePanelStore = create<PanelState>((set, get) => ({
     set({ rulerActive, pickerActive: rulerActive ? false : get().pickerActive }),
   setSearchResults: (searchResults) => set({ searchResults }),
   setSelectedElement: (selectedElement) =>
-    set({
-      accessibilityNotes: selectedElement === null ? [] : getAccessibilityNotes(selectedElement),
-      elementCssResult: null,
-      measurementTarget: null,
-      selectedElement,
+    set((state) => {
+      // Cache the first (pre-edit) snapshot per selector so the exported session
+      // can reconstruct accurate before/after styles for every edited element,
+      // not just the one currently selected.
+      const snapshotBySelector =
+        selectedElement !== null && state.snapshotBySelector[selectedElement.selector] === undefined
+          ? { ...state.snapshotBySelector, [selectedElement.selector]: selectedElement }
+          : state.snapshotBySelector;
+
+      return {
+        accessibilityNotes: selectedElement === null ? [] : getAccessibilityNotes(selectedElement),
+        elementCssResult: null,
+        measurementTarget: null,
+        selectedElement,
+        snapshotBySelector,
+      };
     }),
 }));

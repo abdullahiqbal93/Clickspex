@@ -1,6 +1,7 @@
 import {
   buildMediaQueryFromResponsiveTarget,
   buildStyleTargetSelector,
+  canCoalesceStyleChange,
   getStyleChangeResponsiveTarget,
 } from "@ui-buddy/core";
 import {
@@ -148,27 +149,92 @@ export class StyleInjector {
   private readonly redoStack: StyleChange[] = [];
   // Free-form CSS entered in the Styles → Raw CSS editor, keyed by selector.
   private readonly rawCssBySelector = new Map<string, string>();
+  private readonly rawCssUndoStack: Array<{ selector: string; before: string; after: string }> = [];
+  private readonly rawCssRedoStack: Array<{ selector: string; before: string; after: string }> = [];
 
   public getAppliedChanges(): StyleChange[] {
     return [...this.appliedChanges];
   }
 
-  public setRawCss(selector: string, css: string): void {
-    const trimmed = css.trim();
+  public getRawCssEntries(): Array<{ selector: string; css: string }> {
+    return Array.from(this.rawCssBySelector.entries()).map(([selector, css]) => ({
+      selector,
+      css,
+    }));
+  }
 
-    if (trimmed.length === 0) {
+  private setRawCssValue(selector: string, value: string): void {
+    if (value.length === 0) {
       this.rawCssBySelector.delete(selector);
     } else {
-      this.rawCssBySelector.set(selector, trimmed);
+      this.rawCssBySelector.set(selector, value);
+    }
+  }
+
+  /** Apply raw CSS for a selector as an undoable step. Returns true if it changed. */
+  public applyRawCss(selector: string, css: string): boolean {
+    const before = this.rawCssBySelector.get(selector) ?? "";
+    const after = css.trim();
+
+    if (before === after) {
+      return false;
     }
 
+    this.setRawCssValue(selector, after);
+    this.rawCssUndoStack.push({ selector, before, after });
+    this.rawCssRedoStack.length = 0;
+    this.render();
+    return true;
+  }
+
+  public undoRawCss(): void {
+    const entry = this.rawCssUndoStack.pop();
+
+    if (entry === undefined) {
+      return;
+    }
+
+    this.setRawCssValue(entry.selector, entry.before);
+    this.rawCssRedoStack.push(entry);
     this.render();
   }
 
-  public applyChange(change: StyleChange): void {
+  public redoRawCss(): void {
+    const entry = this.rawCssRedoStack.pop();
+
+    if (entry === undefined) {
+      return;
+    }
+
+    this.setRawCssValue(entry.selector, entry.after);
+    this.rawCssUndoStack.push(entry);
+    this.render();
+  }
+
+  /**
+   * Apply a style change. Returns true when it starts a new undo step, or false
+   * when it coalesced into the previous change (a continuous slider/picker drag),
+   * so callers can avoid recording a separate history entry per intermediate value.
+   */
+  public applyChange(change: StyleChange): boolean {
+    const last = this.appliedChanges[this.appliedChanges.length - 1];
+
+    if (last !== undefined && canCoalesceStyleChange(last, change)) {
+      // Keep the original beforeValue, adopt the newest afterValue/timestamp.
+      this.appliedChanges[this.appliedChanges.length - 1] = {
+        ...last,
+        afterValue: change.afterValue,
+        timestamp: change.timestamp,
+      };
+      this.redoStack.length = 0;
+      this.render();
+      return false;
+    }
+
     this.appliedChanges.push(change);
     this.redoStack.length = 0;
     this.render();
+    return true;
   }
 
   public undo(): void {
@@ -197,6 +263,8 @@ export class StyleInjector {
     this.appliedChanges.length = 0;
     this.redoStack.length = 0;
     this.rawCssBySelector.clear();
+    this.rawCssUndoStack.length = 0;
+    this.rawCssRedoStack.length = 0;
     document.getElementById(STYLE_ELEMENT_ID)?.remove();
   }
 

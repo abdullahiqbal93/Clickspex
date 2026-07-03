@@ -9,7 +9,15 @@ import type {
   DomMoveDirection,
   ElementSearchResult,
   ElementSnapshot,
+  StructuralEdit,
+  StructuralEditKind,
+  StructuralEditTarget,
 } from "@ui-buddy/shared";
+
+const createEditId = (): string =>
+  typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID()
+    : `edit-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 const getPageContext = () => ({
   pageUrl: window.location.href,
@@ -30,8 +38,20 @@ type PickerMode = "select" | "measure";
 
 type PickerCallbacks = {
   onElementSelected?: () => void;
-  /** A new undoable page action (move/nudge/align or delete) was recorded. */
-  onActionRecorded?: (kind: "move" | "delete") => void;
+  /** A new undoable structural edit (move/delete/text/image) was recorded. */
+  onStructuralEdit?: (edit: StructuralEdit) => void;
+};
+
+type ImageEditEntry = {
+  apply: () => void;
+  revert: () => void;
+  element: Element;
+};
+
+type TextEditEntry = {
+  element: HTMLElement;
+  before: string;
+  after: string;
 };
 
 type DisableOptions = {
@@ -114,6 +134,10 @@ export class ElementPickerController {
     display: string;
     visibility: string;
   }> = [];
+  private readonly textUndoStack: TextEditEntry[] = [];
+  private readonly textRedoStack: TextEditEntry[] = [];
+  private readonly imageUndoStack: ImageEditEntry[] = [];
+  private readonly imageRedoStack: ImageEditEntry[] = [];
 
   public constructor(
     private readonly overlay: OverlayController,
@@ -239,6 +263,91 @@ export class ElementPickerController {
     this.applyMoveHistory("redo");
   }
 
+  public undoTextEdit(): void {
+    const entry = this.textUndoStack.pop();
+
+    if (entry === undefined || !entry.element.isConnected) {
+      return;
+    }
+
+    entry.element.textContent = entry.before;
+    this.textRedoStack.push(entry);
+    this.refreshSnapshotFor(entry.element);
+  }
+
+  public redoTextEdit(): void {
+    const entry = this.textRedoStack.pop();
+
+    if (entry === undefined || !entry.element.isConnected) {
+      return;
+    }
+
+    entry.element.textContent = entry.after;
+    this.textUndoStack.push(entry);
+    this.refreshSnapshotFor(entry.element);
+  }
+
+  public undoImageEdit(): void {
+    const entry = this.imageUndoStack.pop();
+
+    if (entry === undefined || !entry.element.isConnected) {
+      return;
+    }
+
+    entry.revert();
+    this.imageRedoStack.push(entry);
+    this.refreshSnapshotFor(entry.element);
+  }
+
+  public redoImageEdit(): void {
+    const entry = this.imageRedoStack.pop();
+
+    if (entry === undefined || !entry.element.isConnected) {
+      return;
+    }
+
+    entry.apply();
+    this.imageUndoStack.push(entry);
+    this.refreshSnapshotFor(entry.element);
+  }
+
+  private refreshSnapshotFor(element: Element): void {
+    if (this.selectedElementNode === element) {
+      this.refreshSelectedSnapshot();
+    }
+  }
+
+  private buildEditTarget(element: Element): StructuralEditTarget {
+    const snapshot = captureElementSnapshot(element);
+
+    return {
+      tagName: snapshot.tagName,
+      classList: snapshot.classList,
+      selector: snapshot.selector,
+      domPath: snapshot.domPath,
+      ...(snapshot.id.length > 0 ? { id: snapshot.id } : {}),
+      ...(snapshot.fallbackSelectors !== undefined && snapshot.fallbackSelectors.length > 0
+        ? { fallbackSelectors: snapshot.fallbackSelectors }
+        : {}),
+    };
+  }
+
+  private emitStructuralEdit(
+    element: Element,
+    kind: StructuralEditKind,
+    summary: string,
+    details: Record<string, string>,
+  ): void {
+    this.callbacks.onStructuralEdit?.({
+      id: createEditId(),
+      kind,
+      timestamp: new Date().toISOString(),
+      target: this.buildEditTarget(element),
+      summary,
+      details,
+    });
+  }
+
   public getSelectedElementNode(): Element | null {
     return this.selectedElementNode;
   }
@@ -352,7 +461,13 @@ export class ElementPickerController {
       const before = this.captureMovePositionSnapshot(element);
       const current = this.moveOffsets.get(element) ?? { x: 0, y: 0 };
       this.applyMoveOffset(element, { x: current.x + deltaX, y: current.y + deltaY });
-      this.recordMoveHistory(element, before, this.captureMovePositionSnapshot(element));
+      this.recordMoveHistory(
+        element,
+        before,
+        this.captureMovePositionSnapshot(element),
+        `Aligned ${alignment}`,
+        { alignment, deltaX: String(Math.round(deltaX)), deltaY: String(Math.round(deltaY)) },
+      );
     }
 
     this.syncMultiSelection();
@@ -367,7 +482,13 @@ export class ElementPickerController {
     const before = this.captureMovePositionSnapshot(element);
 
     if (this.applyDomMove(element, direction)) {
-      this.recordMoveHistory(element, before, this.captureMovePositionSnapshot(element));
+      this.recordMoveHistory(
+        element,
+        before,
+        this.captureMovePositionSnapshot(element),
+        `Moved ${direction} in the DOM`,
+        { direction },
+      );
       this.refreshMovePositionSnapshot();
     }
   }
@@ -627,6 +748,8 @@ export class ElementPickerController {
     element: Element,
     before: MovePositionSnapshot,
     after: MovePositionSnapshot,
+    summary = "Moved element",
+    details: Record<string, string> = {},
   ): void {
     if (this.areMovePositionSnapshotsEqual(before, after)) {
       return;
@@ -635,7 +758,7 @@ export class ElementPickerController {
     this.moveUndoHistory.push({ after, before, element });
     this.trimMoveHistory(this.moveUndoHistory);
     this.moveRedoHistory.length = 0;
-    this.callbacks.onActionRecorded?.("move");
+    this.emitStructuralEdit(element, "move", summary, details);
   }
 
   private refreshMovePositionSnapshot(): void {
@@ -692,7 +815,22 @@ export class ElementPickerController {
       this.selectedElementNode,
       before,
       this.captureMovePositionSnapshot(this.selectedElementNode),
+      `Nudged by (${deltaX}, ${deltaY})px`,
+      { deltaX: String(deltaX), deltaY: String(deltaY) },
     );
+    this.refreshSelectedSnapshot();
+  }
+
+  private recordImageEdit(
+    element: Element,
+    src: string,
+    apply: () => void,
+    revert: () => void,
+  ): void {
+    apply();
+    this.imageUndoStack.push({ element, apply, revert });
+    this.imageRedoStack.length = 0;
+    this.emitStructuralEdit(element, "image", "Replaced image source", { src: src.slice(0, 300) });
     this.refreshSelectedSnapshot();
   }
 
@@ -712,24 +850,78 @@ export class ElementPickerController {
           : null;
 
     if (nestedImage !== null) {
-      nestedImage.src = nextSource;
-      nestedImage.removeAttribute("srcset");
-      this.refreshSelectedSnapshot();
+      const beforeSrc = nestedImage.getAttribute("src");
+      const beforeSrcset = nestedImage.getAttribute("srcset");
+      this.recordImageEdit(
+        nestedImage,
+        nextSource,
+        () => {
+          nestedImage.setAttribute("src", nextSource);
+          nestedImage.removeAttribute("srcset");
+        },
+        () => {
+          if (beforeSrc === null) {
+            nestedImage.removeAttribute("src");
+          } else {
+            nestedImage.setAttribute("src", beforeSrc);
+          }
+
+          if (beforeSrcset === null) {
+            nestedImage.removeAttribute("srcset");
+          } else {
+            nestedImage.setAttribute("srcset", beforeSrcset);
+          }
+        },
+      );
       return;
     }
 
     if (typeof SVGImageElement !== "undefined" && element instanceof SVGImageElement) {
-      element.setAttribute("href", nextSource);
-      element.setAttributeNS("http://www.w3.org/1999/xlink", "href", nextSource);
-      this.refreshSelectedSnapshot();
+      const xlink = "http://www.w3.org/1999/xlink";
+      const beforeHref = element.getAttribute("href");
+      const beforeXlink = element.getAttributeNS(xlink, "href");
+      this.recordImageEdit(
+        element,
+        nextSource,
+        () => {
+          element.setAttribute("href", nextSource);
+          element.setAttributeNS(xlink, "href", nextSource);
+        },
+        () => {
+          if (beforeHref === null) {
+            element.removeAttribute("href");
+          } else {
+            element.setAttribute("href", beforeHref);
+          }
+
+          if (beforeXlink === null) {
+            element.removeAttributeNS(xlink, "href");
+          } else {
+            element.setAttributeNS(xlink, "href", beforeXlink);
+          }
+        },
+      );
       return;
     }
 
     if (element instanceof HTMLElement) {
-      element.style.backgroundImage = `url(${JSON.stringify(nextSource)})`;
-      element.style.backgroundPosition = element.style.backgroundPosition || "center";
-      element.style.backgroundSize = element.style.backgroundSize || "cover";
-      this.refreshSelectedSnapshot();
+      const beforeImage = element.style.backgroundImage;
+      const beforePosition = element.style.backgroundPosition;
+      const beforeSize = element.style.backgroundSize;
+      this.recordImageEdit(
+        element,
+        nextSource,
+        () => {
+          element.style.backgroundImage = `url(${JSON.stringify(nextSource)})`;
+          element.style.backgroundPosition = element.style.backgroundPosition || "center";
+          element.style.backgroundSize = element.style.backgroundSize || "cover";
+        },
+        () => {
+          element.style.backgroundImage = beforeImage;
+          element.style.backgroundPosition = beforePosition;
+          element.style.backgroundSize = beforeSize;
+        },
+      );
     }
   }
   public searchElements(query: string): ElementSearchResult[] {
@@ -819,6 +1011,7 @@ export class ElementPickerController {
 
   private beginTextEdit(element: HTMLElement): void {
     this.isEditingText = true;
+    const beforeText = element.textContent ?? "";
     element.contentEditable = "true";
     element.focus();
 
@@ -832,6 +1025,18 @@ export class ElementPickerController {
       this.isEditingText = false;
       element.contentEditable = "false";
       element.removeEventListener("blur", onBlur);
+
+      const afterText = element.textContent ?? "";
+
+      if (afterText !== beforeText) {
+        this.textUndoStack.push({ element, before: beforeText, after: afterText });
+        this.textRedoStack.length = 0;
+        this.emitStructuralEdit(element, "text", "Edited text content", {
+          before: beforeText.slice(0, 200),
+          after: afterText.slice(0, 200),
+        });
+      }
+
       this.refreshSelectedSnapshot();
     };
 
@@ -960,10 +1165,13 @@ export class ElementPickerController {
 
     if (this.movedDuringDrag) {
       if (this.moveDragStartState !== null) {
+        const offset = this.moveOffsets.get(this.movingElement) ?? { x: 0, y: 0 };
         this.recordMoveHistory(
           this.movingElement,
           this.moveDragStartState,
           this.captureMovePositionSnapshot(this.movingElement),
+          "Dragged to a new position",
+          { x: String(Math.round(offset.x)), y: String(Math.round(offset.y)) },
         );
       }
 
@@ -1206,9 +1414,10 @@ export class ElementPickerController {
         visibility: el.style.visibility,
       });
       this.deletedRedoElements.length = 0;
+      // Record the edit while the element is still in place for an accurate target.
+      this.emitStructuralEdit(el, "delete", "Hid element", {});
       el.style.display = "none";
       el.style.visibility = "hidden";
-      this.callbacks.onActionRecorded?.("delete");
 
       this.clearSelection();
     }
