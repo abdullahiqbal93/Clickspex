@@ -31,11 +31,7 @@ type ApplyResponse = {
 
 type ConnectionState = "idle" | "checking" | "connected" | "disconnected";
 
-const fetchJson = async <T,>(
-  url: string,
-  options: RequestInit,
-  timeoutMs: number,
-): Promise<T> => {
+const fetchJson = async <T,>(url: string, options: RequestInit, timeoutMs: number): Promise<T> => {
   const controller = new AbortController();
   const timer = window.setTimeout(() => controller.abort(), timeoutMs);
 

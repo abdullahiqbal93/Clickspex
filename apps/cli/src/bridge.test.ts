@@ -47,7 +47,12 @@ const session = (): UIChangeSession => ({
       before: {
         styles: {},
         rect: { x: 0, y: 0, width: 0, height: 0, top: 0, right: 0, bottom: 0, left: 0 },
-        boxModel: { margin: side, border: side, padding: side, content: { width: "0px", height: "0px" } },
+        boxModel: {
+          margin: side,
+          border: side,
+          padding: side,
+          content: { width: "0px", height: "0px" },
+        },
       },
       after: { styles: {} },
       changes: [

@@ -839,9 +839,7 @@ export const isExtensionMessage = (value: unknown): value is ExtensionMessage =>
 
   if (messageType === "APPLY_RAW_CSS") {
     return (
-      isRecord(value.payload) &&
-      isString(value.payload.selector) &&
-      isString(value.payload.css)
+      isRecord(value.payload) && isString(value.payload.selector) && isString(value.payload.css)
     );
   }
 

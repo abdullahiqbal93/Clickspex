@@ -1114,10 +1114,7 @@ const RAW_CSS_SEED_PROPERTIES: SupportedStyleProperty[] = [
  * computed styles (minus default/empty noise), with any already-applied edits
  * layered on top so what the user sees matches the live page.
  */
-const buildEditableCssForElement = (
-  snapshot: ElementSnapshot,
-  changes: StyleChange[],
-): string => {
+const buildEditableCssForElement = (snapshot: ElementSnapshot, changes: StyleChange[]): string => {
   const declarations = new Map<string, string>();
 
   for (const property of RAW_CSS_SEED_PROPERTIES) {

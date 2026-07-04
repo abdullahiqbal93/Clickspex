@@ -74,7 +74,9 @@ describe("createUIChangeSession", () => {
     const session = createUIChangeSession({
       pageUrl: "https://example.com",
       viewport: { width: 0, height: 0, devicePixelRatio: 1 },
-      elements: [{ target: snapshot("#a"), changes: [change("#a", "color", "#000000", "#ffffff")] }],
+      elements: [
+        { target: snapshot("#a"), changes: [change("#a", "color", "#000000", "#ffffff")] },
+      ],
       structuralEdits: [edit],
     });
 

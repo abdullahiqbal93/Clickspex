@@ -119,10 +119,7 @@ export const sendMessageToActiveTab = async (message: ExtensionMessage): Promise
 };
 
 export type BackgroundCommand =
-  | "capture-tab"
-  | "detect-tech"
-  | "lookup-source"
-  | "inject-content-script";
+  "capture-tab" | "detect-tech" | "lookup-source" | "inject-content-script";
 
 type BackgroundCommandResponse = { ok: true; data: unknown } | { ok: false; error: string };
 
