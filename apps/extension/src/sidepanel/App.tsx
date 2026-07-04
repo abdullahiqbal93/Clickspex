@@ -49,6 +49,8 @@ declare global {
   }
 }
 
+type TabUpdatedListener = Parameters<typeof chrome.tabs.onUpdated.addListener>[0];
+
 const tabs = [
   { id: "inspect", label: "Inspect", icon: Crosshair },
   { id: "styles", label: "Styles", icon: Paintbrush },
@@ -198,11 +200,7 @@ export const App = () => {
       sendMessageToActiveTab({ type: "SCAN_PAGE" }).catch(() => setPageScanLoading(false));
     };
 
-    const handleUpdated = (
-      _tabId: number,
-      changeInfo: chrome.tabs.TabChangeInfo,
-      tab: chrome.tabs.Tab,
-    ) => {
+    const handleUpdated: TabUpdatedListener = (_tabId, changeInfo, tab) => {
       if (tab.active !== true) {
         return;
       }
