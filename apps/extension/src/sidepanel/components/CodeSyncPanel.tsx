@@ -180,7 +180,7 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
         </button>
       </div>
 
-      <div className="mt-2.5 flex items-center gap-2 rounded-lg bg-slate-50 px-2.5 py-2 text-xs">
+      <div className="mt-2.5 flex items-center gap-2 rounded-xl bg-slate-50 px-2.5 py-2 text-xs">
         <span
           className={`inline-block h-2 w-2 shrink-0 rounded-full ${connection === "connected"
             ? "bg-emerald-500 shadow-[0_0_0_3px_rgb(16_185_129_/_0.15)]"
@@ -250,7 +250,7 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
       ) : null}
 
       {error !== null ? (
-        <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-2xs text-amber-800">
+        <div className="mt-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-2.5 text-2xs text-amber-800">
           <AlertTriangle aria-hidden="true" className="mt-0.5 shrink-0" size={13} />
           <span>{error}</span>
         </div>
@@ -262,7 +262,7 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
             {applicablePreviews.length} of {preview.elements.length} element(s) map to a stylesheet.
           </p>
           {preview.elements.map((element) => (
-            <div className="rounded-lg bg-slate-50 p-2.5 text-xs" key={element.selector}>
+            <div className="rounded-xl bg-slate-50 p-2.5 text-xs" key={element.selector}>
               <div className="flex items-center justify-between gap-2">
                 <span className="truncate font-mono text-[10px] text-slate-600">
                   {element.selector}
@@ -272,7 +272,7 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
                 </span>
               </div>
               {element.diff !== null ? (
-                <pre className="mt-1.5 max-h-32 overflow-auto rounded-md bg-[#161726] p-2 font-mono text-[10px] leading-4 text-slate-100">
+                <pre className="mt-1.5 max-h-32 overflow-auto rounded-xl bg-[#211d3d] p-2 font-mono text-[10px] leading-4 text-slate-100">
                   <code>{element.diff}</code>
                 </pre>
               ) : null}
@@ -283,7 +283,7 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
 
       {applyResult !== null ? (
         <div className="mt-3 space-y-2">
-          <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-2.5 text-xs text-emerald-800">
+          <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-2.5 text-xs text-emerald-800">
             <Check aria-hidden="true" size={13} />
             <span>
               Applied {applyResult.applied.length} change(s) to your source.

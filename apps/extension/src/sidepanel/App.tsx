@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
-import { connectSidePanelPort, sendMessageToActiveTab } from "../chrome/messaging";
+import { createReconnectingSidePanelPort, sendMessageToActiveTab } from "../chrome/messaging";
 
 import { AccessibilityPanel } from "./components/AccessibilityPanel";
 import { AssetsPanel } from "./components/AssetsPanel";
@@ -51,18 +51,36 @@ declare global {
 
 type TabUpdatedListener = Parameters<typeof chrome.tabs.onUpdated.addListener>[0];
 
-const tabs = [
-  { id: "inspect", label: "Inspect", icon: Crosshair },
-  { id: "styles", label: "Styles", icon: Paintbrush },
-  { id: "box", label: "Box", icon: Box },
-  { id: "measure", label: "Measure", icon: Ruler },
-  { id: "motion", label: "Motion", icon: PlaySquare },
-  { id: "palette", label: "Palette", icon: Palette },
-  { id: "typography", label: "Type", icon: Type },
-  { id: "assets", label: "Assets", icon: Image },
-  { id: "accessibility", label: "A11y", icon: Accessibility },
-  { id: "export", label: "Export", icon: Code2 },
-] as const satisfies ReadonlyArray<{ id: PanelTab; label: string; icon: typeof Crosshair }>;
+const tabMeta = {
+  inspect: { label: "Inspect", icon: Crosshair },
+  styles: { label: "Styles", icon: Paintbrush },
+  box: { label: "Box", icon: Box },
+  typography: { label: "Type", icon: Type },
+  motion: { label: "Motion", icon: PlaySquare },
+  measure: { label: "Measure", icon: Ruler },
+  palette: { label: "Palette", icon: Palette },
+  assets: { label: "Assets", icon: Image },
+  accessibility: { label: "A11y", icon: Accessibility },
+  export: { label: "Export", icon: Code2 },
+} as const satisfies Record<PanelTab, { label: string; icon: typeof Crosshair }>;
+
+type NavGroup = {
+  id: string;
+  label: string;
+  icon: typeof Crosshair;
+  tabs: readonly [PanelTab, ...PanelTab[]];
+};
+
+const navGroups: readonly NavGroup[] = [
+  { id: "inspect", label: "Inspect", icon: Crosshair, tabs: ["inspect"] },
+  { id: "style", label: "Style", icon: Paintbrush, tabs: ["styles", "box", "typography", "motion"] },
+  { id: "measure", label: "Measure", icon: Ruler, tabs: ["measure"] },
+  { id: "assets", label: "Assets", icon: Palette, tabs: ["palette", "assets"] },
+  { id: "review", label: "Review", icon: Accessibility, tabs: ["accessibility", "export"] },
+];
+
+const groupForTab = (tab: PanelTab) =>
+  navGroups.find((group) => group.tabs.includes(tab)) ?? navGroups[0]!;
 
 export const App = () => {
   const activeTab = usePanelStore((state) => state.activeTab);
@@ -92,8 +110,6 @@ export const App = () => {
   const resetForNavigation = usePanelStore((state) => state.resetForNavigation);
 
   useEffect(() => {
-    const port = connectSidePanelPort();
-
     const handleMessage = (rawMessage: unknown) => {
       if (!isExtensionMessage(rawMessage)) {
         return;
@@ -105,8 +121,6 @@ export const App = () => {
         setPickerActive(true);
         setHoveredSelector(null);
 
-        // Jump to Inspect only for the first selection; keep the user's tab
-        // (Styles, Box, A11y, ...) when they re-pick another element.
         if (!hadSelection) {
           setActiveTab("inspect");
         }
@@ -165,15 +179,14 @@ export const App = () => {
       }
     };
 
-    port.onMessage.addListener(handleMessage);
+    const connection = createReconnectingSidePanelPort(handleMessage);
 
     setPageScanLoading(true);
     sendMessageToActiveTab({ type: "SCAN_PAGE" }).catch(() => {
       setPageScanLoading(false);
     });
     return () => {
-      port.onMessage.removeListener(handleMessage);
-      port.disconnect();
+      connection.disconnect();
     };
   }, [
     applySessionSync,
@@ -192,8 +205,7 @@ export const App = () => {
     setSelectedElement,
   ]);
 
-  // Reload the panel with the page: when the inspected tab reloads or the user
-  // switches tabs, drop stale selection/edits and rescan the fresh page.
+
   useEffect(() => {
     const rescanFreshPage = () => {
       setPageScanLoading(true);
@@ -306,7 +318,6 @@ export const App = () => {
         ].slice(0, 24);
         await chrome.storage.local.set({ ubColorHistory: nextHistory });
       } catch {
-        // History is best-effort only.
       }
 
       setEyedropperFeedback(result.sRGBHex);
@@ -354,19 +365,23 @@ export const App = () => {
   }, [redoAll, togglePicker, undoAll]);
 
   const currentSelector = selectedElement?.selector ?? hoveredSelector;
+  const activeGroup = groupForTab(activeTab);
 
   return (
-    <main className="min-h-screen bg-canvas text-ink">
-      <header className="sticky top-0 z-40 border-b border-line bg-panel/95 backdrop-blur">
-        <div className="flex items-center justify-between gap-2 px-3 pt-2.5">
-          <div className="flex min-w-0 items-center gap-2">
+    <main className="min-h-screen text-ink">
+      <header className="sticky top-0 z-40 border-b border-line/80 bg-panel/85 backdrop-blur-xl">
+        <div className="flex items-center justify-between gap-2 px-3.5 pt-3">
+          <div className="flex min-w-0 items-center gap-2.5">
             <span
               aria-hidden="true"
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-accent-glow"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 via-indigo-500 to-fuchsia-500 text-white shadow-accent-glow"
             >
-              <SquareMousePointer size={15} />
+              <SquareMousePointer size={17} />
             </span>
-            <h1 className="truncate text-sm font-semibold tracking-tight">UI Buddy</h1>
+            <div className="min-w-0 leading-tight">
+              <h1 className="truncate text-sm font-bold tracking-tight">UI Buddy</h1>
+              <p className="truncate text-[10px] font-medium text-muted">Inspect &amp; refine UI</p>
+            </div>
           </div>
 
           <div className="relative flex shrink-0 items-center gap-0.5">
@@ -389,7 +404,7 @@ export const App = () => {
               <Redo2 aria-hidden="true" size={15} />
             </button>
 
-            <span aria-hidden="true" className="mx-1 h-4 w-px bg-line" />
+            <span aria-hidden="true" className="mx-1 h-4 w-px bg-line-strong" />
 
             {["palette", "typography", "assets"].includes(activeTab) && (
               <button
@@ -404,7 +419,7 @@ export const App = () => {
             <button
               className={
                 eyedropperFeedback
-                  ? "inline-flex h-8 items-center gap-1.5 rounded-lg bg-emerald-50 px-2 text-emerald-700 ring-1 ring-inset ring-emerald-200"
+                  ? "inline-flex h-9 items-center gap-1.5 rounded-2xl bg-emerald-50 px-2.5 text-emerald-700 ring-1 ring-inset ring-emerald-200"
                   : "ub-icon-btn"
               }
               onClick={() => void handleEyedropper()}
@@ -453,9 +468,9 @@ export const App = () => {
             ) : null}
 
             <button
-              className={`ml-1.5 inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition-colors ${pickerActive
-                ? "bg-rose-500 text-white shadow-sm hover:bg-rose-600"
-                : "bg-accent text-white shadow-accent-glow hover:bg-accent-hover"
+              className={`ml-1 inline-flex h-9 items-center gap-1.5 rounded-2xl px-3.5 text-xs font-semibold transition-all active:scale-[0.97] ${pickerActive
+                ? "bg-rose-500 text-white shadow-soft hover:bg-rose-600"
+                : "bg-gradient-to-b from-accent to-accent-hover text-white shadow-accent-glow hover:brightness-105"
                 }`}
               onClick={() => void togglePicker()}
               type="button"
@@ -466,45 +481,77 @@ export const App = () => {
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 px-3 pb-2 pt-1.5">
-          <Crosshair
-            aria-hidden="true"
-            className={currentSelector ? "shrink-0 text-accent" : "shrink-0 text-slate-300"}
-            size={12}
-          />
-          <p
-            className={`min-w-0 truncate font-mono text-2xs ${currentSelector ? "text-slate-600" : "text-slate-400"
+        <div className="px-3.5 pb-2.5 pt-2">
+          <div
+            className={`flex items-center gap-2 rounded-2xl border px-3 py-1.5 transition-colors ${currentSelector
+              ? "border-accent-ring/60 bg-accent-softer"
+              : "border-line bg-panel-soft"
               }`}
-            title={currentSelector ?? "No element selected"}
           >
-            {currentSelector ?? "No element selected - press Pick to inspect"}
-          </p>
+            <Crosshair
+              aria-hidden="true"
+              className={currentSelector ? "shrink-0 text-accent" : "shrink-0 text-slate-300"}
+              size={13}
+            />
+            <p
+              className={`min-w-0 truncate font-mono text-2xs ${currentSelector ? "text-accent-hover" : "text-slate-400"
+                }`}
+              title={currentSelector ?? "No element selected"}
+            >
+              {currentSelector ?? "No element selected — press Pick to inspect"}
+            </p>
+          </div>
         </div>
 
-        <nav
-          className="grid grid-cols-5 gap-1 border-t border-line bg-canvas/60 p-1.5"
-          aria-label="Panel sections"
-        >
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            const selected = activeTab === tab.id;
+        <nav className="px-3.5 pb-3" aria-label="Panel sections">
+          <div className="grid grid-cols-5 gap-1 rounded-2xl border border-line bg-panel-soft p-1 shadow-soft">
+            {navGroups.map((group) => {
+              const Icon = group.icon;
+              const selected = activeGroup.id === group.id;
 
-            return (
-              <button
-                aria-current={selected ? "page" : undefined}
-                className={`flex flex-col items-center justify-center gap-0.5 rounded-lg py-1.5 text-[10px] font-medium transition-colors ${selected
-                  ? "bg-accent-soft text-accent shadow-sm ring-1 ring-inset ring-accent-ring"
-                  : "text-muted hover:bg-slate-100 hover:text-ink"
-                  }`}
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                type="button"
-              >
-                <Icon aria-hidden="true" size={15} />
-                <span>{tab.label}</span>
-              </button>
-            );
-          })}
+              return (
+                <button
+                  aria-current={selected ? "page" : undefined}
+                  className={`flex flex-col items-center justify-center gap-1 rounded-xl py-2 text-[10px] font-semibold transition-all ${selected
+                    ? "bg-gradient-to-b from-accent to-accent-hover text-white shadow-accent-glow"
+                    : "text-muted hover:bg-accent-softer hover:text-accent"
+                    }`}
+                  key={group.id}
+                  onClick={() => setActiveTab(group.tabs[0])}
+                  type="button"
+                >
+                  <Icon aria-hidden="true" size={16} />
+                  <span>{group.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {activeGroup.tabs.length > 1 ? (
+            <div className="mt-1.5 flex flex-wrap gap-1.5 animate-fade-in">
+              {activeGroup.tabs.map((tabId) => {
+                const meta = tabMeta[tabId];
+                const Icon = meta.icon;
+                const selected = activeTab === tabId;
+
+                return (
+                  <button
+                    aria-current={selected ? "page" : undefined}
+                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold transition-all active:scale-95 ${selected
+                      ? "bg-accent-soft text-accent ring-1 ring-inset ring-accent-ring"
+                      : "text-muted hover:bg-panel-soft hover:text-ink"
+                      }`}
+                    key={tabId}
+                    onClick={() => setActiveTab(tabId)}
+                    type="button"
+                  >
+                    <Icon aria-hidden="true" size={13} />
+                    {meta.label}
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
         </nav>
       </header>
 

@@ -72,7 +72,7 @@ const PreviewRow = ({
 const EmptyInspector = () => (
   <div className="ub-card p-4">
     <div className="flex items-center gap-2.5">
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent">
         <MousePointer2 aria-hidden="true" size={16} />
       </span>
       <div>
@@ -413,7 +413,7 @@ export const InspectorPanel = ({ selectedElement }: InspectorPanelProps) => {
         </button>
       </div>
       {searchResults.length > 0 ? (
-        <div className="mt-3 max-h-56 overflow-auto rounded-lg border border-line">
+        <div className="mt-3 max-h-56 overflow-auto rounded-xl border border-line">
           {searchResults.map((result) => (
             <button
               className="block w-full border-b border-line/70 px-3 py-2 text-left transition-colors last:border-b-0 hover:bg-accent-softer"
@@ -502,7 +502,7 @@ export const InspectorPanel = ({ selectedElement }: InspectorPanelProps) => {
           </span>
         </div>
 
-        <div className="mt-3 overflow-hidden rounded-lg border border-line px-3">
+        <div className="mt-3 overflow-hidden rounded-xl border border-line px-3">
           <PreviewRow icon={Hash} label="Selector" value={selectedElement.selector} />
           <PreviewRow icon={Rows3} label="DOM path">
             <div className="flex flex-wrap items-center gap-1">
@@ -586,7 +586,7 @@ export const InspectorPanel = ({ selectedElement }: InspectorPanelProps) => {
         <div className="flex items-center justify-between gap-2">
           <h3 className="text-sm font-semibold tracking-tight">Code</h3>
           {copyFeedback !== null ? (
-            <span className="rounded-md bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-200">
+            <span className="rounded-xl bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-200">
               {copyFeedback} copied
             </span>
           ) : null}
@@ -663,7 +663,7 @@ ${elementCssResult.css}
                 </>
               ) : null}
             </div>
-            <pre className="max-h-40 overflow-auto rounded-lg bg-[#161726] p-2.5 font-mono text-[10px] leading-4 text-slate-100">
+            <pre className="max-h-40 overflow-auto rounded-xl bg-[#211d3d] p-2.5 font-mono text-[10px] leading-4 text-slate-100">
               <code>{elementCssResult.css}</code>
             </pre>
           </div>
@@ -676,7 +676,7 @@ ${elementCssResult.css}
           <button
             className={
               moveMode
-                ? "inline-flex items-center justify-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-white shadow-accent-glow transition-colors hover:bg-accent-hover"
+                ? "inline-flex items-center justify-center gap-1.5 rounded-xl bg-accent px-3 py-1.5 text-xs font-semibold text-white shadow-accent-glow transition-colors hover:bg-accent-hover"
                 : "ub-btn"
             }
             onClick={() => void toggleMoveMode()}
@@ -727,7 +727,7 @@ ${elementCssResult.css}
           </button>
         </div>
         {multiSelection.count > 1 ? (
-          <div className="mt-3 rounded-lg border border-violet-200 bg-violet-50 p-3">
+          <div className="mt-3 rounded-xl border border-violet-200 bg-violet-50 p-3">
             <p className="text-xs font-semibold text-violet-900">
               {multiSelection.count} elements selected
             </p>
@@ -736,7 +736,7 @@ ${elementCssResult.css}
             </p>
             <div className="mt-2 grid grid-cols-6 gap-1.5">
               <button
-                className="inline-flex h-8 items-center justify-center rounded-lg border border-violet-200 bg-white text-violet-700 transition-colors hover:bg-violet-50"
+                className="inline-flex h-8 items-center justify-center rounded-xl border border-violet-200 bg-panel text-violet-700 transition-colors hover:bg-violet-50"
                 onClick={() => void alignSelected("left")}
                 title="Align left edges"
                 type="button"
@@ -744,7 +744,7 @@ ${elementCssResult.css}
                 <AlignStartVertical aria-hidden="true" size={14} />
               </button>
               <button
-                className="inline-flex h-8 items-center justify-center rounded-lg border border-violet-200 bg-white text-violet-700 transition-colors hover:bg-violet-50"
+                className="inline-flex h-8 items-center justify-center rounded-xl border border-violet-200 bg-panel text-violet-700 transition-colors hover:bg-violet-50"
                 onClick={() => void alignSelected("center-x")}
                 title="Align horizontal centers"
                 type="button"
@@ -752,7 +752,7 @@ ${elementCssResult.css}
                 <AlignCenterVertical aria-hidden="true" size={14} />
               </button>
               <button
-                className="inline-flex h-8 items-center justify-center rounded-lg border border-violet-200 bg-white text-violet-700 transition-colors hover:bg-violet-50"
+                className="inline-flex h-8 items-center justify-center rounded-xl border border-violet-200 bg-panel text-violet-700 transition-colors hover:bg-violet-50"
                 onClick={() => void alignSelected("right")}
                 title="Align right edges"
                 type="button"
@@ -760,7 +760,7 @@ ${elementCssResult.css}
                 <AlignEndVertical aria-hidden="true" size={14} />
               </button>
               <button
-                className="inline-flex h-8 items-center justify-center rounded-lg border border-violet-200 bg-white text-violet-700 transition-colors hover:bg-violet-50"
+                className="inline-flex h-8 items-center justify-center rounded-xl border border-violet-200 bg-panel text-violet-700 transition-colors hover:bg-violet-50"
                 onClick={() => void alignSelected("top")}
                 title="Align top edges"
                 type="button"
@@ -768,7 +768,7 @@ ${elementCssResult.css}
                 <AlignStartHorizontal aria-hidden="true" size={14} />
               </button>
               <button
-                className="inline-flex h-8 items-center justify-center rounded-lg border border-violet-200 bg-white text-violet-700 transition-colors hover:bg-violet-50"
+                className="inline-flex h-8 items-center justify-center rounded-xl border border-violet-200 bg-panel text-violet-700 transition-colors hover:bg-violet-50"
                 onClick={() => void alignSelected("center-y")}
                 title="Align vertical centers"
                 type="button"
@@ -776,7 +776,7 @@ ${elementCssResult.css}
                 <AlignCenterHorizontal aria-hidden="true" size={14} />
               </button>
               <button
-                className="inline-flex h-8 items-center justify-center rounded-lg border border-violet-200 bg-white text-violet-700 transition-colors hover:bg-violet-50"
+                className="inline-flex h-8 items-center justify-center rounded-xl border border-violet-200 bg-panel text-violet-700 transition-colors hover:bg-violet-50"
                 onClick={() => void alignSelected("bottom")}
                 title="Align bottom edges"
                 type="button"
@@ -879,7 +879,7 @@ ${elementCssResult.css}
 
       <div className="ub-card p-4">
         <h3 className="text-sm font-semibold tracking-tight">Attributes</h3>
-        <div className="mt-2.5 max-h-48 overflow-auto rounded-lg border border-line">
+        <div className="mt-2.5 max-h-48 overflow-auto rounded-xl border border-line">
           {attributes.length > 0 ? (
             attributes.map(([name, value]) => (
               <div

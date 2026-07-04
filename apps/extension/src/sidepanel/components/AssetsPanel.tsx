@@ -41,7 +41,7 @@ export const AssetsPanel = () => {
     return (
       <div className="ub-card p-4">
         <div className="flex items-center gap-2.5">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent">
             <ImageIcon aria-hidden="true" size={16} />
           </span>
           <div>
@@ -80,7 +80,7 @@ export const AssetsPanel = () => {
     <div className="space-y-3">
       <section className="ub-card p-4">
         <div className="flex items-center gap-2.5">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent">
             <ImageIcon aria-hidden="true" size={16} />
           </span>
           <div>
@@ -112,7 +112,7 @@ export const AssetsPanel = () => {
                         `asset-${i}.${asset.type === "svg" ? "svg" : "png"}`,
                       )
                     }
-                    className="rounded-full bg-white p-2 text-ink shadow-pop transition-transform hover:scale-110"
+                    className="rounded-full bg-panel p-2 text-ink shadow-pop transition-transform hover:scale-110"
                     title="Download"
                     type="button"
                   >

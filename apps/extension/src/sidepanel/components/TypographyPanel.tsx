@@ -10,7 +10,7 @@ export const TypographyPanel = () => {
     return (
       <div className="ub-card p-4">
         <div className="flex items-center gap-2.5">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent">
             <Type aria-hidden="true" size={16} />
           </span>
           <div>
@@ -26,7 +26,7 @@ export const TypographyPanel = () => {
     <div className="space-y-3">
       <section className="ub-card p-4">
         <div className="flex items-center gap-2.5">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent">
             <Type aria-hidden="true" size={16} />
           </span>
           <div>

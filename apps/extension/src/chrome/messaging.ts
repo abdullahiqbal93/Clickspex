@@ -59,6 +59,80 @@ export const sendRuntimeMessage = async (message: ExtensionMessage): Promise<voi
 export const connectSidePanelPort = (): chrome.runtime.Port =>
   chrome.runtime.connect({ name: SIDE_PANEL_PORT_NAME });
 
+export type SidePanelPortConnection = {
+  /** Tear down the connection and stop reconnecting. */
+  disconnect: () => void;
+};
+
+/**
+ * Maintain a live connection from the side panel to the service worker.
+ *
+ * Manifest V3 service workers are terminated after a short period of
+ * inactivity. When that happens the port that delivers page events
+ * (ELEMENT_SELECTED, PAGE_SCAN_RESULT, ...) to the panel is torn down, and the
+ * next service-worker instance starts with an empty port registry. The result
+ * is that picking an element silently stops updating the panel until it is
+ * reopened. We defend against this by transparently reconnecting whenever the
+ * port drops, so the panel is always ready to receive the next page event.
+ */
+export const createReconnectingSidePanelPort = (
+  onMessage: (message: unknown) => void,
+): SidePanelPortConnection => {
+  let stopped = false;
+  let port: chrome.runtime.Port | null = null;
+  let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+
+  function connect(): void {
+    if (stopped) {
+      return;
+    }
+
+    try {
+      port = chrome.runtime.connect({ name: SIDE_PANEL_PORT_NAME });
+    } catch {
+      // Service worker not ready yet; retry shortly.
+      reconnectTimer = setTimeout(connect, 500);
+      return;
+    }
+
+    port.onMessage.addListener(onMessage);
+    port.onDisconnect.addListener(() => {
+      // Reading lastError acknowledges the expected disconnect and prevents
+      // Chrome from logging an unchecked runtime error.
+      void chrome.runtime.lastError;
+      port = null;
+
+      // Reconnect promptly so a fresh service worker re-registers this panel
+      // before the user's next pick.
+      if (!stopped) {
+        reconnectTimer = setTimeout(connect, 250);
+      }
+    });
+  }
+
+  connect();
+
+  return {
+    disconnect: () => {
+      stopped = true;
+
+      if (reconnectTimer !== undefined) {
+        clearTimeout(reconnectTimer);
+      }
+
+      if (port !== null) {
+        try {
+          port.disconnect();
+        } catch {
+          /* already disconnected */
+        }
+
+        port = null;
+      }
+    },
+  };
+};
+
 const isMissingContentScript = (error: unknown): boolean => {
   const text = error instanceof Error ? error.message : String(error);
   return text.includes("Receiving end does not exist");

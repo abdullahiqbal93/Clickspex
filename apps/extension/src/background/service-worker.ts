@@ -52,9 +52,16 @@ chrome.runtime.onConnect.addListener((port) => {
   port.onDisconnect.addListener(() => {
     sidePanelPorts.delete(port);
 
-    // Only react to the *last* side-panel context going away.
+    // The panel transparently reconnects whenever the service worker is
+    // recycled, so a disconnect does not necessarily mean the panel closed.
+    // Wait briefly and only stop the page picker if nothing reconnected in the
+    // meantime - otherwise a routine reconnect would cancel an in-progress pick.
     if (sidePanelPorts.size === 0) {
-      notifyPanelClosed();
+      setTimeout(() => {
+        if (sidePanelPorts.size === 0) {
+          notifyPanelClosed();
+        }
+      }, 800);
     }
   });
 });

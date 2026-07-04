@@ -98,13 +98,13 @@ const ExportBlock = ({ title, content, warnings = [], filename }: ExportBlockPro
         </div>
       </div>
       {warnings.length > 0 ? (
-        <ul className="mt-3 space-y-1 rounded-lg bg-amber-50 px-3 py-2 text-2xs text-amber-800">
+        <ul className="mt-3 space-y-1 rounded-xl bg-amber-50 px-3 py-2 text-2xs text-amber-800">
           {warnings.map((warning) => (
             <li key={warning}>{warning}</li>
           ))}
         </ul>
       ) : null}
-      <pre className="mt-3 max-h-64 overflow-auto rounded-lg bg-[#161726] p-3 font-mono text-2xs leading-5 text-slate-100 shadow-inner">
+      <pre className="mt-3 max-h-64 overflow-auto rounded-xl bg-[#211d3d] p-3 font-mono text-2xs leading-5 text-slate-100 shadow-inner">
         <code>{content || "No output"}</code>
       </pre>
     </section>
@@ -184,7 +184,7 @@ export const ExportPanel = () => {
     return (
       <div className="ub-card p-4">
         <div className="flex items-center gap-2.5">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent">
             <Code2 aria-hidden="true" size={16} />
           </span>
           <div>
@@ -228,7 +228,7 @@ export const ExportPanel = () => {
     <div className="space-y-3">
       <section className="ub-card p-4">
         <div className="flex items-center gap-2.5">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent">
             <Layers aria-hidden="true" size={16} />
           </span>
           <div className="min-w-0">
@@ -239,13 +239,13 @@ export const ExportPanel = () => {
           </div>
         </div>
         <div className="mt-3.5 grid grid-cols-3 gap-2 text-center">
-          <div className="rounded-lg bg-accent-softer p-2.5 ring-1 ring-inset ring-accent-soft">
+          <div className="rounded-xl bg-accent-softer p-2.5 ring-1 ring-inset ring-accent-soft">
             <p className="text-lg font-semibold tabular-nums text-accent">
               {session.stats.editedElements}
             </p>
             <p className="text-[10px] font-medium uppercase tracking-wide text-muted">Elements</p>
           </div>
-          <div className="rounded-lg bg-accent-softer p-2.5 ring-1 ring-inset ring-accent-soft">
+          <div className="rounded-xl bg-accent-softer p-2.5 ring-1 ring-inset ring-accent-soft">
             <p className="text-lg font-semibold tabular-nums text-accent">
               {session.stats.styleChanges}
             </p>
@@ -253,7 +253,7 @@ export const ExportPanel = () => {
               Style edits
             </p>
           </div>
-          <div className="rounded-lg bg-accent-softer p-2.5 ring-1 ring-inset ring-accent-soft">
+          <div className="rounded-xl bg-accent-softer p-2.5 ring-1 ring-inset ring-accent-soft">
             <p className="text-lg font-semibold tabular-nums text-accent">
               {session.stats.structuralEdits}
             </p>
@@ -285,9 +285,9 @@ export const ExportPanel = () => {
           </h3>
           <ul className="mt-3 space-y-1.5">
             {session.structuralEdits.map((edit) => (
-              <li className="rounded-lg bg-slate-50 px-3 py-2 text-xs" key={edit.id}>
+              <li className="rounded-xl bg-slate-50 px-3 py-2 text-xs" key={edit.id}>
                 <div className="flex items-center gap-2">
-                  <span className="rounded-md bg-accent-soft px-1.5 py-0.5 text-[10px] font-semibold uppercase text-accent">
+                  <span className="rounded-xl bg-accent-soft px-1.5 py-0.5 text-[10px] font-semibold uppercase text-accent">
                     {edit.kind}
                   </span>
                   <span className="text-ink">{edit.summary}</span>

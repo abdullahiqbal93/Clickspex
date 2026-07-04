@@ -114,7 +114,7 @@ export const AccessibilityPanel = () => {
       </div>
       {sortedIssues !== null ? (
         sortedIssues.length === 0 ? (
-          <div className="mt-3 flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs font-medium text-emerald-800">
+          <div className="mt-3 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-medium text-emerald-800">
             <CheckCircle2 aria-hidden="true" size={15} />
             No issues found by the lightweight sweep
           </div>
@@ -122,7 +122,7 @@ export const AccessibilityPanel = () => {
           <div className="mt-3 max-h-80 space-y-2 overflow-auto pr-0.5">
             {sortedIssues.map((issue) => (
               <button
-                className={`block w-full rounded-lg border p-3 text-left transition hover:brightness-[0.97] ${SEVERITY_STYLES[issue.severity]}`}
+                className={`block w-full rounded-xl border p-3 text-left transition hover:brightness-[0.97] ${SEVERITY_STYLES[issue.severity]}`}
                 key={issue.id}
                 onClick={() => void selectIssue(issue.selector)}
                 title="Click to select this element on the page"
@@ -166,7 +166,7 @@ export const AccessibilityPanel = () => {
       <div className="space-y-3">
         <div className="ub-card p-4">
           <div className="flex items-center gap-2.5">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent">
               <ShieldCheck aria-hidden="true" size={16} />
             </span>
             <div>
@@ -194,7 +194,7 @@ export const AccessibilityPanel = () => {
       <section className="ub-card p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent">
               <ShieldCheck aria-hidden="true" size={16} />
             </span>
             <div>
@@ -227,7 +227,7 @@ export const AccessibilityPanel = () => {
 
       <section className="ub-card p-4">
         <h3 className="ub-heading">Contrast</h3>
-        <div className="mt-2 flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2.5">
+        <div className="mt-2 flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2.5">
           <span className="text-xs font-medium text-muted">Ratio</span>
           <span className="font-mono text-lg font-semibold tabular-nums text-ink">
             {contrastRatio === null ? "Unknown" : `${contrastRatio}:1`}
@@ -241,7 +241,7 @@ export const AccessibilityPanel = () => {
           {notes.length > 0 ? (
             notes.map((note) => (
               <div
-                className="flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-900"
+                className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-900"
                 key={note.id}
               >
                 <AlertTriangle aria-hidden="true" className="mt-0.5 shrink-0" size={15} />
@@ -252,7 +252,7 @@ export const AccessibilityPanel = () => {
               </div>
             ))
           ) : (
-            <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs font-medium text-emerald-800">
+            <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-medium text-emerald-800">
               <CheckCircle2 aria-hidden="true" size={15} />
               No v1 warnings
             </div>

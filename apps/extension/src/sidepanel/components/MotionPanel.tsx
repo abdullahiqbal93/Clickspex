@@ -21,7 +21,7 @@ export const MotionPanel = () => {
     <div className="space-y-3">
       <section className="ub-card p-4">
         <div className="flex items-center gap-2.5">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent">
             <PlaySquare aria-hidden="true" size={16} />
           </span>
           <div className="min-w-0">
@@ -36,7 +36,7 @@ export const MotionPanel = () => {
           <h3 className="ub-heading">Playback speed</h3>
 
           {error && (
-            <div className="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-2xs text-rose-700">
+            <div className="mt-2 rounded-xl bg-rose-50 px-3 py-2 text-2xs text-rose-700">
               {error}
             </div>
           )}
@@ -60,10 +60,10 @@ export const MotionPanel = () => {
                 key={preset}
                 onClick={() => void handleSpeedChange(preset)}
                 type="button"
-                className={`rounded-lg py-1.5 text-xs font-medium transition-colors ${
+                className={`rounded-xl py-1.5 text-xs font-medium transition-colors ${
                   speed === preset
                     ? "bg-accent text-white shadow-sm"
-                    : "bg-slate-100 text-muted hover:bg-slate-200 hover:text-ink"
+                    : "bg-accent-softer text-muted hover:bg-accent-soft hover:text-ink"
                 }`}
               >
                 {preset === 0 ? "Pause" : `${preset}x`}

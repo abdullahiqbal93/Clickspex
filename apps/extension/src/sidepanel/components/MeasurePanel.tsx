@@ -271,7 +271,7 @@ export const MeasurePanel = () => {
     <div className="space-y-3">
       <section className="ub-card p-4">
         <div className="flex items-center gap-2.5">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent">
             <Ruler aria-hidden="true" size={16} />
           </span>
           <div className="min-w-0">
@@ -292,7 +292,7 @@ export const MeasurePanel = () => {
           <button
             className={
               rulerActive
-                ? "inline-flex items-center justify-center gap-1.5 rounded-lg bg-measure px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-teal-600"
+                ? "inline-flex items-center justify-center gap-1.5 rounded-xl bg-measure px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-teal-600"
                 : "ub-btn"
             }
             onClick={() => void toggleRuler()}
@@ -339,7 +339,7 @@ export const MeasurePanel = () => {
 
                   return (
                     <button
-                      className={`flex min-h-[56px] min-w-0 items-center gap-2 rounded-lg border px-2.5 text-left transition-colors disabled:cursor-wait disabled:opacity-70 ${
+                      className={`flex min-h-[56px] min-w-0 items-center gap-2 rounded-xl border px-2.5 text-left transition-colors disabled:cursor-wait disabled:opacity-70 ${
                         active
                           ? "border-accent-ring bg-accent-soft text-accent"
                           : "border-line text-ink hover:border-line-strong hover:bg-slate-50"

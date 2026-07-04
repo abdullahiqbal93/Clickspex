@@ -90,7 +90,7 @@ export const PalettePanel = () => {
     return (
       <div className="ub-card p-4">
         <div className="flex items-center gap-2.5">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent">
             <Palette aria-hidden="true" size={16} />
           </span>
           <div>
@@ -114,7 +114,7 @@ export const PalettePanel = () => {
     <div className="space-y-3">
       <section className="ub-card p-4">
         <div className="flex items-center gap-2.5">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent">
             <Palette aria-hidden="true" size={16} />
           </span>
           <div>
@@ -131,7 +131,7 @@ export const PalettePanel = () => {
             scan.colors.map((color, i) => (
               <button
                 key={i}
-                className="group relative flex aspect-square flex-col items-center justify-end overflow-hidden rounded-lg ring-1 ring-inset ring-ink/10 transition-transform hover:scale-105 hover:shadow-card"
+                className="group relative flex aspect-square flex-col items-center justify-end overflow-hidden rounded-xl ring-1 ring-inset ring-ink/10 transition-transform hover:scale-105 hover:shadow-card"
                 style={{ backgroundColor: color.rgb }}
                 onClick={() => void copyToClipboard(color.hex)}
                 title={`${color.hex}\nUsed ${color.count} times\nIn: ${color.properties.join(", ")}`}
@@ -171,7 +171,7 @@ export const PalettePanel = () => {
           <div className="mt-3 grid grid-cols-6 gap-1.5">
             {history.map((color) => (
               <button
-                className="group relative aspect-square overflow-hidden rounded-lg ring-1 ring-inset ring-ink/10 transition-transform hover:scale-105 hover:shadow-card"
+                className="group relative aspect-square overflow-hidden rounded-xl ring-1 ring-inset ring-ink/10 transition-transform hover:scale-105 hover:shadow-card"
                 key={color}
                 onClick={() => void copyToClipboard(color)}
                 style={{ backgroundColor: color }}
@@ -190,7 +190,7 @@ export const PalettePanel = () => {
       <section className="ub-card p-4">
         <h3 className="text-sm font-semibold tracking-tight">Gradient generator</h3>
         <div
-          className="mt-3 h-16 rounded-lg ring-1 ring-inset ring-ink/10"
+          className="mt-3 h-16 rounded-xl ring-1 ring-inset ring-ink/10"
           style={{ background: gradientValue }}
         />
         <div className="mt-3 flex items-center gap-2">
@@ -222,7 +222,7 @@ export const PalettePanel = () => {
             <div className="flex items-center gap-2" key={index}>
               <input
                 aria-label={`Stop ${index + 1} color`}
-                className="h-8 w-9 shrink-0 cursor-pointer rounded-lg border border-line bg-transparent p-0.5"
+                className="h-8 w-9 shrink-0 cursor-pointer rounded-xl border border-line bg-transparent p-0.5"
                 onChange={(event) => updateStop(index, { color: event.target.value })}
                 type="color"
                 value={stop.color}
@@ -242,7 +242,7 @@ export const PalettePanel = () => {
                 {stop.position}%
               </span>
               <button
-                className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-ink disabled:opacity-30"
+                className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-accent-softer hover:text-ink disabled:opacity-30"
                 disabled={stops.length <= 2}
                 onClick={() => removeStop(index)}
                 title="Remove stop"
@@ -261,7 +261,7 @@ export const PalettePanel = () => {
           <button
             className={
               copied
-                ? "inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-200"
+                ? "inline-flex items-center justify-center gap-1.5 rounded-xl bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-200"
                 : "ub-btn-primary"
             }
             onClick={() => void copyGradient()}
@@ -271,7 +271,7 @@ export const PalettePanel = () => {
             {copied ? "Copied!" : "Copy CSS"}
           </button>
         </div>
-        <pre className="mt-3 overflow-x-auto rounded-lg bg-[#161726] p-2.5 font-mono text-[10px] leading-4 text-slate-100">
+        <pre className="mt-3 overflow-x-auto rounded-xl bg-[#211d3d] p-2.5 font-mono text-[10px] leading-4 text-slate-100">
           <code>background: {gradientValue};</code>
         </pre>
       </section>

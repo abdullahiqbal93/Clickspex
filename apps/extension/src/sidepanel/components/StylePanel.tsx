@@ -1334,7 +1334,7 @@ export const StylePanel = () => {
     return (
       <div className="ub-card p-4">
         <div className="flex items-center gap-2.5">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent">
             <SlidersHorizontal aria-hidden="true" size={16} />
           </span>
           <div>
@@ -1456,12 +1456,12 @@ export const StylePanel = () => {
           </div>
         </div>
         {classSelector !== null ? (
-          <div className="mt-3 flex items-center gap-1 rounded-lg bg-slate-100 p-1">
+          <div className="mt-3 flex items-center gap-1 rounded-xl bg-accent-softer p-1">
             <button
-              className={`h-7 flex-1 truncate rounded-md px-2 text-2xs font-medium transition ${
+              className={`h-7 flex-1 truncate rounded-xl px-2 text-2xs font-medium transition ${
                 !isClassScope
-                  ? "bg-white text-accent shadow-sm"
-                  : "text-muted hover:bg-white/60 hover:text-ink"
+                  ? "bg-panel text-accent shadow-sm"
+                  : "text-muted hover:bg-panel/60 hover:text-ink"
               }`}
               onClick={() => setSelectorScope("unique")}
               title="Changes apply to this element only"
@@ -1470,10 +1470,10 @@ export const StylePanel = () => {
               This element
             </button>
             <button
-              className={`h-7 flex-1 truncate rounded-md px-2 text-2xs font-medium transition ${
+              className={`h-7 flex-1 truncate rounded-xl px-2 text-2xs font-medium transition ${
                 isClassScope
-                  ? "bg-white text-accent shadow-sm"
-                  : "text-muted hover:bg-white/60 hover:text-ink"
+                  ? "bg-panel text-accent shadow-sm"
+                  : "text-muted hover:bg-panel/60 hover:text-ink"
               }`}
               onClick={() => setSelectorScope("class")}
               title={`Changes apply to every ${classSelector}`}
@@ -1483,13 +1483,13 @@ export const StylePanel = () => {
             </button>
           </div>
         ) : null}
-        <div className="mt-3 flex overflow-x-auto rounded-lg bg-slate-100 p-1 scrollbar-hide">
+        <div className="mt-3 flex overflow-x-auto rounded-xl bg-accent-softer p-1 scrollbar-hide">
           {STYLE_STATE_OPTIONS.map((option) => (
             <button
-              className={`h-7 shrink-0 rounded-md px-2.5 text-2xs font-medium transition ${
+              className={`h-7 shrink-0 rounded-xl px-2.5 text-2xs font-medium transition ${
                 styleTargetState === option.state
-                  ? "bg-white text-accent shadow-sm"
-                  : "text-muted hover:bg-white/60 hover:text-ink"
+                  ? "bg-panel text-accent shadow-sm"
+                  : "text-muted hover:bg-panel/60 hover:text-ink"
               }`}
               key={option.state}
               onClick={() => setStyleTargetState(option.state)}
@@ -1499,13 +1499,13 @@ export const StylePanel = () => {
             </button>
           ))}
         </div>
-        <div className="mt-2 flex overflow-x-auto rounded-lg bg-slate-100 p-1 scrollbar-hide">
+        <div className="mt-2 flex overflow-x-auto rounded-xl bg-accent-softer p-1 scrollbar-hide">
           {STYLE_RESPONSIVE_TARGET_DEFINITIONS.map((definition) => (
             <button
-              className={`flex h-9 min-w-[78px] shrink-0 flex-col items-center justify-center rounded-md px-2 text-2xs font-medium transition ${
+              className={`flex h-9 min-w-[78px] shrink-0 flex-col items-center justify-center rounded-xl px-2 text-2xs font-medium transition ${
                 styleResponsiveTarget === definition.target
-                  ? "bg-white text-accent shadow-sm"
-                  : "text-muted hover:bg-white/60 hover:text-ink"
+                  ? "bg-panel text-accent shadow-sm"
+                  : "text-muted hover:bg-panel/60 hover:text-ink"
               }`}
               key={definition.target}
               onClick={() => setStyleResponsiveTarget(definition.target)}
@@ -1520,9 +1520,9 @@ export const StylePanel = () => {
           ))}
         </div>
         {activeResponsiveDefinition.mediaQuery === null ? null : (
-          <div className="mt-2 flex min-w-0 items-center justify-between gap-2 rounded-lg bg-accent-softer px-2.5 py-2 text-2xs text-accent-hover ring-1 ring-inset ring-accent-soft">
+          <div className="mt-2 flex min-w-0 items-center justify-between gap-2 rounded-xl bg-accent-softer px-2.5 py-2 text-2xs text-accent-hover ring-1 ring-inset ring-accent-soft">
             <span className="shrink-0 font-medium">{activeResponsiveDefinition.label}</span>
-            <code className="min-w-0 truncate rounded-md bg-white/80 px-1.5 py-0.5 font-mono text-[10px] text-accent-hover">
+            <code className="min-w-0 truncate rounded-xl bg-panel/80 px-1.5 py-0.5 font-mono text-[10px] text-accent-hover">
               @media {activeResponsiveDefinition.mediaQuery}
             </code>
           </div>
@@ -1536,7 +1536,7 @@ export const StylePanel = () => {
             Raw CSS
           </div>
           {rawCssApplied ? (
-            <span className="rounded-md bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-200">
+            <span className="rounded-xl bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-200">
               Applied
             </span>
           ) : null}
@@ -1548,7 +1548,7 @@ export const StylePanel = () => {
           Apply (or when you edit and blur).
         </p>
         <textarea
-          className="mt-2 h-32 w-full resize-y rounded-lg bg-[#161726] p-2.5 font-mono text-2xs leading-4 text-slate-100 outline-none ring-1 ring-inset ring-transparent transition focus:ring-accent"
+          className="mt-2 h-32 w-full resize-y rounded-xl bg-[#211d3d] p-2.5 font-mono text-2xs leading-4 text-slate-100 outline-none ring-1 ring-inset ring-transparent transition focus:ring-accent"
           onBlur={applyRawCssIfEdited}
           onChange={(event) => setRawCss(event.target.value)}
           placeholder={"color: #6366f1;\nfont-size: 18px;\nborder-radius: 8px;"}
@@ -1591,7 +1591,7 @@ export const StylePanel = () => {
                 <span className="truncate">{group}</span>
               </button>
               <button
-                className="inline-flex h-6 w-6 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-ink"
+                className="inline-flex h-6 w-6 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-accent-softer hover:text-ink"
                 onClick={() => void copyGroupCss(fields)}
                 title={`Copy ${group} CSS`}
                 type="button"
@@ -1629,7 +1629,7 @@ export const StylePanel = () => {
                           {hexColor !== null ? (
                             <input
                               aria-label={`${field.label} swatch`}
-                              className="h-8 w-9 shrink-0 cursor-pointer rounded-lg border border-line bg-transparent p-0.5"
+                              className="h-8 w-9 shrink-0 cursor-pointer rounded-xl border border-line bg-transparent p-0.5"
                               onChange={(event) =>
                                 void commitChange(field.property, event.target.value)
                               }
@@ -1681,10 +1681,10 @@ export const StylePanel = () => {
 
                               return (
                                 <button
-                                  className={`max-w-[118px] truncate rounded-md px-2 py-1 text-[10px] font-medium transition-colors ${
+                                  className={`max-w-[118px] truncate rounded-xl px-2 py-1 text-[10px] font-medium transition-colors ${
                                     isActive
                                       ? "bg-accent-soft text-accent ring-1 ring-inset ring-accent-ring"
-                                      : "bg-slate-100 text-muted hover:bg-slate-200 hover:text-ink"
+                                      : "bg-accent-softer text-muted hover:bg-accent-soft hover:text-ink"
                                   }`}
                                   key={`${fieldPreset.label}-${fieldPreset.value}`}
                                   onClick={() =>

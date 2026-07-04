@@ -154,7 +154,7 @@ export const BoxModelPanel = () => {
     <div className="space-y-3">
       <section className="ub-card p-4">
         <h2 className="text-sm font-semibold tracking-tight">Box model</h2>
-        <div className="mt-3.5 grid grid-cols-[44px_1fr_44px] grid-rows-[32px_32px_1fr_32px_32px] overflow-hidden rounded-lg border border-line text-center font-mono text-[10px] font-semibold tabular-nums text-slate-600">
+        <div className="mt-3.5 grid grid-cols-[44px_1fr_44px] grid-rows-[32px_32px_1fr_32px_32px] overflow-hidden rounded-xl border border-line text-center font-mono text-[10px] font-semibold tabular-nums text-slate-600">
           <div className="col-start-2 flex items-center justify-center bg-teal-50">
             {styles["margin-top"] ?? boxModel.margin.top}
           </div>
@@ -168,7 +168,7 @@ export const BoxModelPanel = () => {
             <div className="col-start-1 row-start-2 flex items-center justify-center">
               {sideLabel("left")} {styles["padding-left"] ?? boxModel.padding.left}
             </div>
-            <div className="col-start-2 row-start-2 flex items-center justify-center rounded-md border border-amber-200 bg-white text-ink">
+            <div className="col-start-2 row-start-2 flex items-center justify-center rounded-xl border border-amber-200 bg-panel text-ink">
               {contentWidth} x {contentHeight}
             </div>
             <div className="col-start-3 row-start-2 flex items-center justify-center">
@@ -222,7 +222,7 @@ export const BoxModelPanel = () => {
         <h3 className="text-sm font-semibold tracking-tight">Border</h3>
         <div className="mt-2.5 grid grid-cols-4 gap-1.5 text-center text-xs text-ink">
           {sides.map((side) => (
-            <div className="rounded-lg bg-slate-50 px-2 py-2" key={side}>
+            <div className="rounded-xl bg-slate-50 px-2 py-2" key={side}>
               <div className="ub-heading">{side}</div>
               <div className="mt-1 font-mono tabular-nums">{boxModel.border[side]}</div>
             </div>
