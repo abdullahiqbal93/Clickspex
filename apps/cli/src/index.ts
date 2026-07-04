@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { spawn } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
@@ -8,6 +9,22 @@ import chalk from "chalk";
 import { Command } from "commander";
 
 import { startBridge } from "./bridge.js";
+
+/** Best-effort cross-platform "open this URL in the default browser". */
+const openBrowser = (url: string): void => {
+  const [command, args]: [string, string[]] =
+    process.platform === "win32"
+      ? ["cmd", ["/c", "start", "", url]]
+      : process.platform === "darwin"
+        ? ["open", [url]]
+        : ["xdg-open", [url]];
+
+  try {
+    spawn(command, args, { detached: true, stdio: "ignore" }).unref();
+  } catch {
+    // Non-fatal: the user can open the URL manually.
+  }
+};
 
 import type { PatchSuggestion, UIChangeIntent, UIChangeSession } from "@ui-buddy/shared";
 
@@ -221,18 +238,34 @@ program
   .description("start a localhost bridge so the ui-buddy extension can preview and apply changes")
   .option("--path <path>", "project path", process.cwd())
   .option("--port <port>", "port to listen on", "7317")
-  .action(async (options: { path: string; port: string }) => {
+  .option("--open <url>", "open this URL (your running app) in the browser after starting")
+  .action(async (options: { path: string; port: string; open?: string }) => {
     const rootPath = resolve(options.path);
     const parsedPort = Number.parseInt(options.port, 10);
     const port = Number.isNaN(parsedPort) ? 7317 : parsedPort;
     const bridge = await startBridge({ rootPath, port });
+    const url = `http://127.0.0.1:${bridge.port}`;
 
+    process.stdout.write("\n");
+    process.stdout.write(`${chalk.green("●")} ${chalk.bold("ui-buddy bridge")}  ${url}\n`);
+    process.stdout.write(`  ${chalk.bold("project")}  ${rootPath}\n`);
+    process.stdout.write(`  ${chalk.bold("port")}     ${bridge.port}\n\n`);
+    process.stdout.write("  Next steps:\n");
+    process.stdout.write("   1. Open your running app in Chrome\n");
+    process.stdout.write("   2. Open the ui-buddy side panel and edit elements\n");
     process.stdout.write(
-      `${chalk.green("ui-buddy bridge listening")} http://127.0.0.1:${bridge.port}\n`,
+      `   3. Export -> Code sync (port ${bridge.port}) -> Preview diff -> Apply to code\n\n`,
     );
-    process.stdout.write(`${chalk.bold("Project")} ${rootPath}\n`);
-    process.stdout.write("Open the ui-buddy extension -> Export -> Code sync to connect.\n");
-    process.stdout.write(chalk.dim("Press Ctrl+C to stop.\n"));
+    process.stdout.write(chalk.dim("  Ctrl+C to stop.\n"));
+
+    if (options.open !== undefined) {
+      openBrowser(options.open);
+    }
+
+    process.on("SIGINT", () => {
+      bridge.close();
+      process.exit(0);
+    });
   });
 
 program

@@ -92,7 +92,9 @@ const applySession = async (
   rootPath: string,
   selectors?: string[],
 ): Promise<ApplyResult> => {
-  const projectContext: ProjectContext = await scanProjectContext(rootPath, { includeSource: true });
+  const projectContext: ProjectContext = await scanProjectContext(rootPath, {
+    includeSource: true,
+  });
   const selectorFilter = selectors === undefined ? null : new Set(selectors);
 
   const originalByPath = new Map<string, string>();
@@ -142,6 +144,14 @@ const applySession = async (
   const backupId = new Date().toISOString().replace(/[:.]/g, "-");
   const backupRoot = join(rootPath, UI_BUDDY_DIR, "backups", backupId);
   const backedUp: string[] = [];
+
+  // Keep apply backups out of version control by default.
+  await mkdir(join(rootPath, UI_BUDDY_DIR), { recursive: true });
+  await writeFile(
+    join(rootPath, UI_BUDDY_DIR, ".gitignore"),
+    "backups/\nlast-backup.json\n",
+    "utf8",
+  );
 
   for (const relPath of touchedPaths) {
     const absPath = resolve(rootPath, relPath);

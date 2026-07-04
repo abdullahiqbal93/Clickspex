@@ -47,7 +47,7 @@ Load `apps/extension/dist` as an unpacked extension in Chrome:
 ## CLI
 
 ```bash
-pnpm --filter @ui-buddy/cli build
+pnpm --filter ui-buddy build
 node apps/cli/dist/index.js init --path .
 node apps/cli/dist/index.js detect --path .
 node apps/cli/dist/index.js index --path .

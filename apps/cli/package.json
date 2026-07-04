@@ -1,26 +1,53 @@
 {
-  "name": "@ui-buddy/cli",
+  "name": "ui-buddy",
   "version": "0.1.0",
-  "private": true,
+  "private": false,
+  "description": "Inspect and edit UI in the browser, then apply the changes to your source code. Local bridge, source indexer, and patch-preview CLI for the ui-buddy extension.",
+  "license": "MIT",
   "type": "module",
   "bin": {
     "ui-buddy": "./dist/index.js"
   },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "ui",
+    "css",
+    "devtools",
+    "chrome-extension",
+    "design-to-code",
+    "tailwind",
+    "codegen"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/abdullahiqbal93/dev-buddy.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "bundle": "pnpm --filter @ui-buddy/shared --filter @ui-buddy/core --filter @ui-buddy/adapters run build && tsup",
+    "prepack": "pnpm run bundle",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint .",
     "test": "vitest run --passWithNoTests",
     "format": "prettier --write . --ignore-path ../../.prettierignore"
   },
   "dependencies": {
-    "@ui-buddy/adapters": "workspace:*",
-    "@ui-buddy/core": "workspace:*",
-    "@ui-buddy/shared": "workspace:*",
     "chalk": "^5.0.0",
     "commander": "^14.0.0"
   },
   "devDependencies": {
-    "@ui-buddy/config": "workspace:*"
+    "@ui-buddy/adapters": "workspace:*",
+    "@ui-buddy/config": "workspace:*",
+    "@ui-buddy/core": "workspace:*",
+    "@ui-buddy/shared": "workspace:*",
+    "tsup": "^8.0.0"
   }
 }

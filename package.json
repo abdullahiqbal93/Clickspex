@@ -9,7 +9,9 @@
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm -r lint",
     "test": "pnpm -r test",
-    "format": "pnpm -r format && prettier --write ."
+    "format": "pnpm -r format && prettier --write .",
+    "connect": "pnpm --filter ui-buddy build && node apps/cli/dist/index.js connect",
+    "release:cli": "pnpm build && pnpm --filter ui-buddy publish --no-git-checks"
   },
   "engines": {
     "node": ">=22.0.0"

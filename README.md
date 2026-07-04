@@ -69,30 +69,44 @@ pnpm --filter @ui-buddy/extension build
 
 Load `apps/extension/dist` in Chrome via `chrome://extensions` -> Developer mode -> Load unpacked.
 
+## Code Sync (one-click apply)
+
+Once published, developers do not touch this repo. They install the extension from the Chrome Web
+Store, then run the bridge in their own project with **zero install**:
+
+```bash
+npx ui-buddy connect
+# open the app in Chrome -> ui-buddy side panel -> edit -> Export -> Code sync -> Apply
+```
+
+The bridge is a localhost-only server scoped to `--path` (default port `7317`, current directory).
+In the extension, open **Export -> Code sync**: it detects the bridge, shows the connected project,
+and gives you **Preview diff** and **Apply to code**. Apply is guarded: it only writes matched
+stylesheet files, backs up the originals to `.ui-buddy/backups/`, and offers a one-click **Undo**.
+CSS edits are written today; framework adapters stay preview-only.
+
+Other launch styles:
+
+```bash
+ui-buddy connect --path . --open http://localhost:3000   # open the app automatically
+npm i -g ui-buddy && ui-buddy connect                    # global install instead of npx
+```
+
 ## CLI
 
 ```bash
-pnpm --filter @ui-buddy/cli build
-node apps/cli/dist/index.js init --path .
-node apps/cli/dist/index.js detect --path .
-node apps/cli/dist/index.js index --path .
-node apps/cli/dist/index.js export-example --output ui-change-intent.example.json
-node apps/cli/dist/index.js preview-patch --intent ui-change-intent.example.json --project .
-node apps/cli/dist/index.js preview-session --session ui-change-session.json --project .
+npx ui-buddy connect                                      # start the code-sync bridge
+npx ui-buddy detect --path .                              # report detected frameworks
+npx ui-buddy index --path .                               # build a bounded source index
+npx ui-buddy preview-session --session session.json --project .
 ```
 
-## Code Sync (one-click apply)
-
-Run the bridge in your project, then edit visually in the extension and apply straight to source:
+During development in this monorepo, run the local build first:
 
 ```bash
-node apps/cli/dist/index.js connect --path . --port 7317
+pnpm --filter ui-buddy build
+pnpm connect --path .                                     # builds + starts the bridge here
 ```
-
-This starts a localhost-only server. In the extension, open **Export → Code sync**: it detects the
-bridge, shows the connected project, and gives you **Preview diff** and **Apply to code**. Apply is
-guarded — it only writes matched stylesheet files, backs up the originals to `.ui-buddy/backups/`,
-and offers a one-click **Undo**. CSS edits are written today; framework adapters stay preview-only.
 
 ## MCP Server
 
@@ -102,6 +116,36 @@ node apps/mcp-server/dist/index.js
 ```
 
 The MCP server exposes read-only tools only. See `docs/mcp-tools.md` for tool signatures and examples.
+
+## Publishing
+
+Two artifacts ship to users: the **CLI** (npm) and the **extension** (Chrome Web Store).
+
+**CLI -> npm.** The `ui-buddy` package bundles its internal `@ui-buddy/*` packages into a single
+self-contained binary (via tsup), so `npx ui-buddy` needs nothing else on npm. To cut a release:
+
+```bash
+pnpm install          # first time, to fetch tsup
+pnpm typecheck        # type-safe across all packages
+pnpm test             # unit tests incl. the bridge apply/rollback
+pnpm release:cli      # builds, bundles (prepack), and publishes `ui-buddy`
+```
+
+`pnpm --filter ui-buddy bundle` produces the standalone `apps/cli/dist/index.js` if you want to
+inspect the artifact before publishing. If the unscoped name `ui-buddy` is taken on npm, publish
+under a scope (e.g. `@your-org/ui-buddy`); the command then becomes `npx @your-org/ui-buddy connect`.
+
+**Extension -> Chrome Web Store.** Build and zip the unpacked build, then upload it in the Web Store
+developer dashboard:
+
+```bash
+pnpm --filter @ui-buddy/extension build
+# Windows:  Compress-Archive -Path apps/extension/dist/* -DestinationPath ui-buddy-extension.zip
+# macOS/Linux:  (cd apps/extension/dist && zip -r ../../../ui-buddy-extension.zip .)
+```
+
+The manifest, permissions, and icons are already in place; the store listing (name, description,
+screenshots) is added in the dashboard.
 
 ## Documentation
 
