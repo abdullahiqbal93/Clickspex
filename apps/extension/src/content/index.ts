@@ -114,7 +114,7 @@ const redoPageAction = (action: PageAction): void => {
 
 // If this script is injected on demand (into a tab that was already open) while
 // the declared content script also runs, guard against registering the message
-// handler twice — a second listener would double-process every command.
+// handler twice - a second listener would double-process every command.
 if (window.__uiBuddyListenerAttached !== true) {
   window.__uiBuddyListenerAttached = true;
 

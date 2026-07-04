@@ -98,9 +98,9 @@ export const BoxModelPanel = () => {
 
   if (selectedElement === null) {
     return (
-      <div className="rounded-lg border border-border bg-panel/80 backdrop-blur-sm p-4 shadow-card">
-        <h2 className="text-sm font-semibold">Box model</h2>
-        <p className="mt-2 text-xs text-muted">Idle</p>
+      <div className="ub-card p-4">
+        <h2 className="text-sm font-semibold tracking-tight">Box model</h2>
+        <p className="mt-1.5 text-2xs text-muted">Select an element to inspect its box model.</p>
       </div>
     );
   }
@@ -114,11 +114,11 @@ export const BoxModelPanel = () => {
     linked: boolean,
     setLinked: (linked: boolean) => void,
   ) => (
-    <section className="rounded-lg border border-border bg-panel/80 backdrop-blur-sm p-4 shadow-card">
+    <section className="ub-card p-4">
       <div className="flex items-center justify-between gap-3">
-        <h3 className="text-sm font-semibold capitalize">{group}</h3>
+        <h3 className="text-sm font-semibold capitalize tracking-tight">{group}</h3>
         <button
-          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-slate-700 transition hover:bg-slate-50"
+          className={`ub-icon-btn ${linked ? "ub-icon-btn-active" : ""}`}
           onClick={() => setLinked(!linked)}
           title={linked ? "Unlink sides" : "Link sides"}
           type="button"
@@ -130,18 +130,16 @@ export const BoxModelPanel = () => {
           )}
         </button>
       </div>
-      <div className="mt-3 grid grid-cols-2 gap-2">
+      <div className="mt-2.5 grid grid-cols-2 gap-2">
         {sides.map((side) => {
           const property = propertyFor(group, side);
           const value = styles[property] ?? selectedElement.boxModel[group][side];
 
           return (
             <label className="space-y-1" key={property}>
-              <span className="text-[10px] font-semibold uppercase tracking-normal text-slate-500">
-                {side}
-              </span>
+              <span className="ub-heading">{side}</span>
               <CommitInput
-                className="h-8 w-full rounded-md border border-border px-2 text-xs outline-none transition focus:border-accent focus:ring-2 focus:ring-blue-100"
+                className="ub-input h-8 font-mono"
                 onCommit={(nextValue) => void commitSide(group, side, nextValue, linked)}
                 value={value}
               />
@@ -154,13 +152,13 @@ export const BoxModelPanel = () => {
 
   return (
     <div className="space-y-3">
-      <section className="rounded-lg border border-border bg-panel/80 backdrop-blur-sm p-4 shadow-card">
-        <h2 className="text-sm font-semibold">Box model</h2>
-        <div className="mt-4 grid grid-cols-[44px_1fr_44px] grid-rows-[32px_32px_1fr_32px_32px] overflow-hidden rounded-md border border-border text-center text-[10px] font-semibold uppercase tracking-normal text-slate-600">
+      <section className="ub-card p-4">
+        <h2 className="text-sm font-semibold tracking-tight">Box model</h2>
+        <div className="mt-3.5 grid grid-cols-[44px_1fr_44px] grid-rows-[32px_32px_1fr_32px_32px] overflow-hidden rounded-lg border border-line text-center font-mono text-[10px] font-semibold tabular-nums text-slate-600">
           <div className="col-start-2 flex items-center justify-center bg-teal-50">
             {styles["margin-top"] ?? boxModel.margin.top}
           </div>
-          <div className="col-start-2 row-start-2 flex items-center justify-center bg-blue-50">
+          <div className="col-start-2 row-start-2 flex items-center justify-center bg-indigo-50">
             {boxModel.border.top}
           </div>
           <div className="col-start-2 row-start-3 grid min-h-28 grid-cols-[40px_1fr_40px] grid-rows-[24px_minmax(64px,1fr)_24px] bg-amber-50">
@@ -170,7 +168,7 @@ export const BoxModelPanel = () => {
             <div className="col-start-1 row-start-2 flex items-center justify-center">
               {sideLabel("left")} {styles["padding-left"] ?? boxModel.padding.left}
             </div>
-            <div className="col-start-2 row-start-2 flex items-center justify-center rounded border border-amber-200 bg-white text-slate-900">
+            <div className="col-start-2 row-start-2 flex items-center justify-center rounded-md border border-amber-200 bg-white text-ink">
               {contentWidth} x {contentHeight}
             </div>
             <div className="col-start-3 row-start-2 flex items-center justify-center">
@@ -180,7 +178,7 @@ export const BoxModelPanel = () => {
               {styles["padding-bottom"] ?? boxModel.padding.bottom}
             </div>
           </div>
-          <div className="col-start-2 row-start-4 flex items-center justify-center bg-blue-50">
+          <div className="col-start-2 row-start-4 flex items-center justify-center bg-indigo-50">
             {boxModel.border.bottom}
           </div>
           <div className="col-start-2 row-start-5 flex items-center justify-center bg-teal-50">
@@ -195,38 +193,22 @@ export const BoxModelPanel = () => {
         </div>
       </section>
 
-      <section className="rounded-lg border border-border bg-panel/80 backdrop-blur-sm p-4 shadow-card">
-        <h3 className="text-sm font-semibold">Spacing nudges</h3>
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <button
-            className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-border px-2 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
-            onClick={() => void nudgeGroup("margin", 4)}
-            type="button"
-          >
+      <section className="ub-card p-4">
+        <h3 className="text-sm font-semibold tracking-tight">Spacing nudges</h3>
+        <div className="mt-2.5 grid grid-cols-2 gap-1.5">
+          <button className="ub-btn" onClick={() => void nudgeGroup("margin", 4)} type="button">
             <Plus aria-hidden="true" size={13} />
             Margin
           </button>
-          <button
-            className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-border px-2 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
-            onClick={() => void nudgeGroup("margin", -4)}
-            type="button"
-          >
+          <button className="ub-btn" onClick={() => void nudgeGroup("margin", -4)} type="button">
             <Minus aria-hidden="true" size={13} />
             Margin
           </button>
-          <button
-            className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-border px-2 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
-            onClick={() => void nudgeGroup("padding", 4)}
-            type="button"
-          >
+          <button className="ub-btn" onClick={() => void nudgeGroup("padding", 4)} type="button">
             <Plus aria-hidden="true" size={13} />
             Padding
           </button>
-          <button
-            className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-border px-2 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
-            onClick={() => void nudgeGroup("padding", -4)}
-            type="button"
-          >
+          <button className="ub-btn" onClick={() => void nudgeGroup("padding", -4)} type="button">
             <Minus aria-hidden="true" size={13} />
             Padding
           </button>
@@ -236,15 +218,13 @@ export const BoxModelPanel = () => {
       {renderEditableGroup("margin", linkedMargin, setLinkedMargin)}
       {renderEditableGroup("padding", linkedPadding, setLinkedPadding)}
 
-      <section className="rounded-lg border border-border bg-panel/80 backdrop-blur-sm p-4 shadow-card">
-        <h3 className="text-sm font-semibold">Border</h3>
-        <div className="mt-3 grid grid-cols-4 gap-2 text-center text-xs text-slate-700">
+      <section className="ub-card p-4">
+        <h3 className="text-sm font-semibold tracking-tight">Border</h3>
+        <div className="mt-2.5 grid grid-cols-4 gap-1.5 text-center text-xs text-ink">
           {sides.map((side) => (
-            <div className="rounded-md border border-slate-100 bg-slate-50 px-2 py-2" key={side}>
-              <div className="text-[10px] font-semibold uppercase tracking-normal text-slate-500">
-                {side}
-              </div>
-              <div className="mt-1">{boxModel.border[side]}</div>
+            <div className="rounded-lg bg-slate-50 px-2 py-2" key={side}>
+              <div className="ub-heading">{side}</div>
+              <div className="mt-1 font-mono tabular-nums">{boxModel.border[side]}</div>
             </div>
           ))}
         </div>

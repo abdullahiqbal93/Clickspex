@@ -99,7 +99,7 @@ export const sendMessageToActiveTab = async (message: ExtensionMessage): Promise
       throw error;
     }
 
-    // The content script isn't in this tab yet — common on tabs that were
+    // The content script isn't in this tab yet - common on tabs that were
     // already open before the extension was installed/updated, or after the
     // extension reloaded. Inject it on demand and retry once so picking works
     // without the user having to reload the extension or refresh the tab.

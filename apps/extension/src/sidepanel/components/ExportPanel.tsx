@@ -78,13 +78,13 @@ const ExportBlock = ({ title, content, warnings = [], filename }: ExportBlockPro
   };
 
   return (
-    <section className="rounded-lg border border-border bg-panel/80 backdrop-blur-sm p-4 shadow-card">
+    <section className="ub-card p-4">
       <div className="flex items-center justify-between gap-3">
-        <h3 className="text-sm font-semibold">{title}</h3>
-        <div className="flex items-center gap-2">
+        <h3 className="text-sm font-semibold tracking-tight">{title}</h3>
+        <div className="flex items-center gap-1">
           {filename !== undefined && content.length > 0 ? (
             <button
-              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-slate-700 transition hover:bg-slate-50"
+              className="ub-icon-btn"
               onClick={() => downloadContent(content, filename)}
               title={`Download ${filename}`}
               type="button"
@@ -92,24 +92,19 @@ const ExportBlock = ({ title, content, warnings = [], filename }: ExportBlockPro
               <Download aria-hidden="true" size={14} />
             </button>
           ) : null}
-          <button
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-slate-700 transition hover:bg-slate-50"
-            onClick={() => void copy()}
-            title="Copy"
-            type="button"
-          >
+          <button className="ub-icon-btn" onClick={() => void copy()} title="Copy" type="button">
             <Clipboard aria-hidden="true" size={14} />
           </button>
         </div>
       </div>
       {warnings.length > 0 ? (
-        <ul className="mt-3 space-y-1 text-xs text-amber-700">
+        <ul className="mt-3 space-y-1 rounded-lg bg-amber-50 px-3 py-2 text-2xs text-amber-800">
           {warnings.map((warning) => (
             <li key={warning}>{warning}</li>
           ))}
         </ul>
       ) : null}
-      <pre className="mt-3 max-h-64 overflow-auto rounded-md bg-slate-950 p-3 text-xs leading-5 text-slate-50">
+      <pre className="mt-3 max-h-64 overflow-auto rounded-lg bg-[#161726] p-3 font-mono text-2xs leading-5 text-slate-100 shadow-inner">
         <code>{content || "No output"}</code>
       </pre>
     </section>
@@ -187,15 +182,19 @@ export const ExportPanel = () => {
 
   if (!hasContent) {
     return (
-      <div className="rounded-lg border border-border bg-panel/80 backdrop-blur-sm p-4 shadow-card">
-        <div className="flex items-center gap-2 text-sm font-semibold">
-          <Code2 aria-hidden="true" size={16} />
-          Export
+      <div className="ub-card p-4">
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
+            <Code2 aria-hidden="true" size={16} />
+          </span>
+          <div>
+            <h2 className="text-sm font-semibold tracking-tight">Export</h2>
+            <p className="text-2xs text-muted">
+              Idle - edit any elements (styles, raw CSS, moves, text, images) and the whole session
+              shows up here.
+            </p>
+          </div>
         </div>
-        <p className="mt-2 text-xs text-muted">
-          Idle — edit any elements (styles, raw CSS, moves, text, images) and the whole session
-          shows up here.
-        </p>
       </div>
     );
   }
@@ -227,27 +226,38 @@ export const ExportPanel = () => {
 
   return (
     <div className="space-y-3">
-      <section className="rounded-lg border border-border bg-panel/80 backdrop-blur-sm p-4 shadow-card">
-        <h2 className="flex items-center gap-2 text-sm font-semibold">
-          <Layers aria-hidden="true" size={16} />
-          Export session
-        </h2>
-        <p className="mt-1 text-xs leading-5 text-muted">
-          The full session — every edited element and structural change — as one bundle. CLI and MCP
-          tools can turn the JSON into source-aware patch previews for review.
-        </p>
-        <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-          <div className="rounded-md border border-slate-100 bg-slate-50 p-2">
-            <p className="text-lg font-semibold text-slate-900">{session.stats.editedElements}</p>
-            <p className="text-[10px] uppercase tracking-wide text-slate-500">Elements</p>
+      <section className="ub-card p-4">
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
+            <Layers aria-hidden="true" size={16} />
+          </span>
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold tracking-tight">Export session</h2>
+            <p className="text-2xs text-muted">
+              Every edited element and structural change as one bundle.
+            </p>
           </div>
-          <div className="rounded-md border border-slate-100 bg-slate-50 p-2">
-            <p className="text-lg font-semibold text-slate-900">{session.stats.styleChanges}</p>
-            <p className="text-[10px] uppercase tracking-wide text-slate-500">Style edits</p>
+        </div>
+        <div className="mt-3.5 grid grid-cols-3 gap-2 text-center">
+          <div className="rounded-lg bg-accent-softer p-2.5 ring-1 ring-inset ring-accent-soft">
+            <p className="text-lg font-semibold tabular-nums text-accent">
+              {session.stats.editedElements}
+            </p>
+            <p className="text-[10px] font-medium uppercase tracking-wide text-muted">Elements</p>
           </div>
-          <div className="rounded-md border border-slate-100 bg-slate-50 p-2">
-            <p className="text-lg font-semibold text-slate-900">{session.stats.structuralEdits}</p>
-            <p className="text-[10px] uppercase tracking-wide text-slate-500">Structural</p>
+          <div className="rounded-lg bg-accent-softer p-2.5 ring-1 ring-inset ring-accent-soft">
+            <p className="text-lg font-semibold tabular-nums text-accent">
+              {session.stats.styleChanges}
+            </p>
+            <p className="text-[10px] font-medium uppercase tracking-wide text-muted">
+              Style edits
+            </p>
+          </div>
+          <div className="rounded-lg bg-accent-softer p-2.5 ring-1 ring-inset ring-accent-soft">
+            <p className="text-lg font-semibold tabular-nums text-accent">
+              {session.stats.structuralEdits}
+            </p>
+            <p className="text-[10px] font-medium uppercase tracking-wide text-muted">Structural</p>
           </div>
         </div>
       </section>
@@ -255,7 +265,7 @@ export const ExportPanel = () => {
       <CodeSyncPanel session={session} />
 
       {positionalSelectors.length > 0 ? (
-        <section className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-900">
+        <section className="flex items-start gap-2 rounded-card border border-amber-200 bg-amber-50 p-3 text-amber-900">
           <AlertTriangle aria-hidden="true" className="mt-0.5 shrink-0" size={14} />
           <div className="text-xs leading-5">
             <p className="font-semibold">Positional selectors</p>
@@ -268,24 +278,21 @@ export const ExportPanel = () => {
       ) : null}
 
       {session.structuralEdits.length > 0 ? (
-        <section className="rounded-lg border border-border bg-panel/80 backdrop-blur-sm p-4 shadow-card">
-          <h3 className="flex items-center gap-2 text-sm font-semibold">
-            <Boxes aria-hidden="true" size={15} />
+        <section className="ub-card p-4">
+          <h3 className="flex items-center gap-2 text-sm font-semibold tracking-tight">
+            <Boxes aria-hidden="true" className="text-accent" size={15} />
             Structural edits
           </h3>
-          <ul className="mt-3 space-y-2">
+          <ul className="mt-3 space-y-1.5">
             {session.structuralEdits.map((edit) => (
-              <li
-                className="rounded-md border border-slate-100 bg-slate-50 px-3 py-2 text-xs"
-                key={edit.id}
-              >
+              <li className="rounded-lg bg-slate-50 px-3 py-2 text-xs" key={edit.id}>
                 <div className="flex items-center gap-2">
-                  <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-700">
+                  <span className="rounded-md bg-accent-soft px-1.5 py-0.5 text-[10px] font-semibold uppercase text-accent">
                     {edit.kind}
                   </span>
-                  <span className="text-slate-800">{edit.summary}</span>
+                  <span className="text-ink">{edit.summary}</span>
                 </div>
-                <p className="mt-1 truncate font-mono text-[10px] text-slate-500">
+                <p className="mt-1 truncate font-mono text-[10px] text-muted">
                   {edit.target.selector}
                 </p>
               </li>

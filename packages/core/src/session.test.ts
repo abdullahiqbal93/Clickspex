@@ -50,7 +50,7 @@ describe("createUIChangeSession", () => {
           changes: [change("#b", "font-size", "14px", "16px")],
           rawCss: "display: none;",
         },
-        // No changes and no raw CSS — should be dropped from the session.
+        // No changes and no raw CSS - should be dropped from the session.
         { target: snapshot("#c"), changes: [] },
       ],
     });

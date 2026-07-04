@@ -88,12 +88,16 @@ export const PalettePanel = () => {
 
   if (loading || !scan) {
     return (
-      <div className="rounded-lg border border-border bg-panel/80 backdrop-blur-sm p-4 shadow-card">
-        <div className="flex items-center gap-2 text-sm font-semibold">
-          <Palette aria-hidden="true" size={16} />
-          Palette
+      <div className="ub-card p-4">
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
+            <Palette aria-hidden="true" size={16} />
+          </span>
+          <div>
+            <h2 className="text-sm font-semibold tracking-tight">Palette</h2>
+            <p className="text-2xs text-muted">{loading ? "Scanning page colors…" : "Idle"}</p>
+          </div>
         </div>
-        <p className="mt-2 text-xs text-muted">{loading ? "Scanning page colors..." : "Idle"}</p>
       </div>
     );
   }
@@ -108,34 +112,32 @@ export const PalettePanel = () => {
 
   return (
     <div className="space-y-3">
-      <section className="rounded-lg border border-border bg-panel/80 backdrop-blur-sm p-4 shadow-card">
-        <div className="flex items-start justify-between gap-3">
+      <section className="ub-card p-4">
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
+            <Palette aria-hidden="true" size={16} />
+          </span>
           <div>
-            <h2 className="text-sm font-semibold flex items-center gap-2">
-              <Palette size={16} />
-              Color Palette
-            </h2>
-            <p className="mt-1 break-all text-xs text-muted">
-              Top colors extracted from the page. Click to copy hex.
+            <h2 className="text-sm font-semibold tracking-tight">Color Palette</h2>
+            <p className="text-2xs text-muted">
+              Top colors extracted from the page - click to copy hex.
             </p>
           </div>
         </div>
-      </section>
-
-      <section className="rounded-lg border border-border bg-panel/80 backdrop-blur-sm p-4 shadow-card">
-        <div className="grid grid-cols-5 gap-2">
+        <div className="mt-3.5 grid grid-cols-5 gap-1.5 border-t border-line pt-3.5">
           {scan.colors.length === 0 ? (
             <p className="col-span-5 text-xs text-muted">No colors found</p>
           ) : (
             scan.colors.map((color, i) => (
               <button
                 key={i}
-                className="group relative flex aspect-square flex-col items-center justify-end overflow-hidden rounded-md border border-border shadow-sm transition hover:scale-105"
+                className="group relative flex aspect-square flex-col items-center justify-end overflow-hidden rounded-lg ring-1 ring-inset ring-ink/10 transition-transform hover:scale-105 hover:shadow-card"
                 style={{ backgroundColor: color.rgb }}
                 onClick={() => void copyToClipboard(color.hex)}
                 title={`${color.hex}\nUsed ${color.count} times\nIn: ${color.properties.join(", ")}`}
+                type="button"
               >
-                <div className="absolute inset-x-0 bottom-0 bg-black/60 py-1 text-center text-[9px] font-medium text-white opacity-0 transition group-hover:opacity-100">
+                <div className="absolute inset-x-0 bottom-0 bg-ink/70 py-1 text-center font-mono text-[9px] font-medium text-white opacity-0 transition-opacity group-hover:opacity-100">
                   {color.hex}
                 </div>
               </button>
@@ -144,15 +146,15 @@ export const PalettePanel = () => {
         </div>
       </section>
 
-      <section className="rounded-lg border border-border bg-panel/80 backdrop-blur-sm p-4 shadow-card">
+      <section className="ub-card p-4">
         <div className="flex items-center justify-between gap-2">
-          <h3 className="flex items-center gap-2 text-sm font-semibold">
-            <History size={15} />
+          <h3 className="flex items-center gap-2 text-sm font-semibold tracking-tight">
+            <History className="text-accent" size={15} />
             Eyedropper history
           </h3>
           {history.length > 0 ? (
             <button
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border text-slate-500 transition hover:bg-slate-50"
+              className="ub-icon-btn h-7 w-7"
               onClick={() => void clearHistory()}
               title="Clear history"
               type="button"
@@ -162,21 +164,21 @@ export const PalettePanel = () => {
           ) : null}
         </div>
         {history.length === 0 ? (
-          <p className="mt-2 text-xs text-muted">
+          <p className="mt-2 text-2xs text-muted">
             Colors picked with the eyedropper (pipette icon in the header) appear here.
           </p>
         ) : (
-          <div className="mt-3 grid grid-cols-6 gap-2">
+          <div className="mt-3 grid grid-cols-6 gap-1.5">
             {history.map((color) => (
               <button
-                className="group relative aspect-square overflow-hidden rounded-md border border-border shadow-sm transition hover:scale-105"
+                className="group relative aspect-square overflow-hidden rounded-lg ring-1 ring-inset ring-ink/10 transition-transform hover:scale-105 hover:shadow-card"
                 key={color}
                 onClick={() => void copyToClipboard(color)}
                 style={{ backgroundColor: color }}
-                title={`${color} — click to copy`}
+                title={`${color} - click to copy`}
                 type="button"
               >
-                <span className="absolute inset-x-0 bottom-0 bg-black/60 py-0.5 text-center text-[8px] font-medium text-white opacity-0 transition group-hover:opacity-100">
+                <span className="absolute inset-x-0 bottom-0 bg-ink/70 py-0.5 text-center font-mono text-[8px] font-medium text-white opacity-0 transition-opacity group-hover:opacity-100">
                   {color}
                 </span>
               </button>
@@ -185,16 +187,16 @@ export const PalettePanel = () => {
         )}
       </section>
 
-      <section className="rounded-lg border border-border bg-panel/80 backdrop-blur-sm p-4 shadow-card">
-        <h3 className="text-sm font-semibold">Gradient generator</h3>
+      <section className="ub-card p-4">
+        <h3 className="text-sm font-semibold tracking-tight">Gradient generator</h3>
         <div
-          className="mt-3 h-16 rounded-md border border-slate-200"
+          className="mt-3 h-16 rounded-lg ring-1 ring-inset ring-ink/10"
           style={{ background: gradientValue }}
         />
         <div className="mt-3 flex items-center gap-2">
           <select
             aria-label="Gradient type"
-            className="h-8 rounded-md border border-border bg-white px-2 text-xs text-slate-700 outline-none"
+            className="ub-input h-8 w-auto"
             onChange={(event) => setGradientKind(event.target.value as "linear" | "radial")}
             value={gradientKind}
           >
@@ -202,7 +204,7 @@ export const PalettePanel = () => {
             <option value="radial">Radial</option>
           </select>
           {gradientKind === "linear" ? (
-            <label className="flex flex-1 items-center gap-2 text-xs text-slate-600">
+            <label className="flex flex-1 items-center gap-2 text-xs text-muted">
               <input
                 className="w-full accent-accent"
                 max={360}
@@ -211,7 +213,7 @@ export const PalettePanel = () => {
                 type="range"
                 value={angle}
               />
-              <span className="w-10 text-right font-mono">{angle}°</span>
+              <span className="w-10 text-right font-mono tabular-nums">{angle}°</span>
             </label>
           ) : null}
         </div>
@@ -220,7 +222,7 @@ export const PalettePanel = () => {
             <div className="flex items-center gap-2" key={index}>
               <input
                 aria-label={`Stop ${index + 1} color`}
-                className="h-8 w-9 shrink-0 cursor-pointer rounded border border-border bg-transparent p-0"
+                className="h-8 w-9 shrink-0 cursor-pointer rounded-lg border border-line bg-transparent p-0.5"
                 onChange={(event) => updateStop(index, { color: event.target.value })}
                 type="color"
                 value={stop.color}
@@ -236,11 +238,11 @@ export const PalettePanel = () => {
                 type="range"
                 value={stop.position}
               />
-              <span className="w-9 text-right font-mono text-[10px] text-slate-500">
+              <span className="w-9 text-right font-mono text-[10px] tabular-nums text-muted">
                 {stop.position}%
               </span>
               <button
-                className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 disabled:opacity-30"
+                className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-ink disabled:opacity-30"
                 disabled={stops.length <= 2}
                 onClick={() => removeStop(index)}
                 title="Remove stop"
@@ -252,21 +254,16 @@ export const PalettePanel = () => {
           ))}
         </div>
         <div className="mt-3 flex items-center gap-2">
-          <button
-            className="inline-flex h-8 items-center gap-2 rounded-md border border-border px-3 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-40"
-            disabled={stops.length >= 5}
-            onClick={addStop}
-            type="button"
-          >
+          <button className="ub-btn" disabled={stops.length >= 5} onClick={addStop} type="button">
             <Plus aria-hidden="true" size={13} />
             Add stop
           </button>
           <button
-            className={`inline-flex h-8 items-center gap-2 rounded-md px-3 text-xs font-medium transition ${
+            className={
               copied
-                ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
-                : "bg-accent text-white hover:bg-blue-700"
-            }`}
+                ? "inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-200"
+                : "ub-btn-primary"
+            }
             onClick={() => void copyGradient()}
             type="button"
           >
@@ -274,7 +271,7 @@ export const PalettePanel = () => {
             {copied ? "Copied!" : "Copy CSS"}
           </button>
         </div>
-        <pre className="mt-3 overflow-x-auto rounded-md bg-slate-950 p-2 text-[10px] leading-4 text-slate-50">
+        <pre className="mt-3 overflow-x-auto rounded-lg bg-[#161726] p-2.5 font-mono text-[10px] leading-4 text-slate-100">
           <code>background: {gradientValue};</code>
         </pre>
       </section>

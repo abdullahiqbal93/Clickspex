@@ -12,6 +12,7 @@
     BlinkMacSystemFont,
     "Segoe UI",
     sans-serif;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
 }
 
 * {
@@ -21,8 +22,102 @@
 body {
   margin: 0;
   min-width: 320px;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 button {
   font: inherit;
+}
+
+/* Slim, unobtrusive scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #d5d8e4;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #b3b8cc;
+  background-clip: content-box;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+@layer base {
+  /* Consistent, accessible focus rings everywhere */
+  :focus-visible {
+    outline: 2px solid theme("colors.accent.DEFAULT");
+    outline-offset: 1px;
+    border-radius: 4px;
+  }
+
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+}
+
+@layer components {
+  /* Card container for panel sections */
+  .ub-card {
+    @apply rounded-card border border-line bg-panel shadow-card;
+  }
+
+  /* Section heading inside cards */
+  .ub-heading {
+    @apply text-2xs font-semibold uppercase tracking-wider text-muted;
+  }
+
+  /* Icon-only toolbar button */
+  .ub-icon-btn {
+    @apply inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted transition-colors hover:bg-slate-100 hover:text-ink disabled:cursor-not-allowed disabled:opacity-35;
+  }
+  .ub-icon-btn-active {
+    @apply bg-accent-soft text-accent hover:bg-accent-soft hover:text-accent-hover;
+  }
+
+  /* Primary action button */
+  .ub-btn-primary {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-white shadow-accent-glow transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  /* Secondary / outline button */
+  .ub-btn {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-lg border border-line bg-panel px-3 py-1.5 text-xs font-medium text-ink shadow-sm transition-colors hover:border-line-strong hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  /* Danger button */
+  .ub-btn-danger {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-lg bg-rose-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-rose-600;
+  }
+
+  /* Text input */
+  .ub-input {
+    @apply w-full rounded-lg border border-line bg-panel px-2.5 py-1.5 text-xs text-ink placeholder:text-slate-400 transition-colors focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent-ring;
+  }
+
+  /* Small key/value chip */
+  .ub-chip {
+    @apply inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-2xs font-medium text-slate-600;
+  }
+
+  /* Keyboard shortcut chip */
+  .ub-kbd {
+    @apply rounded-md border border-line bg-slate-50 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-slate-600 shadow-sm;
+  }
 }

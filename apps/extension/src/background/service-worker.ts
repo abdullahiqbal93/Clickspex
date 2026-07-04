@@ -17,7 +17,7 @@ void chrome.storage.session.setAccessLevel({ accessLevel: "TRUSTED_AND_UNTRUSTED
 /**
  * When the side panel closes we tell the page's content script to stop the
  * picker and drop any selection. Otherwise the page would keep its hover/select
- * overlay live and remain clickable even though the panel is gone — the user has
+ * overlay live and remain clickable even though the panel is gone - the user has
  * to press "Pick" again to start a new selection.
  */
 const notifyPanelClosed = (): void => {

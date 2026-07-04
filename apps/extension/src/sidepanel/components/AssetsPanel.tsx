@@ -39,12 +39,16 @@ export const AssetsPanel = () => {
 
   if (loading || !scan) {
     return (
-      <div className="rounded-lg border border-border bg-panel/80 backdrop-blur-sm p-4 shadow-card">
-        <div className="flex items-center gap-2 text-sm font-semibold">
-          <ImageIcon aria-hidden="true" size={16} />
-          Assets
+      <div className="ub-card p-4">
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
+            <ImageIcon aria-hidden="true" size={16} />
+          </span>
+          <div>
+            <h2 className="text-sm font-semibold tracking-tight">Assets</h2>
+            <p className="text-2xs text-muted">{loading ? "Scanning page assets…" : "Idle"}</p>
+          </div>
         </div>
-        <p className="mt-2 text-xs text-muted">{loading ? "Scanning page assets..." : "Idle"}</p>
       </div>
     );
   }
@@ -74,38 +78,33 @@ export const AssetsPanel = () => {
 
   return (
     <div className="space-y-3">
-      <section className="rounded-lg border border-border bg-panel/80 backdrop-blur-sm p-4 shadow-card">
-        <div className="flex items-start justify-between gap-3">
+      <section className="ub-card p-4">
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
+            <ImageIcon aria-hidden="true" size={16} />
+          </span>
           <div>
-            <h2 className="text-sm font-semibold flex items-center gap-2">
-              <ImageIcon size={16} />
-              Assets
-            </h2>
-            <p className="mt-1 break-all text-xs text-muted">
-              Images, SVGs, and backgrounds found on the page.
+            <h2 className="text-sm font-semibold tracking-tight">Assets</h2>
+            <p className="text-2xs text-muted">
+              {scan.assets.length} images, SVGs &amp; backgrounds on this page.
             </p>
           </div>
         </div>
       </section>
 
       {scan.assets.length === 0 ? (
-        <section className="rounded-lg border border-border bg-panel/80 backdrop-blur-sm p-4 shadow-card text-xs text-muted">
-          No assets found
-        </section>
+        <section className="ub-card p-6 text-center text-xs text-muted">No assets found</section>
       ) : (
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-2.5">
           {scan.assets.map((asset, i) => (
-            <div
-              key={i}
-              className="flex flex-col overflow-hidden rounded-lg border border-border bg-panel/80 backdrop-blur-sm shadow-sm"
-            >
-              <div className="flex h-24 items-center justify-center bg-slate-100 p-2 relative group">
+            <div key={i} className="ub-card flex flex-col overflow-hidden">
+              <div className="group relative flex h-24 items-center justify-center bg-[repeating-conic-gradient(#f1f5f9_0%_25%,#ffffff_0%_50%)] bg-[length:16px_16px] p-2">
                 <img
                   src={asset.src}
                   alt={asset.alt}
                   className="max-h-full max-w-full object-contain"
                 />
-                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="absolute inset-0 flex items-center justify-center bg-ink/40 opacity-0 backdrop-blur-[1px] transition-opacity group-hover:opacity-100">
                   <button
                     onClick={() =>
                       void downloadAsset(
@@ -113,22 +112,21 @@ export const AssetsPanel = () => {
                         `asset-${i}.${asset.type === "svg" ? "svg" : "png"}`,
                       )
                     }
-                    className="p-2 bg-white rounded-full text-slate-900 hover:scale-110 transition-transform"
+                    className="rounded-full bg-white p-2 text-ink shadow-pop transition-transform hover:scale-110"
                     title="Download"
+                    type="button"
                   >
-                    <Download size={16} />
+                    <Download size={15} />
                   </button>
                 </div>
               </div>
-              <div className="p-2 border-t border-slate-100 bg-white">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-semibold uppercase text-slate-500">
-                    {asset.type}
-                  </span>
-                  <span className="text-[10px] text-slate-400">
-                    {asset.width}×{asset.height}
-                  </span>
-                </div>
+              <div className="flex items-center justify-between border-t border-line bg-panel px-2.5 py-1.5">
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-accent">
+                  {asset.type}
+                </span>
+                <span className="font-mono text-[10px] tabular-nums text-muted">
+                  {asset.width}×{asset.height}
+                </span>
               </div>
             </div>
           ))}

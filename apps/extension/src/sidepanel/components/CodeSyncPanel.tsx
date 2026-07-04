@@ -115,7 +115,7 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
       );
       setPreview(result);
     } catch {
-      setError("Preview failed — is `ui-buddy connect` running in your project?");
+      setError("Preview failed - is `ui-buddy connect` running in your project?");
       setConnection("disconnected");
     } finally {
       setBusy(false);
@@ -139,7 +139,7 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
       );
       setApplyResult(result);
     } catch {
-      setError("Apply failed — check the ui-buddy connect terminal for errors.");
+      setError("Apply failed - check the ui-buddy connect terminal for errors.");
     } finally {
       setBusy(false);
     }
@@ -154,7 +154,7 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
       setApplyResult(null);
       setError(null);
     } catch {
-      setError("Rollback failed — check the ui-buddy connect terminal.");
+      setError("Rollback failed - check the ui-buddy connect terminal.");
     } finally {
       setBusy(false);
     }
@@ -163,14 +163,14 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
   const applicablePreviews = preview?.elements.filter((element) => element.applicable) ?? [];
 
   return (
-    <section className="rounded-lg border border-border bg-panel/80 p-4 shadow-card backdrop-blur-sm">
+    <section className="ub-card p-4">
       <div className="flex items-center justify-between gap-2">
-        <h3 className="flex items-center gap-2 text-sm font-semibold">
-          <Plug aria-hidden="true" size={15} />
+        <h3 className="flex items-center gap-2 text-sm font-semibold tracking-tight">
+          <Plug aria-hidden="true" className="text-accent" size={15} />
           Code sync
         </h3>
         <button
-          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border text-slate-500 transition hover:bg-slate-50"
+          className="ub-icon-btn h-7 w-7"
           disabled={connection === "checking"}
           onClick={() => void checkHealth(port)}
           title="Reconnect"
@@ -180,31 +180,30 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
         </button>
       </div>
 
-      <div className="mt-2 flex items-center gap-2 text-xs">
+      <div className="mt-2.5 flex items-center gap-2 rounded-lg bg-slate-50 px-2.5 py-2 text-xs">
         <span
-          className={`inline-block h-2 w-2 rounded-full ${
-            connection === "connected"
-              ? "bg-emerald-500"
-              : connection === "checking"
-                ? "bg-amber-400"
-                : "bg-slate-300"
-          }`}
+          className={`inline-block h-2 w-2 shrink-0 rounded-full ${connection === "connected"
+            ? "bg-emerald-500 shadow-[0_0_0_3px_rgb(16_185_129_/_0.15)]"
+            : connection === "checking"
+              ? "animate-pulse bg-amber-400"
+              : "bg-slate-300"
+            }`}
         />
         {connection === "connected" ? (
-          <span className="text-slate-700">
+          <span className="text-ink">
             Connected to <span className="font-semibold">{projectName}</span>
           </span>
         ) : connection === "checking" ? (
-          <span className="text-slate-500">Checking…</span>
+          <span className="text-muted">Checking…</span>
         ) : (
-          <span className="text-slate-500">
-            Not connected. Run <code className="font-mono">npx ui-buddy connect</code> in your
+          <span className="text-muted">
+            Not connected. Run <code className="ub-chip">npx ui-buddy connect</code> in your
             project.
           </span>
         )}
         <input
           aria-label="Bridge port"
-          className="ml-auto h-7 w-16 rounded-md border border-border px-2 text-[11px] outline-none focus:border-accent"
+          className="ub-input ml-auto h-7 w-16 text-center text-2xs"
           onBlur={() => void checkHealth(port)}
           onChange={(event) => savePort(event.target.value.replace(/[^0-9]/g, ""))}
           value={port}
@@ -213,12 +212,7 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
 
       {connection === "connected" ? (
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <button
-            className="inline-flex h-8 items-center gap-2 rounded-md border border-border px-3 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-40"
-            disabled={busy}
-            onClick={() => void runPreview()}
-            type="button"
-          >
+          <button className="ub-btn" disabled={busy} onClick={() => void runPreview()} type="button">
             <FileCode2 aria-hidden="true" size={13} />
             Preview diff
           </button>
@@ -226,24 +220,20 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
           {confirming ? (
             <>
               <button
-                className="inline-flex h-8 items-center gap-2 rounded-md bg-red-600 px-3 text-xs font-medium text-white transition hover:bg-red-700 disabled:opacity-40"
+                className="ub-btn-danger"
                 disabled={busy}
                 onClick={() => void runApply()}
                 type="button"
               >
                 Confirm apply
               </button>
-              <button
-                className="inline-flex h-8 items-center rounded-md border border-border px-3 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
-                onClick={() => setConfirming(false)}
-                type="button"
-              >
+              <button className="ub-btn" onClick={() => setConfirming(false)} type="button">
                 Cancel
               </button>
             </>
           ) : (
             <button
-              className="inline-flex h-8 items-center gap-2 rounded-md bg-accent px-3 text-xs font-medium text-white transition hover:bg-blue-700 disabled:opacity-40"
+              className="ub-btn-primary"
               disabled={busy || applicablePreviews.length === 0}
               onClick={() => setConfirming(true)}
               title={
@@ -260,7 +250,7 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
       ) : null}
 
       {error !== null ? (
-        <div className="mt-3 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+        <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-2xs text-amber-800">
           <AlertTriangle aria-hidden="true" className="mt-0.5 shrink-0" size={13} />
           <span>{error}</span>
         </div>
@@ -268,14 +258,11 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
 
       {preview !== null && applyResult === null ? (
         <div className="mt-3 space-y-2">
-          <p className="text-[11px] text-muted">
+          <p className="text-2xs text-muted">
             {applicablePreviews.length} of {preview.elements.length} element(s) map to a stylesheet.
           </p>
           {preview.elements.map((element) => (
-            <div
-              className="rounded-md border border-slate-100 bg-slate-50 p-2 text-xs"
-              key={element.selector}
-            >
+            <div className="rounded-lg bg-slate-50 p-2.5 text-xs" key={element.selector}>
               <div className="flex items-center justify-between gap-2">
                 <span className="truncate font-mono text-[10px] text-slate-600">
                   {element.selector}
@@ -285,7 +272,7 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
                 </span>
               </div>
               {element.diff !== null ? (
-                <pre className="mt-1 max-h-32 overflow-auto rounded bg-slate-950 p-2 text-[10px] leading-4 text-slate-50">
+                <pre className="mt-1.5 max-h-32 overflow-auto rounded-md bg-[#161726] p-2 font-mono text-[10px] leading-4 text-slate-100">
                   <code>{element.diff}</code>
                 </pre>
               ) : null}
@@ -296,7 +283,7 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
 
       {applyResult !== null ? (
         <div className="mt-3 space-y-2">
-          <div className="flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-800">
+          <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-2.5 text-xs text-emerald-800">
             <Check aria-hidden="true" size={13} />
             <span>
               Applied {applyResult.applied.length} change(s) to your source.
@@ -304,13 +291,13 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
             </span>
           </div>
           {applyResult.applied.map((item) => (
-            <p className="truncate font-mono text-[10px] text-slate-500" key={item.selector}>
+            <p className="truncate font-mono text-[10px] text-muted" key={item.selector}>
               {item.file} ← {item.selector}
             </p>
           ))}
           {applyResult.backupId !== null ? (
             <button
-              className="inline-flex h-8 items-center gap-2 rounded-md border border-border px-3 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-40"
+              className="ub-btn"
               disabled={busy}
               onClick={() => void runRollback()}
               type="button"

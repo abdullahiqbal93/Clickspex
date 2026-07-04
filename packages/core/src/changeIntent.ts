@@ -231,7 +231,7 @@ export const summarizeSessionAsMarkdown = (session: UIChangeSession): string => 
       ? [
           "## Structural edits",
           ...session.structuralEdits.map(
-            (edit) => `- (${edit.kind}) \`${edit.target.selector}\` — ${edit.summary}`,
+            (edit) => `- (${edit.kind}) \`${edit.target.selector}\` - ${edit.summary}`,
           ),
         ]
       : [];

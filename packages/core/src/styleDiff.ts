@@ -85,7 +85,7 @@ export const createStyleChange = (
 export const STYLE_CHANGE_COALESCE_WINDOW_MS = 600;
 
 /**
- * True when `next` should collapse into `previous` — same target property, and
+ * True when `next` should collapse into `previous` - same target property, and
  * committed within the coalesce window. Lets a slider drag record one change
  * (and undo as one step) rather than dozens.
  */

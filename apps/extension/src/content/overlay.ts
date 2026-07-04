@@ -491,7 +491,7 @@ export class OverlayController {
     container.style.height = `${rect.height}px`;
     container.style.overflow = "visible";
 
-    // margin zone (orange) — uses negative offsets to extend outward
+    // margin zone (orange) - uses negative offsets to extend outward
     const mBox = doc.createElement("div");
     mBox.style.cssText = `position:absolute;top:-${margin.top};right:-${margin.right};bottom:-${margin.bottom};left:-${margin.left};border-style:solid;border-color:rgb(249 204 157/.65);border-width:${margin.top} ${margin.right} ${margin.bottom} ${margin.left};pointer-events:none;`;
 

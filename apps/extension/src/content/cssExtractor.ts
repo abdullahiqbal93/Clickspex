@@ -47,7 +47,7 @@ const selectorMatches = (element: Element, selectorText: string): boolean =>
     }
 
     // Retry with pseudo-classes/elements removed so :hover/:focus rules and
-    // ::before styles are still captured — but only when a real compound
+    // ::before styles are still captured - but only when a real compound
     // selector remains. A selector that strips down to "" or "*" (e.g. `:root`,
     // `:host`, `:focus-visible`) would otherwise match every element.
     if (/:/.test(selector)) {

@@ -70,7 +70,7 @@ describe("StyleInjector", () => {
     const first = injector.applyChange(
       createChange("color", "black", "white", undefined, undefined, "2026-07-01T00:00:00.000Z"),
     );
-    // 200ms later — within the coalesce window, like a slider drag.
+    // 200ms later - within the coalesce window, like a slider drag.
     const second = injector.applyChange(
       createChange("color", "white", "red", undefined, undefined, "2026-07-01T00:00:00.200Z"),
     );

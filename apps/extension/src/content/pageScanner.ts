@@ -118,7 +118,7 @@ export const scanPage = (): PageScanResult => {
     if (rect.width > 0 && rect.height > 0) {
       const serializer = new XMLSerializer();
       const svgStr = serializer.serializeToString(svg);
-      // Use a data: URL — blob: URLs minted in the page context cannot be
+      // Use a data: URL - blob: URLs minted in the page context cannot be
       // loaded by the extension side panel (different origin/process).
       assets.push({
         type: "svg",

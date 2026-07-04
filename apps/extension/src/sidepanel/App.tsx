@@ -353,83 +353,60 @@ export const App = () => {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [redoAll, togglePicker, undoAll]);
 
+  const currentSelector = selectedElement?.selector ?? hoveredSelector;
+
   return (
     <main className="min-h-screen bg-canvas text-ink">
-      <header className="border-b border-slate-200 bg-panel px-4 py-3">
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <h1 className="text-sm font-semibold">ui-buddy</h1>
-            <p
-              className="truncate text-xs text-muted"
-              title={selectedElement?.selector ?? hoveredSelector ?? "No element selected"}
+      <header className="sticky top-0 z-40 border-b border-line bg-panel/95 backdrop-blur">
+        <div className="flex items-center justify-between gap-2 px-3 pt-2.5">
+          <div className="flex min-w-0 items-center gap-2">
+            <span
+              aria-hidden="true"
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-accent-glow"
             >
-              {selectedElement?.selector ?? hoveredSelector ?? "No element selected"}
-            </p>
+              <SquareMousePointer size={15} />
+            </span>
+            <h1 className="truncate text-sm font-semibold tracking-tight">UI Buddy</h1>
           </div>
-          <div className="relative flex shrink-0 items-center gap-1.5">
+
+          <div className="relative flex shrink-0 items-center gap-0.5">
             <button
-              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-panel text-slate-600 transition hover:bg-slate-50 hover:text-ink disabled:cursor-not-allowed disabled:opacity-35"
+              className="ub-icon-btn"
               disabled={historyUndoDepth === 0}
               onClick={() => void undoAll()}
-              title="Undo last change (styles, moves, deletes) — Ctrl+Z"
+              title="Undo last change (styles, moves, deletes) - Ctrl+Z"
               type="button"
             >
-              <Undo2 aria-hidden="true" size={14} />
+              <Undo2 aria-hidden="true" size={15} />
             </button>
             <button
-              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-panel text-slate-600 transition hover:bg-slate-50 hover:text-ink disabled:cursor-not-allowed disabled:opacity-35"
+              className="ub-icon-btn"
               disabled={historyRedoDepth === 0}
               onClick={() => void redoAll()}
-              title="Redo — Ctrl+Shift+Z"
+              title="Redo - Ctrl+Shift+Z"
               type="button"
             >
-              <Redo2 aria-hidden="true" size={14} />
+              <Redo2 aria-hidden="true" size={15} />
             </button>
-            <button
-              className={`inline-flex h-8 w-8 items-center justify-center rounded-md border transition ${
-                showHelp
-                  ? "border-accent bg-blue-50 text-accent"
-                  : "border-slate-200 bg-panel text-slate-600 hover:bg-slate-50 hover:text-ink"
-              }`}
-              onClick={() => setShowHelp((current) => !current)}
-              title="Keyboard shortcuts"
-              type="button"
-            >
-              <HelpCircle aria-hidden="true" size={14} />
-            </button>
-            {showHelp ? (
-              <div className="absolute right-0 top-10 z-50 w-72 rounded-lg border border-slate-200 bg-white p-3 shadow-xl">
-                <p className="text-xs font-semibold text-slate-900">Keyboard shortcuts</p>
-                <dl className="mt-2 space-y-1.5">
-                  {hotkeys.map(([keys, description]) => (
-                    <div className="flex items-start justify-between gap-2" key={keys}>
-                      <dt className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-slate-700">
-                        {keys}
-                      </dt>
-                      <dd className="text-right text-[11px] leading-4 text-slate-600">
-                        {description}
-                      </dd>
-                    </div>
-                  ))}
-                </dl>
-              </div>
-            ) : null}
+
+            <span aria-hidden="true" className="mx-1 h-4 w-px bg-line" />
+
             {["palette", "typography", "assets"].includes(activeTab) && (
               <button
-                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-panel text-slate-600 transition hover:bg-slate-50 hover:text-ink"
+                className="ub-icon-btn"
                 onClick={() => void handleRescan()}
                 title="Rescan Page"
                 type="button"
               >
-                <RefreshCcw aria-hidden="true" size={14} />
+                <RefreshCcw aria-hidden="true" size={15} />
               </button>
             )}
             <button
-              className={`inline-flex h-8 items-center justify-center gap-1.5 rounded-md border transition ${
+              className={
                 eyedropperFeedback
-                  ? "border-emerald-200 bg-emerald-50 px-2 text-emerald-700"
-                  : "w-8 border-slate-200 bg-panel text-slate-600 hover:bg-slate-50 hover:text-ink"
-              }`}
+                  ? "inline-flex h-8 items-center gap-1.5 rounded-lg bg-emerald-50 px-2 text-emerald-700 ring-1 ring-inset ring-emerald-200"
+                  : "ub-icon-btn"
+              }
               onClick={() => void handleEyedropper()}
               title="Global Eyedropper"
               type="button"
@@ -437,20 +414,16 @@ export const App = () => {
               {eyedropperFeedback ? (
                 <>
                   <Check aria-hidden="true" size={13} />
-                  <span className="text-[10px] font-mono font-bold uppercase">
+                  <span className="font-mono text-[10px] font-bold uppercase">
                     {eyedropperFeedback}
                   </span>
                 </>
               ) : (
-                <Pipette aria-hidden="true" size={14} />
+                <Pipette aria-hidden="true" size={15} />
               )}
             </button>
             <button
-              className={`inline-flex h-8 w-8 items-center justify-center rounded-md border transition ${
-                gridActive
-                  ? "border-accent bg-accent text-white hover:bg-blue-700"
-                  : "border-slate-200 bg-panel text-slate-600 hover:bg-slate-50 hover:text-ink"
-              }`}
+              className={`ub-icon-btn ${gridActive ? "ub-icon-btn-active" : ""}`}
               onClick={() => void toggleGrid()}
               title="Toggle Layout Grid"
               type="button"
@@ -458,51 +431,86 @@ export const App = () => {
               <Grid3X3 aria-hidden="true" size={15} />
             </button>
             <button
-              className={`inline-flex h-8 items-center gap-2 rounded-md px-3 text-xs font-medium shadow-sm transition ${
-                pickerActive
-                  ? "bg-red-600 text-white hover:bg-red-700"
-                  : "bg-accent text-white hover:bg-blue-700"
-              }`}
+              className={`ub-icon-btn ${showHelp ? "ub-icon-btn-active" : ""}`}
+              onClick={() => setShowHelp((current) => !current)}
+              title="Keyboard shortcuts"
+              type="button"
+            >
+              <HelpCircle aria-hidden="true" size={15} />
+            </button>
+            {showHelp ? (
+              <div className="absolute right-0 top-10 z-50 w-72 rounded-card border border-line bg-panel p-3.5 shadow-pop">
+                <p className="text-xs font-semibold text-ink">Keyboard shortcuts</p>
+                <dl className="mt-2.5 space-y-2">
+                  {hotkeys.map(([keys, description]) => (
+                    <div className="flex items-start justify-between gap-3" key={keys}>
+                      <dt className="ub-kbd shrink-0">{keys}</dt>
+                      <dd className="text-right text-2xs leading-4 text-muted">{description}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            ) : null}
+
+            <button
+              className={`ml-1.5 inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition-colors ${pickerActive
+                ? "bg-rose-500 text-white shadow-sm hover:bg-rose-600"
+                : "bg-accent text-white shadow-accent-glow hover:bg-accent-hover"
+                }`}
               onClick={() => void togglePicker()}
               type="button"
             >
-              <SquareMousePointer aria-hidden="true" size={15} />
+              <SquareMousePointer aria-hidden="true" size={14} />
               {pickerActive ? "Stop" : "Pick"}
             </button>
           </div>
         </div>
+
+        <div className="flex items-center gap-1.5 px-3 pb-2 pt-1.5">
+          <Crosshair
+            aria-hidden="true"
+            className={currentSelector ? "shrink-0 text-accent" : "shrink-0 text-slate-300"}
+            size={12}
+          />
+          <p
+            className={`min-w-0 truncate font-mono text-2xs ${currentSelector ? "text-slate-600" : "text-slate-400"
+              }`}
+            title={currentSelector ?? "No element selected"}
+          >
+            {currentSelector ?? "No element selected - press Pick to inspect"}
+          </p>
+        </div>
+
+        <nav
+          className="grid grid-cols-5 gap-1 border-t border-line bg-canvas/60 p-1.5"
+          aria-label="Panel sections"
+        >
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            const selected = activeTab === tab.id;
+
+            return (
+              <button
+                aria-current={selected ? "page" : undefined}
+                className={`flex flex-col items-center justify-center gap-0.5 rounded-lg py-1.5 text-[10px] font-medium transition-colors ${selected
+                  ? "bg-accent-soft text-accent shadow-sm ring-1 ring-inset ring-accent-ring"
+                  : "text-muted hover:bg-slate-100 hover:text-ink"
+                  }`}
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                type="button"
+              >
+                <Icon aria-hidden="true" size={15} />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
+        </nav>
       </header>
 
-      <nav
-        className="flex overflow-x-auto border-b border-slate-200 bg-panel scrollbar-hide"
-        aria-label="Panel sections"
-      >
-        {tabs.map((tab) => {
-          const Icon = tab.icon;
-          const selected = activeTab === tab.id;
-
-          return (
-            <button
-              aria-current={selected ? "page" : undefined}
-              className={`flex h-12 min-w-[64px] flex-col items-center justify-center gap-1 text-[10px] font-medium transition ${
-                selected
-                  ? "bg-blue-50 text-accent"
-                  : "text-slate-600 hover:bg-slate-50 hover:text-ink"
-              }`}
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              type="button"
-            >
-              <Icon aria-hidden="true" size={15} />
-              <span>{tab.label}</span>
-            </button>
-          );
-        })}
-      </nav>
-
-      <section className="space-y-3 p-4">
+      <section className="space-y-3 p-3">
         {error !== null ? (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs leading-5 text-red-700">
+          <div className="rounded-card border border-rose-200 bg-rose-50 p-3 text-xs leading-5 text-rose-700">
             {error}
           </div>
         ) : null}

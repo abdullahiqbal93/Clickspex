@@ -15,7 +15,7 @@ import { usePanelStore } from "../store";
 import type { A11yIssue } from "@ui-buddy/shared";
 
 const SEVERITY_STYLES: Record<A11yIssue["severity"], string> = {
-  error: "border-red-200 bg-red-50 text-red-900",
+  error: "border-rose-200 bg-rose-50 text-rose-900",
   warning: "border-amber-200 bg-amber-50 text-amber-900",
   info: "border-sky-200 bg-sky-50 text-sky-900",
 };
@@ -81,19 +81,19 @@ export const AccessibilityPanel = () => {
       : [...a11yIssues].sort((a, b) => severityRank[a.severity] - severityRank[b.severity]);
 
   const pageAuditSection = (
-    <section className="rounded-lg border border-border bg-panel/80 backdrop-blur-sm p-4 shadow-card">
+    <section className="ub-card p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold">Page audit</h3>
-          <p className="mt-1 text-xs leading-5 text-muted">
+          <h3 className="text-sm font-semibold tracking-tight">Page audit</h3>
+          <p className="mt-1 text-2xs leading-4 text-muted">
             Sweep the whole page for missing alt text, unlabeled controls, low contrast, duplicate
             ids, and heading issues.
           </p>
         </div>
-        <div className="flex shrink-0 gap-2">
+        <div className="flex shrink-0 gap-1.5">
           {sortedIssues !== null && sortedIssues.length > 0 ? (
             <button
-              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-slate-700 transition hover:bg-slate-50"
+              className="ub-icon-btn"
               onClick={downloadReport}
               title="Download Markdown report"
               type="button"
@@ -102,27 +102,27 @@ export const AccessibilityPanel = () => {
             </button>
           ) : null}
           <button
-            className="inline-flex h-8 items-center gap-2 rounded-md bg-accent px-3 text-xs font-medium text-white transition hover:bg-blue-700 disabled:opacity-50"
+            className="ub-btn-primary"
             disabled={a11yScanLoading}
             onClick={() => void runPageScan()}
             type="button"
           >
             <ScanSearch aria-hidden="true" size={14} />
-            {a11yScanLoading ? "Scanning..." : "Scan page"}
+            {a11yScanLoading ? "Scanning…" : "Scan page"}
           </button>
         </div>
       </div>
       {sortedIssues !== null ? (
         sortedIssues.length === 0 ? (
-          <div className="mt-3 flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-xs font-medium text-emerald-800">
+          <div className="mt-3 flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs font-medium text-emerald-800">
             <CheckCircle2 aria-hidden="true" size={15} />
             No issues found by the lightweight sweep
           </div>
         ) : (
-          <div className="mt-3 max-h-80 space-y-2 overflow-auto">
+          <div className="mt-3 max-h-80 space-y-2 overflow-auto pr-0.5">
             {sortedIssues.map((issue) => (
               <button
-                className={`block w-full rounded-md border p-3 text-left transition hover:brightness-95 ${SEVERITY_STYLES[issue.severity]}`}
+                className={`block w-full rounded-lg border p-3 text-left transition hover:brightness-[0.97] ${SEVERITY_STYLES[issue.severity]}`}
                 key={issue.id}
                 onClick={() => void selectIssue(issue.selector)}
                 title="Click to select this element on the page"
@@ -164,14 +164,18 @@ export const AccessibilityPanel = () => {
   if (selectedElement === null) {
     return (
       <div className="space-y-3">
-        <div className="rounded-lg border border-border bg-panel/80 backdrop-blur-sm p-4 shadow-card">
-          <div className="flex items-center gap-2 text-sm font-semibold">
-            <ShieldCheck aria-hidden="true" size={16} />
-            Accessibility
+        <div className="ub-card p-4">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
+              <ShieldCheck aria-hidden="true" size={16} />
+            </span>
+            <div>
+              <h2 className="text-sm font-semibold tracking-tight">Accessibility</h2>
+              <p className="text-2xs text-muted">
+                Select an element for per-element checks, or run a page-wide audit below.
+              </p>
+            </div>
           </div>
-          <p className="mt-2 text-xs text-muted">
-            Select an element for per-element checks, or run a page-wide audit below.
-          </p>
         </div>
         {pageAuditSection}
       </div>
@@ -181,26 +185,28 @@ export const AccessibilityPanel = () => {
   const contrastRatio = contrastRatioFromCssColors(
     selectedElement.computedStyles.color ?? "",
     selectedElement.effectiveBackgroundColor ??
-      selectedElement.computedStyles["background-color"] ??
-      "",
+    selectedElement.computedStyles["background-color"] ??
+    "",
   );
 
   return (
     <div className="space-y-3">
-      <section className="rounded-lg border border-border bg-panel/80 backdrop-blur-sm p-4 shadow-card">
+      <section className="ub-card p-4">
         <div className="flex items-start justify-between gap-3">
-          <div className="flex items-start gap-3">
-            <ShieldCheck aria-hidden="true" className="mt-0.5 text-accent" size={17} />
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
+              <ShieldCheck aria-hidden="true" size={16} />
+            </span>
             <div>
-              <h2 className="text-sm font-semibold">Accessibility</h2>
-              <p className="mt-1 text-xs leading-5 text-muted">
-                Lightweight v1 checks only. This is not a full WCAG audit.
+              <h2 className="text-sm font-semibold tracking-tight">Accessibility</h2>
+              <p className="text-2xs text-muted">
+                Lightweight v1 checks only - not a full WCAG audit.
               </p>
             </div>
           </div>
-          <div className="flex shrink-0 gap-2">
+          <div className="flex shrink-0 gap-1">
             <button
-              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-slate-700 transition hover:bg-slate-50"
+              className="ub-icon-btn"
               onClick={() => void pinAudit()}
               title="Pin audit card"
               type="button"
@@ -208,7 +214,7 @@ export const AccessibilityPanel = () => {
               <Pin aria-hidden="true" size={14} />
             </button>
             <button
-              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-slate-700 transition hover:bg-slate-50"
+              className="ub-icon-btn"
               onClick={() => void clearPins()}
               title="Clear pinned cards"
               type="button"
@@ -219,34 +225,34 @@ export const AccessibilityPanel = () => {
         </div>
       </section>
 
-      <section className="rounded-lg border border-border bg-panel/80 backdrop-blur-sm p-4 shadow-card">
-        <h3 className="text-sm font-semibold">Contrast</h3>
-        <div className="mt-3 flex items-center justify-between rounded-md bg-slate-50 p-3">
-          <span className="text-xs font-medium text-slate-500">Ratio</span>
-          <span className="text-lg font-semibold text-slate-950">
+      <section className="ub-card p-4">
+        <h3 className="ub-heading">Contrast</h3>
+        <div className="mt-2 flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2.5">
+          <span className="text-xs font-medium text-muted">Ratio</span>
+          <span className="font-mono text-lg font-semibold tabular-nums text-ink">
             {contrastRatio === null ? "Unknown" : `${contrastRatio}:1`}
           </span>
         </div>
       </section>
 
-      <section className="rounded-lg border border-border bg-panel/80 backdrop-blur-sm p-4 shadow-card">
-        <h3 className="text-sm font-semibold">Warnings</h3>
-        <div className="mt-3 space-y-2">
+      <section className="ub-card p-4">
+        <h3 className="ub-heading">Warnings</h3>
+        <div className="mt-2 space-y-2">
           {notes.length > 0 ? (
             notes.map((note) => (
               <div
-                className="flex items-start gap-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-900"
+                className="flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-900"
                 key={note.id}
               >
                 <AlertTriangle aria-hidden="true" className="mt-0.5 shrink-0" size={15} />
                 <div>
                   <p className="text-xs font-semibold">{note.title}</p>
-                  <p className="mt-1 text-xs leading-5">{note.message}</p>
+                  <p className="mt-1 text-2xs leading-4">{note.message}</p>
                 </div>
               </div>
             ))
           ) : (
-            <div className="flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-xs font-medium text-emerald-800">
+            <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs font-medium text-emerald-800">
               <CheckCircle2 aria-hidden="true" size={15} />
               No v1 warnings
             </div>

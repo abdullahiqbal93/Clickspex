@@ -295,7 +295,7 @@ export type StructuralEdit = {
 /**
  * A complete browser editing session: every edited element (with its style
  * changes and raw CSS) plus every structural edit, so the full set of changes
- * can be exported and mapped to source — not just the last-selected element.
+ * can be exported and mapped to source - not just the last-selected element.
  */
 export type UIChangeSession = {
   id: string;
