@@ -1,7 +1,5 @@
 import { addRuntimeMessageListener, sendRuntimeMessage } from "../chrome/messaging";
 
-import type { StructuralEdit } from "@ui-buddy/shared";
-
 import { runA11yAudit } from "./a11yAudit";
 import { extractElementCss } from "./cssExtractor";
 import { GridController } from "./grid";
@@ -10,6 +8,8 @@ import { scanPage } from "./pageScanner";
 import { ElementPickerController } from "./picker";
 import { ManualRulerController } from "./ruler";
 import { StyleInjector } from "./styleInjector";
+
+import type { StructuralEdit } from "@ui-buddy/shared";
 
 declare global {
   interface Window {
@@ -22,9 +22,9 @@ declare global {
 const overlay = new OverlayController();
 const styleInjector = new StyleInjector();
 
-// ── Unified page-action history ─────────────────────────────
+// Unified page-action history.
 // One ordered log across style edits, raw CSS, moves, deletes, text, and image
-// edits so a single undo/redo covers everything the user did to the page — and
+// edits so a single undo/redo covers everything the user did to the page and
 // so the full session (not just the last-selected element) can be exported.
 type PageAction =
   { kind: "style" } | { kind: "raw-css" } | { kind: StructuralEdit["kind"]; edit: StructuralEdit };
