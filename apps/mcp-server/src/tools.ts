@@ -320,7 +320,15 @@ export const handleGenerateSessionExport = (input: GenerateSessionExportInput): 
           tailwind: tailwindAdapter.generateExport(intent),
           rawCss: intent.rawCss ?? null,
         })),
-        structuralEdits: session.structuralEdits,
+        structuralEdits: session.structuralEdits.map((edit) => ({
+          id: edit.id,
+          kind: edit.kind,
+          selector: edit.target.selector,
+          target: edit.target,
+          summary: edit.summary,
+          details: edit.details,
+          timestamp: edit.timestamp,
+        })),
       },
     };
   } catch (error) {
