@@ -1,4 +1,10 @@
-export { cssAdapter, generateCssFromChangeIntent } from "./cssAdapter.js";
+export {
+  cssAdapter,
+  computeCssFileEdit,
+  generateCssFromChangeIntent,
+  type CssFileEdit,
+} from "./cssAdapter.js";
+export { createUnifiedDiff } from "./diffPreview.js";
 export { scaffoldAdapters } from "./scaffoldAdapters.js";
 export { generateTailwindClassesFromChangeIntent, tailwindAdapter } from "./tailwindAdapter.js";
 

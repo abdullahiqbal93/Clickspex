@@ -32,13 +32,16 @@ Implemented:
 - Generate file-specific CSS patch previews when an indexed stylesheet is available.
 - Generate file-specific Tailwind class attribute previews when an indexed component or route is available.
 - Show changed files, diff previews, confidence, warnings, and manual review steps.
-- Keep CLI and MCP patch flows read-only.
+- Capture the full multi-element session (styles, raw CSS, and structural edits), not just the last-selected element.
+- Guarded apply for CSS: `ui-buddy connect` runs a localhost bridge; the extension's Code Sync panel previews the diff and writes matched stylesheet files on explicit confirmation.
+- Rollback: every apply writes originals to `.ui-buddy/backups/<id>/` with a manifest, and the bridge exposes a one-click Undo that restores them.
+- Cumulative edits: multiple elements mapping to the same stylesheet stack instead of overwriting.
 
 Still future work:
 
-- A guarded apply command with explicit confirmation.
-- Rollback metadata for applied patches.
+- Extend guarded apply to Tailwind class edits and framework components (currently CSS-only).
 - Richer conflict detection for Tailwind utility replacement/removal.
+- Multi-backup history browser and per-file selective rollback.
 
 ## Phase 4: Framework Adapters
 

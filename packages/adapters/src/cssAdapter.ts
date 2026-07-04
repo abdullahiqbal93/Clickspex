@@ -154,19 +154,109 @@ const upsertCssRule = (
   return `${content.slice(0, existingRule.index)}${nextRule}${content.slice(existingRule.index + existingRule[0].length)}`;
 };
 
-const generateCssPatch = (
+/** Parse a free-form CSS declaration string into a property/value record. */
+const parseCssDeclarations = (rawCss: string): Record<string, string> => {
+  const declarations: Record<string, string> = {};
+
+  for (const part of rawCss.replace(/\/\*[\s\S]*?\*\//g, "").split(";")) {
+    const trimmed = part.trim();
+    const colon = trimmed.indexOf(":");
+
+    if (colon <= 0) {
+      continue;
+    }
+
+    const property = trimmed.slice(0, colon).trim();
+    const value = trimmed
+      .slice(colon + 1)
+      .trim()
+      .replace(/\s*!important\s*$/i, "");
+
+    if (property.length > 0 && value.length > 0) {
+      declarations[property] = value;
+    }
+  }
+
+  return declarations;
+};
+
+/** A concrete, writable edit to a single stylesheet file. */
+export type CssFileEdit = {
+  path: string;
+  previousContent: string;
+  nextContent: string;
+  confidence: number;
+};
+
+/**
+ * Resolve the exact file edit for an intent: pick the best indexed stylesheet,
+ * upsert the changed declarations (and any raw CSS), and return the new content
+ * so callers can preview a diff or write the file. Returns null when nothing
+ * changed or no source stylesheet is available.
+ */
+export const computeCssFileEdit = (
   changeIntent: UIChangeIntent,
   projectContext?: ProjectContext,
-): PatchSuggestion[] => {
+): CssFileEdit | null => {
   const ruleRecords = styleChangesToRuleRecords(changeIntent.target.selector, changeIntent.changes);
+  const rawDeclarations =
+    changeIntent.rawCss !== undefined ? parseCssDeclarations(changeIntent.rawCss) : {};
+  const hasRawCss = Object.keys(rawDeclarations).length > 0;
 
-  if (ruleRecords.length === 0) {
-    return standaloneCssPatch(changeIntent, "No style declarations were changed.");
+  if (ruleRecords.length === 0 && !hasRawCss) {
+    return null;
   }
 
   const selected = selectStylesheet(projectContext, changeIntent);
 
   if (selected === null) {
+    return null;
+  }
+
+  const baseRecords = ruleRecords.filter((record) => record.responsiveTarget === "all");
+  const responsiveChanges = changeIntent.changes.filter(
+    (change) => getStyleChangeResponsiveTarget(change) !== "all",
+  );
+
+  let content = baseRecords.reduce(
+    (current, record) => upsertCssRule(current, record.selector, record.styles),
+    selected.file.content,
+  );
+
+  if (hasRawCss) {
+    content = upsertCssRule(content, changeIntent.target.selector, rawDeclarations);
+  }
+
+  if (responsiveChanges.length > 0) {
+    content = `${content.trimEnd()}\n\n${buildCssRulesFromChanges(
+      changeIntent.target.selector,
+      responsiveChanges,
+    )}\n`;
+  }
+
+  return {
+    path: selected.file.path,
+    previousContent: selected.file.content,
+    nextContent: content,
+    confidence: selected.confidence,
+  };
+};
+
+const generateCssPatch = (
+  changeIntent: UIChangeIntent,
+  projectContext?: ProjectContext,
+): PatchSuggestion[] => {
+  const edit = computeCssFileEdit(changeIntent, projectContext);
+
+  if (edit === null) {
+    const hasChanges =
+      styleChangesToRuleRecords(changeIntent.target.selector, changeIntent.changes).length > 0 ||
+      (changeIntent.rawCss !== undefined && changeIntent.rawCss.trim().length > 0);
+
+    if (!hasChanges) {
+      return standaloneCssPatch(changeIntent, "No style declarations were changed.");
+    }
+
     return standaloneCssPatch(
       changeIntent,
       projectContext === undefined
@@ -175,31 +265,19 @@ const generateCssPatch = (
     );
   }
 
-  const baseRecords = ruleRecords.filter((record) => record.responsiveTarget === "all");
   const responsiveChanges = changeIntent.changes.filter(
     (change) => getStyleChangeResponsiveTarget(change) !== "all",
   );
-  const contentWithBaseRules = baseRecords.reduce(
-    (content, record) => upsertCssRule(content, record.selector, record.styles),
-    selected.file.content,
-  );
-  const nextContent =
-    responsiveChanges.length === 0
-      ? contentWithBaseRules
-      : `${contentWithBaseRules.trimEnd()}\n\n${buildCssRulesFromChanges(
-          changeIntent.target.selector,
-          responsiveChanges,
-        )}\n`;
 
   return [
     {
       adapterId: "css",
-      title: `Apply CSS rule in ${selected.file.path}`,
-      confidence: selected.confidence,
+      title: `Apply CSS rule in ${edit.path}`,
+      confidence: edit.confidence,
       explanation:
         "Selected the best indexed stylesheet by matching selectors, ids, and classes from the captured element.",
-      filesToChange: [selected.file.path],
-      diffPreview: createUnifiedDiff(selected.file.path, selected.file.content, nextContent),
+      filesToChange: [edit.path],
+      diffPreview: createUnifiedDiff(edit.path, edit.previousContent, edit.nextContent),
       warnings: [
         "Review selector stability and cascade order before applying this patch.",
         ...(responsiveChanges.length === 0

@@ -78,7 +78,21 @@ node apps/cli/dist/index.js detect --path .
 node apps/cli/dist/index.js index --path .
 node apps/cli/dist/index.js export-example --output ui-change-intent.example.json
 node apps/cli/dist/index.js preview-patch --intent ui-change-intent.example.json --project .
+node apps/cli/dist/index.js preview-session --session ui-change-session.json --project .
 ```
+
+## Code Sync (one-click apply)
+
+Run the bridge in your project, then edit visually in the extension and apply straight to source:
+
+```bash
+node apps/cli/dist/index.js connect --path . --port 7317
+```
+
+This starts a localhost-only server. In the extension, open **Export → Code sync**: it detects the
+bridge, shows the connected project, and gives you **Preview diff** and **Apply to code**. Apply is
+guarded — it only writes matched stylesheet files, backs up the originals to `.ui-buddy/backups/`,
+and offers a one-click **Undo**. CSS edits are written today; framework adapters stay preview-only.
 
 ## MCP Server
 

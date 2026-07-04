@@ -10,6 +10,8 @@ import { useEffect, useMemo, useState } from "react";
 import { readPageContext, type PageContext } from "../../chrome/session";
 import { usePanelStore } from "../store";
 
+import { CodeSyncPanel } from "./CodeSyncPanel";
+
 import type { ElementSnapshot } from "@ui-buddy/shared";
 
 const fallbackPageContext = (): PageContext => ({
@@ -249,6 +251,8 @@ export const ExportPanel = () => {
           </div>
         </div>
       </section>
+
+      <CodeSyncPanel session={session} />
 
       {positionalSelectors.length > 0 ? (
         <section className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-900">

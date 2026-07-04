@@ -7,6 +7,8 @@ import { detectProject, scanProjectContext } from "@ui-buddy/core/project";
 import chalk from "chalk";
 import { Command } from "commander";
 
+import { startBridge } from "./bridge.js";
+
 import type { PatchSuggestion, UIChangeIntent, UIChangeSession } from "@ui-buddy/shared";
 
 const program = new Command();
@@ -212,6 +214,25 @@ program
     const outputPath = resolve(options.output);
     await writeFile(outputPath, output, "utf8");
     process.stdout.write(`${chalk.green("wrote")} ${outputPath}\n`);
+  });
+
+program
+  .command("connect")
+  .description("start a localhost bridge so the ui-buddy extension can preview and apply changes")
+  .option("--path <path>", "project path", process.cwd())
+  .option("--port <port>", "port to listen on", "7317")
+  .action(async (options: { path: string; port: string }) => {
+    const rootPath = resolve(options.path);
+    const parsedPort = Number.parseInt(options.port, 10);
+    const port = Number.isNaN(parsedPort) ? 7317 : parsedPort;
+    const bridge = await startBridge({ rootPath, port });
+
+    process.stdout.write(
+      `${chalk.green("ui-buddy bridge listening")} http://127.0.0.1:${bridge.port}\n`,
+    );
+    process.stdout.write(`${chalk.bold("Project")} ${rootPath}\n`);
+    process.stdout.write("Open the ui-buddy extension -> Export -> Code sync to connect.\n");
+    process.stdout.write(chalk.dim("Press Ctrl+C to stop.\n"));
   });
 
 program
