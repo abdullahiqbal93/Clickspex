@@ -19,7 +19,9 @@ export default defineManifest({
   // checks for; the http/https patterns alone can leave it dependent on a fresh
   // activeTab grant, which produced the "<all_urls> or activeTab required"
   // error. It also covers source lookup / tech detection (scripting MAIN world).
-  host_permissions: ["<all_urls>"],
+  // The explicit localhost patterns document (and guarantee) the side panel's
+  // fetch to the `ui-buddy connect` Code Sync bridge.
+  host_permissions: ["<all_urls>", "http://127.0.0.1/*", "http://localhost/*"],
   side_panel: {
     default_path: "sidepanel.html",
   },

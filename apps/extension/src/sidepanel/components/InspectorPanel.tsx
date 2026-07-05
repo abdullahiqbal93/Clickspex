@@ -663,6 +663,12 @@ ${elementCssResult.css}
                 </>
               ) : null}
             </div>
+            {elementCssResult.source === "computed" ? (
+              <p className="rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-[10px] leading-4 text-amber-800">
+                Approximate — the page&apos;s stylesheets are cross-origin, so these are computed
+                (resolved) values, not the author&apos;s source rules.
+              </p>
+            ) : null}
             <pre className="max-h-40 overflow-auto rounded-xl bg-[#211d3d] p-2.5 font-mono text-[10px] leading-4 text-slate-100">
               <code>{elementCssResult.css}</code>
             </pre>

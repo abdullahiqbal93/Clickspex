@@ -24,8 +24,30 @@ describe("background message router", () => {
     ).toBe(true);
   });
 
+  it("forwards session sync and restored-edits messages to the side panel", () => {
+    expect(
+      shouldForwardToSidePanel({
+        type: "SESSION_SYNC",
+        payload: {
+          styleChanges: [],
+          rawCss: [],
+          structuralEdits: [],
+          undoDepth: 0,
+          redoDepth: 0,
+        },
+      }),
+    ).toBe(true);
+    expect(shouldForwardToSidePanel({ type: "EDITS_RESTORED", payload: { count: 3 } })).toBe(true);
+  });
+
   it("does not forward side-panel command messages back to the side panel", () => {
     expect(shouldForwardToSidePanel({ type: "PICKER_ENABLE" })).toBe(false);
+    expect(shouldForwardToSidePanel({ type: "SET_CAPTURE_MODE", payload: { active: true } })).toBe(
+      false,
+    );
+    expect(
+      shouldForwardToSidePanel({ type: "APPLY_RAW_CSS", payload: { selector: ":root", css: "" } }),
+    ).toBe(false);
     expect(
       shouldForwardToSidePanel({
         type: "APPLY_STYLE_CHANGE",

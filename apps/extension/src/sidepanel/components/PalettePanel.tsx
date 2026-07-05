@@ -1,7 +1,11 @@
-import { Clipboard, History, Palette, Plus, Trash2, X } from "lucide-react";
+import { Braces, Clipboard, History, Palette, Plus, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { sendMessageToActiveTab } from "../../chrome/messaging";
 import { usePanelStore } from "../store";
+
+const asHexInput = (value: string): string =>
+  /^#[0-9a-f]{6}$/i.test(value.trim()) ? value.trim() : "#000000";
 
 type GradientStop = {
   color: string;
@@ -32,6 +36,26 @@ export const PalettePanel = () => {
   const [gradientKind, setGradientKind] = useState<"linear" | "radial">("linear");
   const [angle, setAngle] = useState(90);
   const [copied, setCopied] = useState(false);
+  const [tokenOverrides, setTokenOverrides] = useState<Record<string, string>>({});
+
+  const setTokenValue = (name: string, value: string) => {
+    setTokenOverrides((current) => ({ ...current, [name]: value }));
+  };
+
+  const applyTokenOverride = async (name: string, value: string) => {
+    const next = { ...tokenOverrides, [name]: value };
+    setTokenOverrides(next);
+    const css = Object.entries(next)
+      .map(([tokenName, tokenValue]) => `${tokenName}: ${tokenValue};`)
+      .join(" ");
+
+    try {
+      // Overrides all edited tokens on :root at once (undoable + persisted).
+      await sendMessageToActiveTab({ type: "APPLY_RAW_CSS", payload: { selector: ":root", css } });
+    } catch {
+      // Ignore — the page may not be reachable.
+    }
+  };
 
   useEffect(() => {
     void chrome.storage.local.get("ubColorHistory").then((stored) => {
@@ -145,6 +169,56 @@ export const PalettePanel = () => {
           )}
         </div>
       </section>
+
+      {scan.tokens !== undefined && scan.tokens.length > 0 ? (
+        <section className="ub-card p-4">
+          <h3 className="flex items-center gap-2 text-sm font-semibold tracking-tight">
+            <Braces className="text-accent" size={15} />
+            Design tokens
+          </h3>
+          <p className="mt-1 text-2xs text-muted">
+            Edit CSS custom properties live. Applied to <code className="ub-chip">:root</code> —
+            undoable and survives reload.
+          </p>
+          <div className="mt-3 max-h-72 divide-y divide-line overflow-auto border-t border-line">
+            {scan.tokens.map((token) => {
+              const value = tokenOverrides[token.name] ?? token.value;
+
+              return (
+                <div className="flex items-center gap-2 py-1.5" key={token.name}>
+                  {token.isColor ? (
+                    <input
+                      aria-label={`${token.name} color`}
+                      className="h-7 w-7 shrink-0 cursor-pointer rounded-lg border border-line bg-transparent p-0.5"
+                      onChange={(event) => void applyTokenOverride(token.name, event.target.value)}
+                      type="color"
+                      value={asHexInput(value)}
+                    />
+                  ) : (
+                    <span
+                      className="h-4 w-4 shrink-0 rounded-md ring-1 ring-inset ring-ink/10"
+                      style={{ background: value }}
+                    />
+                  )}
+                  <span
+                    className="min-w-0 flex-1 truncate font-mono text-[10px] text-muted"
+                    title={token.name}
+                  >
+                    {token.name}
+                  </span>
+                  <input
+                    aria-label={`${token.name} value`}
+                    className="ub-input h-7 w-28 font-mono text-[10px]"
+                    onBlur={() => void applyTokenOverride(token.name, value)}
+                    onChange={(event) => setTokenValue(token.name, event.target.value)}
+                    value={value}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
 
       <section className="ub-card p-4">
         <div className="flex items-center justify-between gap-2">

@@ -85,6 +85,9 @@ const groupForTab = (tab: PanelTab) =>
 export const App = () => {
   const activeTab = usePanelStore((state) => state.activeTab);
   const error = usePanelStore((state) => state.error);
+  const restoredEditsCount = usePanelStore((state) => state.restoredEditsCount);
+  const setRestoredEditsCount = usePanelStore((state) => state.setRestoredEditsCount);
+  const resetElementChanges = usePanelStore((state) => state.resetElementChanges);
   const gridActive = usePanelStore((state) => state.gridActive);
   const hoveredSelector = usePanelStore((state) => state.hoveredSelector);
   const pickerActive = usePanelStore((state) => state.pickerActive);
@@ -177,6 +180,10 @@ export const App = () => {
       if (rawMessage.type === "SESSION_SYNC") {
         applySessionSync(rawMessage.payload);
       }
+
+      if (rawMessage.type === "EDITS_RESTORED") {
+        setRestoredEditsCount(rawMessage.payload.count);
+      }
     };
 
     const connection = createReconnectingSidePanelPort(handleMessage);
@@ -201,6 +208,7 @@ export const App = () => {
     setPageScanLoading,
     setPickerActive,
     setRulerActive,
+    setRestoredEditsCount,
     setSearchResults,
     setSelectedElement,
   ]);
@@ -344,6 +352,16 @@ export const App = () => {
       setError(caughtError instanceof Error ? caughtError.message : "Unable to redo.");
     }
   }, [setError]);
+
+  const clearRestoredEdits = useCallback(async () => {
+    setRestoredEditsCount(0);
+    try {
+      await sendMessageToActiveTab({ type: "RESET_ELEMENT_CHANGES" });
+      resetElementChanges();
+    } catch {
+      // Best effort — the banner is dismissed regardless.
+    }
+  }, [resetElementChanges, setRestoredEditsCount]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -559,6 +577,30 @@ export const App = () => {
         {error !== null ? (
           <div className="rounded-card border border-rose-200 bg-rose-50 p-3 text-xs leading-5 text-rose-700">
             {error}
+          </div>
+        ) : null}
+
+        {restoredEditsCount > 0 ? (
+          <div className="flex items-center gap-3 rounded-card border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800">
+            <span className="flex-1 leading-5">
+              Restored <span className="font-semibold">{restoredEditsCount}</span> edit
+              {restoredEditsCount === 1 ? "" : "s"} from before the reload.
+            </span>
+            <button
+              className="rounded-md border border-blue-200 bg-white px-2 py-1 font-medium text-blue-700 transition hover:bg-blue-100"
+              onClick={() => void clearRestoredEdits()}
+              type="button"
+            >
+              Clear
+            </button>
+            <button
+              className="rounded-md px-1.5 py-1 font-semibold text-blue-500 transition hover:text-blue-800"
+              onClick={() => setRestoredEditsCount(0)}
+              title="Dismiss"
+              type="button"
+            >
+              ✕
+            </button>
           </div>
         ) : null}
 

@@ -14,6 +14,7 @@ const CONTENT_TO_PANEL_MESSAGES = new Set<ExtensionMessage["type"]>([
   "ASSET_FETCHED",
   "MULTI_SELECTION_CHANGED",
   "SESSION_SYNC",
+  "EDITS_RESTORED",
 ]);
 
 export const shouldForwardToSidePanel = (message: ExtensionMessage): boolean =>

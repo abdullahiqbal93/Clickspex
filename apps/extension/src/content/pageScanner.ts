@@ -1,4 +1,10 @@
-import type { PageAssetInfo, PageColorInfo, PageFontInfo, PageScanResult } from "@ui-buddy/shared";
+import type {
+  PageAssetInfo,
+  PageColorInfo,
+  PageFontInfo,
+  PageScanResult,
+  PageTokenInfo,
+} from "@ui-buddy/shared";
 
 const rgbToHex = (r: number, g: number, b: number): string =>
   "#" + [r, g, b].map((c) => c.toString(16).padStart(2, "0")).join("");
@@ -7,6 +13,39 @@ const parseRgb = (value: string): { r: number; g: number; b: number } | null => 
   const m = value.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
   if (!m) return null;
   return { r: parseInt(m[1]!, 10), g: parseInt(m[2]!, 10), b: parseInt(m[3]!, 10) };
+};
+
+const isColorValue = (value: string): boolean =>
+  parseRgb(value) !== null || /^#(?:[0-9a-f]{3,8})$/i.test(value.trim());
+
+/** Collect the page's CSS custom properties (design tokens) defined on :root. */
+const scanTokens = (): PageTokenInfo[] => {
+  const rootStyles = getComputedStyle(document.documentElement);
+  const tokens: PageTokenInfo[] = [];
+  const seen = new Set<string>();
+
+  for (let index = 0; index < rootStyles.length; index += 1) {
+    const name = rootStyles.item(index);
+
+    if (!name.startsWith("--") || seen.has(name)) {
+      continue;
+    }
+
+    seen.add(name);
+    const value = rootStyles.getPropertyValue(name).trim();
+
+    if (value.length === 0) {
+      continue;
+    }
+
+    tokens.push({ name, value, isColor: isColorValue(value) });
+
+    if (tokens.length >= 200) {
+      break;
+    }
+  }
+
+  return tokens.sort((a, b) => a.name.localeCompare(b.name));
 };
 
 export const scanPage = (): PageScanResult => {
@@ -149,5 +188,5 @@ export const scanPage = (): PageScanResult => {
     }))
     .sort((a, b) => b.count - a.count);
 
-  return { colors, fonts, assets: assets.slice(0, 50) };
+  return { colors, fonts, assets: assets.slice(0, 50), tokens: scanTokens() };
 };

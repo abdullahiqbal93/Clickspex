@@ -111,6 +111,31 @@ describe("Chrome messaging helpers", () => {
     await expect(sendMessageToActiveTab(pickerMessage)).rejects.toThrow("content failed");
   });
 
+  it("injects the content script and retries when the receiving end is missing", async () => {
+    const chromeMock = installChromeMock({ id: 5, url: "https://example.test" });
+    chromeMock.tabSendMessage
+      .mockRejectedValueOnce(new Error("Could not establish connection. Receiving end does not exist."))
+      .mockResolvedValueOnce({ ok: true });
+    // runtime.sendMessage backs the inject-content-script background command.
+    chromeMock.sendMessage.mockResolvedValue({ ok: true });
+
+    await sendMessageToActiveTab(pickerMessage);
+
+    expect(chromeMock.sendMessage).toHaveBeenCalledWith({
+      __ubBackground: true,
+      command: "inject-content-script",
+    });
+    expect(chromeMock.tabSendMessage).toHaveBeenCalledTimes(2);
+  });
+
+  it("asks the user to refresh when injection does not recover the content script", async () => {
+    const chromeMock = installChromeMock({ id: 5, url: "https://example.test" });
+    chromeMock.tabSendMessage.mockRejectedValue(new Error("Receiving end does not exist"));
+    chromeMock.sendMessage.mockResolvedValue({ ok: true });
+
+    await expect(sendMessageToActiveTab(pickerMessage)).rejects.toThrow("Refresh the tab");
+  });
+
   it("wraps valid runtime messages with ok/error responses and removes listeners", async () => {
     const chromeMock = installChromeMock();
     const handler = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);

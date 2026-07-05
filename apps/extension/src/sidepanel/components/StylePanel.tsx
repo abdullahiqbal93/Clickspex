@@ -1449,9 +1449,14 @@ export const StylePanel = () => {
               <Clipboard aria-hidden="true" size={13} />
               Copy
             </button>
-            <button className="ub-btn px-2.5" onClick={() => void resetChanges()} type="button">
+            <button
+              className="ub-btn px-2.5"
+              onClick={() => void resetChanges()}
+              title="Remove every style and raw-CSS edit from this whole session"
+              type="button"
+            >
               <RotateCcw aria-hidden="true" size={13} />
-              Reset
+              Reset all
             </button>
           </div>
         </div>

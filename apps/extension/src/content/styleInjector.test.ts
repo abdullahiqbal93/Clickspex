@@ -140,4 +140,23 @@ describe("StyleInjector", () => {
 
     expect(styleElement()).toBeNull();
   });
+
+  it("restores persisted style and raw CSS edits and re-injects them", () => {
+    const injector = new StyleInjector();
+
+    injector.restore(
+      [createChange("color", "black", "white")],
+      [{ selector: "#save", css: "font-size: 20px;" }],
+    );
+
+    const css = styleElement()?.textContent ?? "";
+    expect(css).toContain("color: white !important;");
+    expect(css).toContain("font-size: 20px !important;");
+    expect(injector.getAppliedChanges()).toHaveLength(1);
+    expect(injector.getRawCssEntries()).toEqual([{ selector: "#save", css: "font-size: 20px;" }]);
+
+    // Raw CSS is restored as an undoable step.
+    injector.undoRawCss();
+    expect(styleElement()?.textContent ?? "").not.toContain("font-size: 20px");
+  });
 });

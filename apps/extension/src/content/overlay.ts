@@ -29,6 +29,10 @@ export class OverlayController {
   private readonly tooltip: HTMLDivElement;
   private readonly pinnedCards = new Map<string, HTMLDivElement>();
   private readonly measurementPins: Array<{ source: RectSnapshot; target: RectSnapshot }> = [];
+  // The overlay host is built in memory and only injected into the page the
+  // first time something is actually shown — so pages the user never inspects
+  // don't get an extra DOM node.
+  private mounted = false;
 
   public constructor(documentRef: Document = document) {
     const existingHost = documentRef.getElementById(HOST_ID);
@@ -42,6 +46,7 @@ export class OverlayController {
       this.multiSelectLayer = this.getOrCreateBox("multi-select-layer");
       this.pinnedLayer = this.getOrCreateBox("pinned-layer");
       this.tooltip = this.getOrCreateBox("tooltip");
+      this.mounted = true;
       return;
     }
 
@@ -63,7 +68,16 @@ export class OverlayController {
       this.pinnedLayer,
       this.tooltip,
     );
-    documentRef.documentElement.append(this.host);
+    // Not appended to the document here — see ensureMounted().
+  }
+
+  private ensureMounted(): void {
+    if (this.mounted) {
+      return;
+    }
+
+    this.host.ownerDocument.documentElement.append(this.host);
+    this.mounted = true;
   }
 
   public get hostElement(): HTMLDivElement {
@@ -79,19 +93,23 @@ export class OverlayController {
   }
 
   public showHover(snapshot: ElementSnapshot): void {
+    this.ensureMounted();
     this.updateBoxModel(this.hoverBox, snapshot);
     this.updateTooltip(snapshot);
   }
 
   public showSelected(rect: DOMRect | DOMRectReadOnly): void {
+    this.ensureMounted();
     this.updateBox(this.selectedBox, rect);
   }
 
   public showMeasurement(source: RectSnapshot, target: RectSnapshot): void {
+    this.ensureMounted();
     this.renderMeasurements({ source, target });
   }
 
   public pinMeasurement(source: RectSnapshot, target: RectSnapshot): void {
+    this.ensureMounted();
     this.measurementPins.push({ source, target });
     this.renderMeasurements();
   }
@@ -106,6 +124,7 @@ export class OverlayController {
   }
 
   public showMultiSelected(rects: Array<DOMRect | DOMRectReadOnly>): void {
+    this.ensureMounted();
     this.multiSelectLayer.replaceChildren();
     this.multiSelectLayer.hidden = rects.length === 0;
 
@@ -134,6 +153,7 @@ export class OverlayController {
   // ── tooltip ──────────────────────────────────────────
 
   public pinElementCard(snapshot: ElementSnapshot, kind: PinCardKind): void {
+    this.ensureMounted();
     this.pinnedLayer.hidden = false;
     const cardId = `${kind}-${snapshot.selector}-${Date.now()}-${this.pinnedCards.size}`;
     const card = this.createPinnedCard(cardId, snapshot, kind);

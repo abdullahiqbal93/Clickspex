@@ -3,6 +3,12 @@ import { generateUniqueSelector } from "@ui-buddy/core";
 export type ElementCssExtraction = {
   css: string;
   html: string | null;
+  /**
+   * "authored" when the rules came from readable stylesheets, "computed" when
+   * every stylesheet was cross-origin and we fell back to a computed-style diff
+   * (approximate — resolved values, not the author's source).
+   */
+  source: "authored" | "computed";
 };
 
 const MAX_DESCENDANTS = 40;
@@ -297,8 +303,11 @@ export const extractElementCss = (
     collectAuthoredRules(child, rules, seen);
   }
 
+  let source: ElementCssExtraction["source"] = "authored";
+
   // Fallback: no readable stylesheet matched anything (e.g. all cross-origin).
   if (rules.length === 0) {
+    source = "computed";
     const rootSelector = generateUniqueSelector(element);
     rules.push(`${rootSelector} {\n${computedStyleDeclarations(element).join("\n")}\n}`);
 
@@ -317,5 +326,6 @@ export const extractElementCss = (
   return {
     css: rules.join("\n\n"),
     html: includeChildren ? cleanedOuterHtml(element) : null,
+    source,
   };
 };

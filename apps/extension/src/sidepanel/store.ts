@@ -28,6 +28,7 @@ export type SessionSyncPayload = {
 export type ElementCssResult = {
   css: string;
   html: string | null;
+  source: "authored" | "computed";
 };
 
 export type AssetFetchResult = {
@@ -74,6 +75,8 @@ export type PanelState = {
   rulerActive: boolean;
   rawCssEntries: RawCssEntry[];
   structuralEdits: StructuralEdit[];
+  /** Number of edits re-applied from a prior session after a page reload. */
+  restoredEditsCount: number;
   /** Baseline (pre-edit) snapshot of every element selected this session. */
   snapshotBySelector: Record<string, ElementSnapshot>;
   searchResults: ElementSearchResult[];
@@ -106,6 +109,7 @@ export type PanelState = {
   setRulerActive: (active: boolean) => void;
   setSearchResults: (results: ElementSearchResult[]) => void;
   setSelectedElement: (snapshot: ElementSnapshot | null) => void;
+  setRestoredEditsCount: (count: number) => void;
 };
 
 const applyStyleLayerChange = (
@@ -188,6 +192,7 @@ export const usePanelStore = create<PanelState>((set, get) => ({
   rulerActive: false,
   rawCssEntries: [],
   structuralEdits: [],
+  restoredEditsCount: 0,
   snapshotBySelector: {},
   searchResults: [],
   selectedElement: null,
@@ -271,6 +276,7 @@ export const usePanelStore = create<PanelState>((set, get) => ({
       rulerActive: false,
       rawCssEntries: [],
       structuralEdits: [],
+      restoredEditsCount: 0,
       snapshotBySelector: {},
       searchResults: [],
       selectedElement: null,
@@ -288,6 +294,7 @@ export const usePanelStore = create<PanelState>((set, get) => ({
   setRulerActive: (rulerActive) =>
     set({ rulerActive, pickerActive: rulerActive ? false : get().pickerActive }),
   setSearchResults: (searchResults) => set({ searchResults }),
+  setRestoredEditsCount: (restoredEditsCount) => set({ restoredEditsCount }),
   setSelectedElement: (selectedElement) =>
     set((state) => {
       // Cache the first (pre-edit) snapshot per selector so the exported session

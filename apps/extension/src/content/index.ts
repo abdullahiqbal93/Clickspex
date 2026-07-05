@@ -1,4 +1,5 @@
 import { addRuntimeMessageListener, sendRuntimeMessage } from "../chrome/messaging";
+import { clearEdits, currentEditsUrl, loadEdits, persistEdits } from "../chrome/session";
 
 import { runA11yAudit } from "./a11yAudit";
 import { extractElementCss } from "./cssExtractor";
@@ -36,6 +37,23 @@ const actionRedoLog: PageAction[] = [];
 const collectStructuralEdits = (): StructuralEdit[] =>
   actionUndoLog.flatMap((action) => ("edit" in action ? [action.edit] : []));
 
+// Persist CSS-family edits (style + raw CSS) so they survive a page reload.
+// Debounced so a slider drag doesn't hammer storage.
+let persistTimer: number | null = null;
+const persistCurrentEdits = (): void => {
+  if (persistTimer !== null) {
+    return;
+  }
+
+  persistTimer = window.setTimeout(() => {
+    persistTimer = null;
+    void persistEdits(currentEditsUrl(), {
+      styleChanges: styleInjector.getAppliedChanges(),
+      rawCss: styleInjector.getRawCssEntries(),
+    });
+  }, 300);
+};
+
 const sendSessionSync = (): void => {
   void sendRuntimeMessage({
     type: "SESSION_SYNC",
@@ -47,6 +65,7 @@ const sendSessionSync = (): void => {
       redoDepth: actionRedoLog.length,
     },
   });
+  persistCurrentEdits();
 };
 
 const recordPageAction = (action: PageAction): void => {
@@ -155,6 +174,7 @@ if (window.__uiBuddyListenerAttached !== true) {
       const keptRedo = actionRedoLog.filter(keep);
       actionUndoLog.splice(0, actionUndoLog.length, ...keptUndo);
       actionRedoLog.splice(0, actionRedoLog.length, ...keptRedo);
+      void clearEdits(currentEditsUrl());
       sendSessionSync();
       return;
     }
@@ -385,4 +405,41 @@ if (window.__uiBuddyListenerAttached !== true) {
       return;
     }
   });
+
+  // Rehydrate CSS-family edits saved before a reload so the page keeps the
+  // in-progress changes (and the panel shows a "restored" banner).
+  void (async () => {
+    const saved = await loadEdits(currentEditsUrl());
+
+    if (saved === null || (saved.styleChanges.length === 0 && saved.rawCss.length === 0)) {
+      return;
+    }
+
+    styleInjector.restore(saved.styleChanges, saved.rawCss);
+    saved.styleChanges.forEach(() => actionUndoLog.push({ kind: "style" }));
+    saved.rawCss.forEach(() => actionUndoLog.push({ kind: "raw-css" }));
+    sendSessionSync();
+    void sendRuntimeMessage({
+      type: "EDITS_RESTORED",
+      payload: { count: saved.styleChanges.length + saved.rawCss.length },
+    });
+  })();
+
+  // Flush any pending (debounced) edit before the page unloads so the very last
+  // change made right before a reload still survives.
+  window.addEventListener(
+    "pagehide",
+    () => {
+      if (persistTimer !== null) {
+        window.clearTimeout(persistTimer);
+        persistTimer = null;
+      }
+
+      void persistEdits(currentEditsUrl(), {
+        styleChanges: styleInjector.getAppliedChanges(),
+        rawCss: styleInjector.getRawCssEntries(),
+      });
+    },
+    { capture: true },
+  );
 }

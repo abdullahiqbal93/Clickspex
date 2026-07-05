@@ -156,6 +156,31 @@ export class StyleInjector {
     return [...this.appliedChanges];
   }
 
+  /**
+   * Rehydrate style + raw CSS edits after a page reload and re-inject them.
+   * Rebuilds the raw-CSS undo stack so each restored raw block stays undoable.
+   */
+  public restore(styleChanges: StyleChange[], rawCss: Array<{ selector: string; css: string }>): void {
+    this.appliedChanges.length = 0;
+    this.appliedChanges.push(...styleChanges);
+    this.redoStack.length = 0;
+
+    this.rawCssBySelector.clear();
+    this.rawCssUndoStack.length = 0;
+    this.rawCssRedoStack.length = 0;
+
+    for (const { selector, css } of rawCss) {
+      if (css.trim().length === 0) {
+        continue;
+      }
+
+      this.rawCssBySelector.set(selector, css);
+      this.rawCssUndoStack.push({ selector, before: "", after: css });
+    }
+
+    this.render();
+  }
+
   public getRawCssEntries(): Array<{ selector: string; css: string }> {
     return Array.from(this.rawCssBySelector.entries()).map(([selector, css]) => ({
       selector,
