@@ -228,14 +228,30 @@ const rollback = async (rootPath: string, backupId?: string): Promise<RollbackRe
 
 // ── HTTP server ─────────────────────────────────────────────
 
-const setCors = (res: ServerResponse): void => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
+/**
+ * Only the extension (chrome-extension://…) may talk to the bridge. This blocks
+ * drive-by websites: without it, any page the user has open could POST to the
+ * bridge and read source (via /preview) or overwrite files (via /apply), since
+ * the browser sends the page's real Origin and cannot spoof it. Requests with no
+ * Origin (curl/native tooling, not a browser threat) are allowed for debugging.
+ */
+const isAllowedOrigin = (origin: string | undefined): boolean =>
+  origin === undefined || origin.startsWith("chrome-extension://");
+
+const setCors = (res: ServerResponse, origin: string | undefined): void => {
+  res.setHeader("Access-Control-Allow-Origin", origin ?? "*");
+  res.setHeader("Vary", "Origin");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "content-type");
 };
 
-const sendJson = (res: ServerResponse, status: number, data: unknown): void => {
-  setCors(res);
+const sendJson = (
+  res: ServerResponse,
+  status: number,
+  data: unknown,
+  origin: string | undefined,
+): void => {
+  setCors(res, origin);
   res.writeHead(status, { "content-type": "application/json" });
   res.end(JSON.stringify(data));
 };
@@ -271,9 +287,17 @@ export const startBridge = async (options: {
 
   const server = createServer((req, res) => {
     void (async () => {
+      const origin = req.headers.origin;
+
       try {
+        if (!isAllowedOrigin(origin)) {
+          res.writeHead(403, { "content-type": "application/json" });
+          res.end(JSON.stringify({ ok: false, error: "Forbidden origin." }));
+          return;
+        }
+
         if (req.method === "OPTIONS") {
-          setCors(res);
+          setCors(res, origin);
           res.writeHead(204);
           res.end();
           return;
@@ -282,39 +306,46 @@ export const startBridge = async (options: {
         const url = req.url ?? "/";
 
         if (req.method === "GET" && url.startsWith("/health")) {
-          sendJson(res, 200, {
-            ok: true,
-            name: await projectName(rootPath),
-            root: rootPath,
-            version: "0.1.0",
-          });
+          sendJson(
+            res,
+            200,
+            {
+              ok: true,
+              name: await projectName(rootPath),
+              root: rootPath,
+              version: "0.1.0",
+            },
+            origin,
+          );
           return;
         }
 
         if (req.method === "POST" && url.startsWith("/preview")) {
           const body = await readJsonBody<{ session: UIChangeSession }>(req);
-          sendJson(res, 200, await previewSession(body.session, rootPath));
+          sendJson(res, 200, await previewSession(body.session, rootPath), origin);
           return;
         }
 
         if (req.method === "POST" && url.startsWith("/apply")) {
           const body = await readJsonBody<{ session: UIChangeSession; selectors?: string[] }>(req);
-          sendJson(res, 200, await applySession(body.session, rootPath, body.selectors));
+          sendJson(res, 200, await applySession(body.session, rootPath, body.selectors), origin);
           return;
         }
 
         if (req.method === "POST" && url.startsWith("/rollback")) {
           const body = await readJsonBody<{ backupId?: string }>(req);
-          sendJson(res, 200, await rollback(rootPath, body.backupId));
+          sendJson(res, 200, await rollback(rootPath, body.backupId), origin);
           return;
         }
 
-        sendJson(res, 404, { ok: false, error: "Unknown endpoint." });
+        sendJson(res, 404, { ok: false, error: "Unknown endpoint." }, origin);
       } catch (error) {
-        sendJson(res, 500, {
-          ok: false,
-          error: error instanceof Error ? error.message : "Bridge request failed.",
-        });
+        sendJson(
+          res,
+          500,
+          { ok: false, error: error instanceof Error ? error.message : "Bridge request failed." },
+          origin,
+        );
       }
     })();
   });
@@ -323,7 +354,10 @@ export const startBridge = async (options: {
     server.listen(port, "127.0.0.1", () => resolvePromise());
   });
 
-  return { port, close: () => server.close() };
+  const address = server.address();
+  const actualPort = typeof address === "object" && address !== null ? address.port : port;
+
+  return { port: actualPort, close: () => server.close() };
 };
 
 export { applySession, previewSession, rollback };

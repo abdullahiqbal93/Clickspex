@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { applySession, previewSession, rollback } from "./bridge.js";
+import { applySession, previewSession, rollback, startBridge } from "./bridge.js";
 
 import type { UIChangeSession } from "@ui-buddy/shared";
 
@@ -80,6 +80,27 @@ describe("bridge preview/apply/rollback", () => {
     expect(result.elements[0]?.applicable).toBe(true);
     expect(result.elements[0]?.file).toBe("src/styles.css");
     expect(result.elements[0]?.diff).toContain("color: #ff0000");
+  });
+
+  it("rejects requests from non-extension origins but allows the extension", async () => {
+    const root = await makeProject();
+    const bridge = await startBridge({ rootPath: root, port: 0 });
+
+    try {
+      const base = `http://127.0.0.1:${bridge.port}`;
+
+      const fromWebsite = await fetch(`${base}/health`, {
+        headers: { origin: "https://evil.example" },
+      });
+      expect(fromWebsite.status).toBe(403);
+
+      const fromExtension = await fetch(`${base}/health`, {
+        headers: { origin: "chrome-extension://abcdef" },
+      });
+      expect(fromExtension.status).toBe(200);
+    } finally {
+      bridge.close();
+    }
   });
 
   it("applies the change to source and can roll it back", async () => {
