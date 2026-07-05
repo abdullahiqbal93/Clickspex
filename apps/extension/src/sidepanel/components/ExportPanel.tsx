@@ -1,18 +1,29 @@
 import { cssAdapter, tailwindAdapter } from "@ui-buddy/adapters";
 import {
   createUIChangeSession,
+  summarizeSessionAsAgentPrompt,
   summarizeSessionAsMarkdown,
   type SessionElementInput,
 } from "@ui-buddy/core";
-import { AlertTriangle, Boxes, Clipboard, Code2, Download, Layers } from "lucide-react";
+import {
+  AlertTriangle,
+  Boxes,
+  ChevronDown,
+  Clipboard,
+  Code2,
+  Download,
+  Layers,
+  Sparkles,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
+import { callBackground } from "../../chrome/messaging";
 import { readPageContext, type PageContext } from "../../chrome/session";
 import { usePanelStore } from "../store";
 
 import { CodeSyncPanel } from "./CodeSyncPanel";
 
-import type { ElementSnapshot } from "@ui-buddy/shared";
+import type { ElementSnapshot, PageTechInfo } from "@ui-buddy/shared";
 
 const fallbackPageContext = (): PageContext => ({
   pageUrl: "about:blank",
@@ -119,6 +130,22 @@ export const ExportPanel = () => {
   const structuralEdits = usePanelStore((state) => state.structuralEdits);
   const snapshotBySelector = usePanelStore((state) => state.snapshotBySelector);
   const selectedElement = usePanelStore((state) => state.selectedElement);
+  const tech = usePanelStore((state) => state.tech);
+  const setTech = usePanelStore((state) => state.setTech);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
+  // Detect frameworks so Tailwind output only shows for Tailwind projects.
+  useEffect(() => {
+    if (tech !== null) {
+      return;
+    }
+
+    callBackground<PageTechInfo[]>("detect-tech")
+      .then((detected) => setTech(detected))
+      .catch(() => setTech([]));
+  }, [tech, setTech]);
+
+  const tailwindDetected = tech?.some((entry) => entry.name === "Tailwind CSS") ?? false;
 
   useEffect(() => {
     let disposed = false;
@@ -167,6 +194,7 @@ export const ExportPanel = () => {
       viewport: context.viewport,
       elements,
       structuralEdits,
+      ...(tech !== null ? { frameworkHints: tech.map((entry) => entry.name) } : {}),
     });
   }, [
     accessibilityNotes,
@@ -176,6 +204,7 @@ export const ExportPanel = () => {
     selectedElement,
     snapshotBySelector,
     structuralEdits,
+    tech,
   ]);
 
   const hasContent = session.elements.length > 0 || session.structuralEdits.length > 0;
@@ -217,6 +246,7 @@ export const ExportPanel = () => {
     .filter((part) => part.length > 0)
     .join("\n\n");
 
+  const agentPrompt = summarizeSessionAsAgentPrompt(session);
   const jsonExport = JSON.stringify(session, null, 2);
   const markdownExport = summarizeSessionAsMarkdown(session);
 
@@ -302,13 +332,62 @@ export const ExportPanel = () => {
       ) : null}
 
       <ExportBlock content={sessionCss} filename="ui-buddy-session.css" title="CSS" />
-      <ExportBlock
-        content={sessionTailwind}
-        filename="ui-buddy-session-tailwind.txt"
-        title="Tailwind"
-      />
-      <ExportBlock content={jsonExport} filename="ui-change-session.json" title="JSON (session)" />
-      <ExportBlock content={markdownExport} filename="ui-buddy-session.md" title="Markdown" />
+
+      <section className="ub-card p-4">
+        <div className="flex items-center gap-2 text-sm font-semibold tracking-tight">
+          <Sparkles aria-hidden="true" className="text-accent" size={15} />
+          Copy for AI agent
+        </div>
+        <p className="mt-1 text-2xs text-muted">
+          Paste into Cursor / Claude Code / any coding agent to apply these changes to your source.
+        </p>
+        <div className="mt-2">
+          <button
+            className="ub-btn-primary"
+            onClick={() => void navigator.clipboard.writeText(agentPrompt).catch(() => undefined)}
+            type="button"
+          >
+            <Clipboard aria-hidden="true" size={13} />
+            Copy prompt
+          </button>
+        </div>
+        <pre className="mt-3 max-h-56 overflow-auto rounded-xl bg-[#211d3d] p-3 font-mono text-[10px] leading-4 text-slate-100">
+          <code>{agentPrompt}</code>
+        </pre>
+      </section>
+
+      {tailwindDetected ? (
+        <ExportBlock
+          content={sessionTailwind}
+          filename="ui-buddy-session-tailwind.txt"
+          title="Tailwind"
+        />
+      ) : null}
+
+      <section className="ub-card p-3">
+        <button
+          className="flex w-full items-center gap-2 text-left text-sm font-semibold tracking-tight text-ink"
+          onClick={() => setShowAdvanced((current) => !current)}
+          type="button"
+        >
+          <ChevronDown
+            aria-hidden="true"
+            className={`shrink-0 transition-transform ${showAdvanced ? "" : "-rotate-90"}`}
+            size={14}
+          />
+          Advanced — JSON &amp; Markdown
+        </button>
+        {showAdvanced ? (
+          <div className="mt-3 space-y-3">
+            <ExportBlock
+              content={jsonExport}
+              filename="ui-change-session.json"
+              title="Session JSON (for CLI / MCP)"
+            />
+            <ExportBlock content={markdownExport} filename="ui-buddy-session.md" title="Markdown summary" />
+          </div>
+        ) : null}
+      </section>
     </div>
   );
 };

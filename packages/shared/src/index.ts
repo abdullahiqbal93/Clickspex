@@ -209,9 +209,7 @@ export type ElementSnapshot = {
   computedStyles: Record<string, string>;
   boxModel: BoxModelSnapshot;
   parentLayout: ParentLayoutInfo | null;
-  /** First opaque ancestor background, for contrast checks. */
   effectiveBackgroundColor?: string;
-  /** Alternative unique selectors, most stable first. */
   fallbackSelectors?: string[];
 };
 
@@ -265,11 +263,9 @@ export type UIChangeIntent = {
   accessibilityNotes: AccessibilityNote[];
   visualIntent?: string;
   frameworkHints?: string[];
-  /** Free-form CSS the user authored for this element in the Raw CSS editor. */
   rawCss?: string;
 };
 
-/** A non-declarative edit made in the browser (DOM move, delete, text, image). */
 export type StructuralEditKind = "move" | "delete" | "text" | "image";
 
 export type StructuralEditTarget = {
@@ -286,9 +282,7 @@ export type StructuralEdit = {
   kind: StructuralEditKind;
   timestamp: string;
   target: StructuralEditTarget;
-  /** Human-readable one-line summary, e.g. "Moved before previous sibling". */
   summary: string;
-  /** Kind-specific data (direction, before/after text, image src, etc.). */
   details: Record<string, string>;
 };
 
@@ -297,6 +291,31 @@ export type StructuralEdit = {
  * changes and raw CSS) plus every structural edit, so the full set of changes
  * can be exported and mapped to source - not just the last-selected element.
  */
+export type PromptStackHint = {
+  name: string;
+  confidence?: number;
+  evidence?: string[];
+  guidance?: string;
+  sourceModel?: string;
+};
+
+export type PromptClassConvention = {
+  name: string;
+  stablePatterns?: string[];
+  weakPatterns?: string[];
+  generatedPatterns?: string[];
+  utilityPatterns?: string[];
+  cssModulePatterns?: string[];
+  notes?: string[];
+};
+
+export type PromptProjectContext = {
+  stackHints?: PromptStackHint[];
+  classConventions?: PromptClassConvention[];
+  sourceHints?: string[];
+  designTokenHints?: string[];
+};
+
 export type UIChangeSession = {
   id: string;
   timestamp: string;
@@ -308,6 +327,8 @@ export type UIChangeSession = {
   };
   elements: UIChangeIntent[];
   structuralEdits: StructuralEdit[];
+  frameworkHints?: string[];
+  promptContext?: PromptProjectContext;
   stats: {
     editedElements: number;
     styleChanges: number;
@@ -411,10 +432,17 @@ export type PageAssetInfo = {
   height: number;
 };
 
+export type PageTokenInfo = {
+  name: string;
+  value: string;
+  isColor: boolean;
+};
+
 export type PageScanResult = {
   colors: PageColorInfo[];
   fonts: PageFontInfo[];
   assets: PageAssetInfo[];
+  tokens?: PageTokenInfo[];
 };
 
 export type PageTechInfo = {
@@ -487,7 +515,10 @@ export type ExtensionMessage =
   | { type: "SET_ANIMATION_SPEED"; payload: { speed: number } }
   | { type: "PAGE_SCAN_RESULT"; payload: PageScanResult }
   | { type: "COPY_ELEMENT_CSS"; payload: { includeChildren: boolean } }
-  | { type: "ELEMENT_CSS_RESULT"; payload: { css: string; html: string | null } }
+  | {
+      type: "ELEMENT_CSS_RESULT";
+      payload: { css: string; html: string | null; source: "authored" | "computed" };
+    }
   | { type: "A11Y_SCAN" }
   | { type: "A11Y_SCAN_RESULT"; payload: { issues: A11yIssue[] } }
   | { type: "FETCH_ASSET"; payload: { src: string } }
@@ -498,6 +529,7 @@ export type ExtensionMessage =
   | { type: "MARK_SELECTED_FOR_SOURCE" }
   | { type: "SET_CAPTURE_MODE"; payload: { active: boolean } }
   | { type: "APPLY_RAW_CSS"; payload: { selector: string; css: string } }
+  | { type: "EDITS_RESTORED"; payload: { count: number } }
   | { type: "MULTI_SELECTION_CHANGED"; payload: { count: number; selectors: string[] } }
   | {
       type: "SESSION_SYNC";
@@ -716,7 +748,8 @@ export const isExtensionMessage = (value: unknown): value is ExtensionMessage =>
       isRecord(value.payload) &&
       Array.isArray(value.payload.colors) &&
       Array.isArray(value.payload.fonts) &&
-      Array.isArray(value.payload.assets)
+      Array.isArray(value.payload.assets) &&
+      (value.payload.tokens === undefined || Array.isArray(value.payload.tokens))
     );
   }
 
@@ -767,7 +800,8 @@ export const isExtensionMessage = (value: unknown): value is ExtensionMessage =>
     return (
       isRecord(value.payload) &&
       isString(value.payload.css) &&
-      (value.payload.html === null || isString(value.payload.html))
+      (value.payload.html === null || isString(value.payload.html)) &&
+      (value.payload.source === "authored" || value.payload.source === "computed")
     );
   }
 
@@ -841,6 +875,10 @@ export const isExtensionMessage = (value: unknown): value is ExtensionMessage =>
     return (
       isRecord(value.payload) && isString(value.payload.selector) && isString(value.payload.css)
     );
+  }
+
+  if (messageType === "EDITS_RESTORED") {
+    return isRecord(value.payload) && isNumber(value.payload.count);
   }
 
   return false;

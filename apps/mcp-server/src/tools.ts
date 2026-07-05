@@ -114,6 +114,30 @@ const structuralEditSchema = z.object({
   details: z.record(z.string()),
 });
 
+const promptStackHintSchema = z.object({
+  name: z.string(),
+  confidence: z.number().optional(),
+  evidence: z.array(z.string()).optional(),
+  guidance: z.string().optional(),
+  sourceModel: z.string().optional(),
+});
+
+const promptClassConventionSchema = z.object({
+  name: z.string(),
+  stablePatterns: z.array(z.string()).optional(),
+  weakPatterns: z.array(z.string()).optional(),
+  generatedPatterns: z.array(z.string()).optional(),
+  utilityPatterns: z.array(z.string()).optional(),
+  cssModulePatterns: z.array(z.string()).optional(),
+  notes: z.array(z.string()).optional(),
+});
+
+const promptProjectContextSchema = z.object({
+  stackHints: z.array(promptStackHintSchema).optional(),
+  classConventions: z.array(promptClassConventionSchema).optional(),
+  sourceHints: z.array(z.string()).optional(),
+  designTokenHints: z.array(z.string()).optional(),
+});
 const sessionObjectSchema = z.object({
   id: z.string(),
   timestamp: z.string(),
@@ -121,6 +145,8 @@ const sessionObjectSchema = z.object({
   viewport: z.object({ width: z.number(), height: z.number(), devicePixelRatio: z.number() }),
   elements: z.array(changeIntentObjectSchema),
   structuralEdits: z.array(structuralEditSchema),
+  frameworkHints: z.array(z.string()).optional(),
+  promptContext: promptProjectContextSchema.optional(),
   stats: z.object({
     editedElements: z.number(),
     styleChanges: z.number(),
