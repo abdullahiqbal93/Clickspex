@@ -149,6 +149,7 @@ screenshots) is added in the dashboard.
 
 ## Documentation
 
+- `CONTRIBUTING.md` — setup, workflow, and conventions for contributors
 - `docs/product-spec.md`
 - `docs/architecture.md`
 - `docs/development.md`
@@ -159,17 +160,17 @@ screenshots) is added in the dashboard.
 
 ## Security And Safety
 
-- The extension requests `activeTab`, `sidePanel`, and `storage`; it avoids broad background host permissions.
-- Overlay UI is isolated in a Shadow DOM host.
-- Temporary edits are injected through one page style tag and are not persisted to source.
-- CLI and MCP project tooling is read-only: it can index source and generate diff previews, but it does not write source files.
-- MCP project scans skip `.git`, `node_modules`, and secret-looking files.
-- Patch previews are advisory and require human review.
+- Overlay UI is isolated in a Shadow DOM host, injected only when inspection actually starts.
+- In-browser edits are injected through page style tags; CSS/raw-CSS edits are persisted per URL in `chrome.storage.session` so a reload doesn't lose work.
+- The Code Sync bridge (`ui-buddy connect`) listens on `127.0.0.1` and only accepts requests whose origin is `chrome-extension://…` — arbitrary websites cannot reach it to read or write your source.
+- Applying to source is guarded: it writes only matched stylesheet files inside the project root, backs up originals to `.ui-buddy/backups/`, and offers a one-click undo.
+- The MCP server is read-only: it can index source and generate diff previews, but it does not write files.
+- Project scans skip `.git`, `node_modules`, and secret-looking files.
 
 ## v1 Limitations
 
-- No automatic source-code mutation.
-- Framework adapters provide source hints, but AST-safe framework patches are not generated automatically yet.
+- Source mutation is CSS-only (via the Code Sync bridge); framework/Tailwind edits are preview-only until AST-safe patches land.
+- Structural edits (DOM moves, deletes, text, image swaps) are captured and exported but not written to source or persisted across reloads.
 - Tailwind export is conservative and does not inspect existing source classes.
-- Cross-origin iframe inspection is not supported.
+- Cross-origin iframe inspection is not supported; extracted CSS falls back to computed values (flagged in the UI) for cross-origin stylesheets.
 - Accessibility checks are intentionally lightweight and do not replace a full audit.
