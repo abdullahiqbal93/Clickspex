@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type CommitInputProps = {
   value: string;
@@ -6,39 +6,45 @@ type CommitInputProps = {
 } & Omit<React.InputHTMLAttributes<HTMLInputElement>, "value" | "onChange">;
 
 /**
- * Text input that commits on blur or Enter instead of every keystroke.
+ * Text input that previews changes as the user types.
  *
- * Committing per keystroke floods the style-change history (typing "100px"
- * produced four separate undo entries) and applies broken intermediate
- * values like "1" and "10" to the live page.
+ * The style injector coalesces rapid edits of the same property, so live typing
+ * still behaves like one continuous edit for undo/history in normal use.
  */
 export const CommitInput = ({ value, onCommit, ...rest }: CommitInputProps) => {
   const [draft, setDraft] = useState(value);
   const [focused, setFocused] = useState(false);
+  const focusBaselineRef = useRef(value);
 
   useEffect(() => {
     if (!focused) {
       setDraft(value);
+      focusBaselineRef.current = value;
     }
   }, [value, focused]);
+
+  const previewValue = (nextValue: string, forceCommit = false) => {
+    setDraft(nextValue);
+    if (forceCommit || nextValue !== value) {
+      onCommit(nextValue);
+    }
+  };
 
   return (
     <input
       {...rest}
-      onBlur={() => {
-        setFocused(false);
-        if (draft !== value) {
-          onCommit(draft);
-        }
+      onBlur={() => setFocused(false)}
+      onChange={(event) => previewValue(event.target.value)}
+      onFocus={() => {
+        focusBaselineRef.current = value;
+        setFocused(true);
       }}
-      onChange={(event) => setDraft(event.target.value)}
-      onFocus={() => setFocused(true)}
       onKeyDown={(event) => {
         if (event.key === "Enter") {
           event.currentTarget.blur();
         }
         if (event.key === "Escape") {
-          setDraft(value);
+          previewValue(focusBaselineRef.current, true);
           event.currentTarget.blur();
         }
       }}
