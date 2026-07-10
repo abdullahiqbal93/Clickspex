@@ -85,9 +85,13 @@ type OriginalDomPosition = {
 };
 
 type MovePositionSnapshot = {
+  elementIndex: number | null;
+  nextElementSelector: string | null;
   nextSibling: ChildNode | null;
   offset: MoveOffset | null;
   parentNode: Node | null;
+  parentSelector: string | null;
+  previousElementSelector: string | null;
   style: InlineMoveState | null;
 };
 
@@ -728,13 +732,105 @@ export class ElementPickerController {
   private captureMovePositionSnapshot(element: Element): MovePositionSnapshot {
     const currentOffset =
       element instanceof HTMLElement ? this.moveOffsets.get(element) : undefined;
+    const parentElement = element.parentElement;
+    const siblingElements = parentElement === null ? [] : Array.from(parentElement.children);
+    const elementIndex = parentElement === null ? -1 : siblingElements.indexOf(element);
 
     return {
+      elementIndex: elementIndex >= 0 ? elementIndex : null,
+      nextElementSelector:
+        element.nextElementSibling === null
+          ? null
+          : generateUniqueSelector(element.nextElementSibling),
       nextSibling: element.nextSibling,
       offset: currentOffset === undefined ? null : { ...currentOffset },
       parentNode: element.parentNode,
+      parentSelector: parentElement === null ? null : generateUniqueSelector(parentElement),
+      previousElementSelector:
+        element.previousElementSibling === null
+          ? null
+          : generateUniqueSelector(element.previousElementSibling),
       style: element instanceof HTMLElement ? this.captureInlineMoveState(element) : null,
     };
+  }
+
+  private semanticMoveDetails(
+    before: MovePositionSnapshot,
+    after: MovePositionSnapshot,
+    details: Record<string, string>,
+  ): Record<string, string> {
+    const enrichedDetails: Record<string, string> = { ...details };
+
+    if (before.parentNode !== after.parentNode) {
+      enrichedDetails.intent = "relocate";
+      enrichedDetails.confidence = "high";
+      enrichedDetails.implementationHint =
+        "Move the source markup between the recorded source owners; avoid translate offsets when the intent is hierarchy/layout.";
+
+      if (before.parentSelector !== null) {
+        enrichedDetails.beforeParentSelector = before.parentSelector;
+      }
+      if (after.parentSelector !== null) {
+        enrichedDetails.afterParentSelector = after.parentSelector;
+      }
+      if (before.elementIndex !== null) {
+        enrichedDetails.beforeIndex = String(before.elementIndex);
+      }
+      if (after.elementIndex !== null) {
+        enrichedDetails.afterIndex = String(after.elementIndex);
+      }
+
+      return enrichedDetails;
+    }
+
+    if (
+      before.elementIndex !== null &&
+      after.elementIndex !== null &&
+      before.elementIndex !== after.elementIndex
+    ) {
+      enrichedDetails.intent = "reorder";
+      enrichedDetails.confidence = "high";
+      enrichedDetails.implementationHint =
+        "Implement through source markup order or the project's existing flex/grid order mechanism; avoid pixel offsets.";
+      enrichedDetails.beforeIndex = String(before.elementIndex);
+      enrichedDetails.afterIndex = String(after.elementIndex);
+
+      if ((after.parentSelector ?? before.parentSelector) !== null) {
+        enrichedDetails.parentSelector = after.parentSelector ?? before.parentSelector ?? "";
+      }
+      if (before.previousElementSelector !== null) {
+        enrichedDetails.beforePreviousSelector = before.previousElementSelector;
+      }
+      if (before.nextElementSelector !== null) {
+        enrichedDetails.beforeNextSelector = before.nextElementSelector;
+      }
+      if (after.previousElementSelector !== null) {
+        enrichedDetails.afterPreviousSelector = after.previousElementSelector;
+      }
+      if (after.nextElementSelector !== null) {
+        enrichedDetails.afterNextSelector = after.nextElementSelector;
+      }
+
+      return enrichedDetails;
+    }
+
+    const beforeOffset = before.offset ?? { x: 0, y: 0 };
+    const afterOffset = after.offset ?? { x: 0, y: 0 };
+
+    if (beforeOffset.x !== afterOffset.x || beforeOffset.y !== afterOffset.y) {
+      enrichedDetails.intent = "nudge";
+      enrichedDetails.confidence = "medium";
+      enrichedDetails.implementationHint =
+        "Use transform/translate, margin, or spacing only after matching the visual intent in source; do not change DOM order for a nudge.";
+      enrichedDetails.x = enrichedDetails.x ?? String(Math.round(afterOffset.x));
+      enrichedDetails.y = enrichedDetails.y ?? String(Math.round(afterOffset.y));
+
+      return enrichedDetails;
+    }
+
+    enrichedDetails.intent = "unknown";
+    enrichedDetails.confidence = "low";
+    return enrichedDetails;
   }
 
   private clearMoveHistory(element: Element): void {
@@ -758,7 +854,12 @@ export class ElementPickerController {
     this.moveUndoHistory.push({ after, before, element });
     this.trimMoveHistory(this.moveUndoHistory);
     this.moveRedoHistory.length = 0;
-    this.emitStructuralEdit(element, "move", summary, details);
+    this.emitStructuralEdit(
+      element,
+      "move",
+      summary,
+      this.semanticMoveDetails(before, after, details),
+    );
   }
 
   private refreshMovePositionSnapshot(): void {

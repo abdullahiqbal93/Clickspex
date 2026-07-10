@@ -150,6 +150,50 @@ describe("createUIChangeSession", () => {
     // Structural edit
     expect(prompt).toContain("#promo");
   });
+  it("separates runtime service hints and suggests semantic hooks for repeated text", () => {
+    const cardTarget: ElementSnapshot = {
+      ...snapshot("div.box:nth-of-type(4)"),
+      tagName: "div",
+      classList: ["box"],
+      textPreview: "e-passbook",
+      attributes: { class: "box" },
+    };
+    const labelTarget: ElementSnapshot = {
+      ...snapshot("div.box:nth-of-type(4) > p:nth-of-type(1)"),
+      tagName: "p",
+      textPreview: "e-passbook",
+    };
+
+    const session = createUIChangeSession({
+      pageUrl: "https://www.cdb.lk/",
+      viewport: { width: 1363, height: 903, devicePixelRatio: 1 },
+      elements: [
+        {
+          target: cardTarget,
+          changes: [
+            change(cardTarget.selector, "background-color", "rgb(220, 232, 242)", "#407db0"),
+          ],
+        },
+        {
+          target: labelTarget,
+          changes: [change(labelTarget.selector, "color", "rgb(29, 29, 31)", "#ffffff")],
+        },
+      ],
+      frameworkHints: ["jQuery", "Bootstrap", "Google Analytics / GTM"],
+    });
+
+    const prompt = summarizeSessionAsAgentPrompt(session);
+
+    expect(prompt).toContain("Detected stack: jQuery, Bootstrap");
+    expect(prompt).toContain("Observed runtime services: Google Analytics / GTM");
+    expect(prompt).toContain("Stack guidance confidence: detected");
+    expect(prompt).not.toContain("Unrecognized source hints: Google Analytics / GTM");
+    expect(prompt).toContain(
+      "Related source note: another edited element has the same visible text",
+    );
+    expect(prompt).toContain("add a small semantic class or data attribute");
+  });
+
   it("collapses intermediate edits and warns about weak source selectors", () => {
     const target: ElementSnapshot = {
       ...snapshot("p.mb-4"),
@@ -163,9 +207,14 @@ describe("createUIChangeSession", () => {
       id: "move-1",
       kind: "move",
       timestamp: "2026-07-01T00:00:00.000Z",
-      target: { tagName: "div", classList: ["box"], selector: "div.box:nth-of-type(3)", domPath: "div.box:nth-of-type(3)" },
+      target: {
+        tagName: "div",
+        classList: ["box"],
+        selector: "div.box:nth-of-type(3)",
+        domPath: "div.box:nth-of-type(3)",
+      },
       summary: "Dragged to a new position",
-      details: { x: "24", y: "-8" },
+      details: { intent: "nudge", confidence: "medium", x: "24", y: "-8" },
     };
 
     const session = createUIChangeSession({
@@ -182,14 +231,23 @@ describe("createUIChangeSession", () => {
           ],
         },
       ],
-      structuralEdits: [move, { ...move, id: "move-2", details: { x: "32", y: "-4" } }],
+      structuralEdits: [
+        move,
+        {
+          ...move,
+          id: "move-2",
+          details: { intent: "nudge", confidence: "medium", x: "32", y: "-4" },
+        },
+      ],
       frameworkHints: ["Bootstrap"],
     });
 
     const prompt = summarizeSessionAsAgentPrompt(session);
 
     expect(prompt).toContain("Final values to apply");
-    expect(prompt).toContain("`width`: `476.266px` -> `590px` (final value; 3 adjustments collapsed)");
+    expect(prompt).toContain(
+      "`width`: `476.266px` -> `590px` (final value; 3 adjustments collapsed)",
+    );
     expect(prompt).toContain("width: 590px;");
     expect(prompt).not.toContain("`width`: `800px` -> `700px`");
     expect(prompt).toContain(
@@ -197,10 +255,57 @@ describe("createUIChangeSession", () => {
     );
     expect(prompt).toContain("runtime/framework/generated classes (weak source clues): `.mb-4`");
     expect(prompt).toContain("Selector caution");
+    expect(prompt).toContain("Verification selector only");
     expect(prompt).toContain("Treat drag/move records as layout observations");
-    expect(prompt).toContain("Layout movement observed");
+    expect(prompt).toContain("Visual nudge");
+    expect(prompt).toContain("confidence: medium");
     expect(prompt).toContain("2 related edits collapsed");
     expect(prompt).toContain("visual offset: x=32px, y=-4px");
+    expect(prompt).toContain("do not treat it as source order/layout");
+  });
+
+  it("describes reorder and relocate structural moves as source-level intent", () => {
+    const session = createUIChangeSession({
+      pageUrl: "https://example.com",
+      viewport: { width: 1280, height: 720, devicePixelRatio: 1 },
+      elements: [],
+      structuralEdits: [
+        {
+          id: "move-reorder",
+          kind: "move",
+          timestamp: "2026-07-01T00:00:00.000Z",
+          target: { tagName: "span", classList: [], selector: "#second", domPath: "#second" },
+          summary: "Moved previous in the DOM",
+          details: {
+            intent: "reorder",
+            confidence: "high",
+            parentSelector: "#list",
+            beforeIndex: "1",
+            afterIndex: "0",
+          },
+        },
+        {
+          id: "move-relocate",
+          kind: "move",
+          timestamp: "2026-07-01T00:00:00.000Z",
+          target: { tagName: "span", classList: [], selector: "#child", domPath: "#child" },
+          summary: "Moved out-after in the DOM",
+          details: {
+            intent: "relocate",
+            confidence: "high",
+            beforeParentSelector: "#parent",
+            afterParentSelector: "body",
+          },
+        },
+      ],
+    });
+
+    const prompt = summarizeSessionAsAgentPrompt(session);
+
+    expect(prompt).toContain("Reorder `#second` within `#list` from position 2 to 1");
+    expect(prompt).toContain("Relocate `#child` from `#parent` to `body`");
+    expect(prompt).toContain("confidence: high");
+    expect(prompt).toContain("avoid pixel offsets");
   });
 
   it("avoids conflicting animation shorthand in agent prompts", () => {
@@ -253,6 +358,8 @@ describe("createUIChangeSession", () => {
     expect(prompt).toContain("animation-name: ui-buddy-slide-up;");
     expect(prompt).toContain("animation-duration: 150ms;");
     expect(prompt).toContain("animation-timing-function: ease-in;");
+    expect(prompt).toContain("Motion note: reuse existing keyframes");
+    expect(prompt).toContain("prefers-reduced-motion");
   });
 
   it("uses project prompt context and marks unknown stack guidance as partial", () => {
@@ -304,7 +411,9 @@ describe("createUIChangeSession", () => {
     expect(prompt).toContain("Project source hint: Dashboard views live under apps/web/views.");
     expect(prompt).toContain("Project design-token hint: Prefer --surface-* variables");
     expect(prompt).toContain("stable class clues: `.u-card`");
-    expect(prompt).toContain("runtime/framework/generated classes (weak source clues): `.tw-a1b2c3`");
+    expect(prompt).toContain(
+      "runtime/framework/generated classes (weak source clues): `.tw-a1b2c3`",
+    );
     expect(prompt).toContain(
       "Final style target (illustrative CSS -- translate/scope to the actual source mechanism before applying):",
     );

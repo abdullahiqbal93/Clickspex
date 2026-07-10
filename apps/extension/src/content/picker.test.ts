@@ -6,6 +6,8 @@ import { sendRuntimeMessage } from "../chrome/messaging";
 import { OverlayController } from "./overlay";
 import { ElementPickerController } from "./picker";
 
+import type { StructuralEdit } from "@ui-buddy/shared";
+
 vi.mock("../chrome/messaging", () => ({
   sendRuntimeMessage: vi.fn().mockResolvedValue(undefined),
 }));
@@ -178,6 +180,72 @@ describe("ElementPickerController", () => {
       "child",
       "after",
     ]);
+  });
+
+  it("records source-aware move intent details for AI export", () => {
+    document.documentElement.innerHTML =
+      "<head></head><body><main id='list'><span id='first'>First</span><span id='second'>Second</span><span id='third'>Third</span></main></body>";
+    const edits: StructuralEdit[] = [];
+    const picker = new ElementPickerController(new OverlayController(), {
+      onStructuralEdit: (edit) => edits.push(edit),
+    });
+    const second = document.getElementById("second") as HTMLElement | null;
+
+    if (second === null) {
+      throw new Error("Expected source-aware move fixture.");
+    }
+
+    picker.enable("select");
+    second.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+
+    picker.moveSelectedElement("previous");
+    picker.nudgeSelectedElement(8, -4);
+
+    expect(edits[0]?.details).toEqual(
+      expect.objectContaining({
+        intent: "reorder",
+        confidence: "high",
+        parentSelector: "#list",
+        beforeIndex: "1",
+        afterIndex: "0",
+      }),
+    );
+    expect(edits[1]?.details).toEqual(
+      expect.objectContaining({
+        intent: "nudge",
+        confidence: "medium",
+        x: "8",
+        y: "-4",
+        deltaX: "8",
+        deltaY: "-4",
+      }),
+    );
+
+    picker.disable();
+    document.documentElement.innerHTML =
+      "<head></head><body><div id='parent'><span id='child'>Child</span><span id='sibling'>Sibling</span></div><section id='after'></section></body>";
+    const relocateEdits: StructuralEdit[] = [];
+    const relocatePicker = new ElementPickerController(new OverlayController(), {
+      onStructuralEdit: (edit) => relocateEdits.push(edit),
+    });
+    const child = document.getElementById("child");
+
+    if (child === null) {
+      throw new Error("Expected relocate move fixture.");
+    }
+
+    relocatePicker.enable("select");
+    child.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    relocatePicker.moveSelectedElement("out-after");
+
+    expect(relocateEdits[0]?.details).toEqual(
+      expect.objectContaining({
+        intent: "relocate",
+        confidence: "high",
+        beforeParentSelector: "#parent",
+        afterParentSelector: "body",
+      }),
+    );
   });
 
   it("restores selected elements to their original sibling position", () => {

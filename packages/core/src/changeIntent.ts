@@ -265,6 +265,11 @@ const truncateText = (value: string, max: number): string =>
 
 const unique = <T>(values: T[]): T[] => Array.from(new Set(values));
 
+const sourceTextKey = (value: string | undefined): string | null => {
+  const key = value?.trim().replace(/\s+/g, " ").toLowerCase() ?? "";
+  return key.length === 0 ? null : key;
+};
+
 const compilePattern = (pattern: string): RegExp | null => {
   try {
     return new RegExp(pattern);
@@ -281,10 +286,16 @@ type StackGuidanceRule = {
   guidance: string;
 };
 
+type NonSourceStackRule = {
+  id: string;
+  patterns: RegExp[];
+};
+
 type StackGuidanceResult = {
   displayStack: string;
   confidence: "detected" | "partial" | "unknown";
   lines: string[];
+  nonSourceHints: string[];
   sourceModels: string[];
 };
 
@@ -347,14 +358,40 @@ const STACK_GUIDANCE_RULES: StackGuidanceRule[] = [
   },
 ];
 
+const NON_SOURCE_STACK_RULES: NonSourceStackRule[] = [
+  {
+    id: "analytics",
+    patterns: [
+      /\bgoogle analytics\b/i,
+      /\bgoogle tag manager\b/i,
+      /\bgtm\b/i,
+      /\bga4\b/i,
+      /\banalytics\b/i,
+    ],
+  },
+  {
+    id: "monitoring",
+    patterns: [/\bsentry\b/i, /\bhotjar\b/i, /\bsegment\b/i, /\bposthog\b/i, /\bplausible\b/i],
+  },
+  {
+    id: "marketing-pixel",
+    patterns: [/\bmeta pixel\b/i, /\bfacebook pixel\b/i, /\bpixel\b/i, /\bads?\b/i],
+  },
+];
+
+const isNonSourceStackHint = (hint: string): boolean =>
+  NON_SOURCE_STACK_RULES.some((rule) => rule.patterns.some((pattern) => pattern.test(hint)));
+
 const stackHintNames = (
   frameworkHints: string[] | undefined,
   promptContext: PromptProjectContext | undefined,
 ): string[] =>
-  unique([
-    ...(frameworkHints ?? []),
-    ...(promptContext?.stackHints?.map((hint) => hint.name) ?? []),
-  ].filter((hint) => hint.trim().length > 0));
+  unique(
+    [
+      ...(frameworkHints ?? []),
+      ...(promptContext?.stackHints?.map((hint) => hint.name) ?? []),
+    ].filter((hint) => hint.trim().length > 0),
+  );
 
 const stackRuleMatchesHint = (rule: StackGuidanceRule, hint: string): boolean =>
   rule.patterns.some((pattern) => pattern.test(hint));
@@ -364,36 +401,43 @@ const frameworkGuidance = (
   promptContext: PromptProjectContext | undefined,
 ): StackGuidanceResult => {
   const hints = stackHintNames(frameworkHints, promptContext);
+  const sourceHints = hints.filter((hint) => !isNonSourceStackHint(hint));
+  const nonSourceHints = hints.filter(isNonSourceStackHint);
+  const sourceStackHints =
+    promptContext?.stackHints?.filter((hint) => sourceHints.includes(hint.name)) ?? [];
   const matchedRules = STACK_GUIDANCE_RULES.filter((rule) =>
-    hints.some((hint) => stackRuleMatchesHint(rule, hint)),
+    sourceHints.some((hint) => stackRuleMatchesHint(rule, hint)),
   );
-  const recognizedHints = hints.filter((hint) =>
+  const recognizedHints = sourceHints.filter((hint) =>
     matchedRules.some((rule) => stackRuleMatchesHint(rule, hint)),
   );
-  const unrecognizedHints = hints.filter((hint) => !recognizedHints.includes(hint));
-  const customStackGuidance = promptContext?.stackHints
-    ?.filter((hint) => hint.guidance !== undefined && hint.guidance.trim().length > 0)
-    .map((hint) => `- Project-specific stack guidance (${hint.name}): ${hint.guidance!.trim()}`) ?? [];
+  const unrecognizedHints = sourceHints.filter((hint) => !recognizedHints.includes(hint));
+  const customStackGuidance = sourceStackHints
+    .filter((hint) => hint.guidance !== undefined && hint.guidance.trim().length > 0)
+    .map((hint) => `- Project-specific stack guidance (${hint.name}): ${hint.guidance!.trim()}`);
   const contextLines = [
     ...(promptContext?.sourceHints?.map((hint) => `- Project source hint: ${hint}`) ?? []),
-    ...(promptContext?.designTokenHints?.map((hint) => `- Project design-token hint: ${hint}`) ?? []),
-    ...(promptContext?.classConventions?.flatMap((convention) =>
-      convention.notes?.map((note) => `- Class convention note (${convention.name}): ${note}`) ?? [],
+    ...(promptContext?.designTokenHints?.map((hint) => `- Project design-token hint: ${hint}`) ??
+      []),
+    ...(promptContext?.classConventions?.flatMap(
+      (convention) =>
+        convention.notes?.map((note) => `- Class convention note (${convention.name}): ${note}`) ??
+        [],
     ) ?? []),
   ];
   const lines: string[] = [];
 
-  if (hints.length === 0) {
+  if (sourceHints.length === 0) {
     lines.push(
       "- Stack detection is unavailable. Verify whether the source is component-based, server-rendered, CMS/theme-driven, static HTML/CSS, Web Components, email markup, or another architecture before deciding where to edit.",
     );
   } else if (matchedRules.length === 0 && customStackGuidance.length === 0) {
     lines.push(
-      `- Stack detection is uncertain. Captured hints (${hints.join(", ")}) do not match built-in guidance, so inspect package/config/template files before choosing an implementation style.`,
+      `- Stack detection is uncertain. Captured source hints (${sourceHints.join(", ")}) do not match built-in guidance, so inspect package/config/template files before choosing an implementation style.`,
     );
   } else if (unrecognizedHints.length > 0) {
     lines.push(
-      `- Stack detection is partial. Unrecognized hints: ${unrecognizedHints.join(", ")}. Treat the guidance below as provisional and verify the real source structure first.`,
+      `- Stack detection is partial. Unrecognized source hints: ${unrecognizedHints.join(", ")}. Treat the guidance below as provisional and verify the real source structure first.`,
     );
   }
 
@@ -405,19 +449,20 @@ const frameworkGuidance = (
   );
 
   return {
-    displayStack: hints.length > 0 ? hints.join(", ") : "unknown",
+    displayStack: sourceHints.length > 0 ? sourceHints.join(", ") : "unknown",
     confidence:
-      hints.length === 0 || (matchedRules.length === 0 && customStackGuidance.length === 0)
+      sourceHints.length === 0 || (matchedRules.length === 0 && customStackGuidance.length === 0)
         ? "unknown"
         : unrecognizedHints.length > 0
           ? "partial"
           : "detected",
     lines,
+    nonSourceHints,
     sourceModels: unique([
       ...matchedRules.map((rule) => rule.sourceModel),
-      ...(promptContext?.stackHints
-        ?.map((hint) => hint.sourceModel)
-        .filter((model): model is string => model !== undefined && model.trim().length > 0) ?? []),
+      ...sourceStackHints
+        .map((hint) => hint.sourceModel)
+        .filter((model): model is string => model !== undefined && model.trim().length > 0),
     ]),
   };
 };
@@ -497,18 +542,25 @@ const CSS_SHORTHAND_RULES: ShorthandRule[] = [
   },
   { shorthand: "overflow", longhands: ["overflow-x", "overflow-y"] },
   { shorthand: "flex", longhands: ["flex-grow", "flex-shrink", "flex-basis"] },
-  { shorthand: "font", longhands: ["font-family", "font-size", "font-weight", "font-style", "line-height"] },
+  {
+    shorthand: "font",
+    longhands: ["font-family", "font-size", "font-weight", "font-style", "line-height"],
+  },
   { shorthand: "text-decoration", longhands: ["text-decoration-line"] },
   { shorthand: "background", longhands: ["background-color", "background-repeat"] },
-  { shorthand: "margin", longhands: ["margin-top", "margin-right", "margin-bottom", "margin-left"] },
-  { shorthand: "padding", longhands: ["padding-top", "padding-right", "padding-bottom", "padding-left"] },
+  {
+    shorthand: "margin",
+    longhands: ["margin-top", "margin-right", "margin-bottom", "margin-left"],
+  },
+  {
+    shorthand: "padding",
+    longhands: ["padding-top", "padding-right", "padding-bottom", "padding-left"],
+  },
   { shorthand: "inset", longhands: ["top", "right", "bottom", "left"] },
   { shorthand: "border", longhands: ["border-width", "border-style", "border-color"] },
 ];
 
-const normalizePromptStyleChanges = (
-  changes: CollapsedStyleChange[],
-): CollapsedStyleChange[] => {
+const normalizePromptStyleChanges = (changes: CollapsedStyleChange[]): CollapsedStyleChange[] => {
   const groupsWithLonghands = new Set<string>();
 
   for (const change of changes) {
@@ -530,8 +582,14 @@ type CssModulePattern = {
 };
 
 const CSS_MODULE_CLASS_PATTERNS: CssModulePattern[] = [
-  { source: "css-loader [name]_[local]__[hash]", pattern: /^[A-Za-z][\w-]*_([A-Za-z][A-Za-z0-9-]*)__[A-Za-z0-9_-]{4,}$/ },
-  { source: "css-loader [name]__[local]___[hash]", pattern: /^[A-Za-z][\w-]*__([A-Za-z][A-Za-z0-9-]*)___[A-Za-z0-9_-]{4,}$/ },
+  {
+    source: "css-loader [name]_[local]__[hash]",
+    pattern: /^[A-Za-z][\w-]*_([A-Za-z][A-Za-z0-9-]*)__[A-Za-z0-9_-]{4,}$/,
+  },
+  {
+    source: "css-loader [name]__[local]___[hash]",
+    pattern: /^[A-Za-z][\w-]*__([A-Za-z][A-Za-z0-9-]*)___[A-Za-z0-9_-]{4,}$/,
+  },
   { source: "css-loader [local]__[hash]", pattern: /^([A-Za-z][A-Za-z0-9-]*)__[A-Za-z0-9_-]{5,}$/ },
 ];
 
@@ -556,15 +614,38 @@ const DEFAULT_CLASS_PATTERNS: DefaultClassPattern[] = [
   { kind: "generated", source: "MUI makeStyles hash", pattern: /^makeStyles-[A-Za-z0-9_-]+-\d+$/ },
   { kind: "generated", source: "hash suffix", pattern: /__[A-Za-z0-9_-]{5,}$/ },
   { kind: "utility", source: "Bootstrap utility", pattern: /^(m|p)[trblxyse]?-[0-5]$/i },
-  { kind: "utility", source: "Bootstrap layout utility", pattern: /^(d|w|h|text|bg|border|rounded|flex|grid|gap|justify|align|container|row|col)-/i },
-  { kind: "utility", source: "Tailwind-style utility", pattern: /^(?:sm:|md:|lg:|xl:|2xl:|hover:|focus:|active:|disabled:)?(?:m|p|w|h|min-w|max-w|min-h|max-h|text|bg|border|rounded|flex|grid|gap|justify|items|content|self|order|font|leading|tracking|opacity|shadow|translate|scale|rotate|duration|ease|animate)-/i },
-  { kind: "weak", source: "Ant Design runtime/component class", pattern: /^(ant|anticon|ant-btn|ant-dropdown|ant-tooltip|ant-modal|ant-select|ant-input)(?:-|$)/i },
-  { kind: "weak", source: "runtime UI-library class", pattern: /^(btn|dropdown|tooltip|modal|nav|navbar)(?:-|$)/i },
+  {
+    kind: "utility",
+    source: "Bootstrap layout utility",
+    pattern: /^(d|w|h|text|bg|border|rounded|flex|grid|gap|justify|align|container|row|col)-/i,
+  },
+  {
+    kind: "utility",
+    source: "Tailwind-style utility",
+    pattern:
+      /^(?:sm:|md:|lg:|xl:|2xl:|hover:|focus:|active:|disabled:)?(?:m|p|w|h|min-w|max-w|min-h|max-h|text|bg|border|rounded|flex|grid|gap|justify|items|content|self|order|font|leading|tracking|opacity|shadow|translate|scale|rotate|duration|ease|animate)-/i,
+  },
+  {
+    kind: "weak",
+    source: "Ant Design runtime/component class",
+    pattern:
+      /^(ant|anticon|ant-btn|ant-dropdown|ant-tooltip|ant-modal|ant-select|ant-input)(?:-|$)/i,
+  },
+  {
+    kind: "weak",
+    source: "runtime UI-library class",
+    pattern: /^(btn|dropdown|tooltip|modal|nav|navbar)(?:-|$)/i,
+  },
 ];
 
 const contextPatternsFor = (
   promptContext: PromptProjectContext | undefined,
-  field: "stablePatterns" | "weakPatterns" | "generatedPatterns" | "utilityPatterns" | "cssModulePatterns",
+  field:
+    | "stablePatterns"
+    | "weakPatterns"
+    | "generatedPatterns"
+    | "utilityPatterns"
+    | "cssModulePatterns",
 ): Array<{ convention: string; pattern: RegExp }> =>
   promptContext?.classConventions?.flatMap((convention) =>
     (convention[field] ?? [])
@@ -598,7 +679,9 @@ const matchesContextPattern = (
   promptContext: PromptProjectContext | undefined,
   field: "stablePatterns" | "weakPatterns" | "generatedPatterns" | "utilityPatterns",
 ): string | null => {
-  const match = contextPatternsFor(promptContext, field).find((entry) => entry.pattern.test(className));
+  const match = contextPatternsFor(promptContext, field).find((entry) =>
+    entry.pattern.test(className),
+  );
   return match?.convention ?? null;
 };
 
@@ -646,10 +729,8 @@ const classifyClassName = (
   return { kind: "unknown", source: "unrecognized class convention" };
 };
 
-const isLikelyGeneratedClass = (
-  className: string,
-  promptContext?: PromptProjectContext,
-): boolean => classifyClassName(className, promptContext).kind === "generated";
+const isLikelyGeneratedClass = (className: string, promptContext?: PromptProjectContext): boolean =>
+  classifyClassName(className, promptContext).kind === "generated";
 
 const isFrameworkOrUtilityClass = (
   className: string,
@@ -664,10 +745,7 @@ const selectorClassNames = (selector: string): string[] =>
     (className) => className.length > 0,
   );
 
-const isWeakSelector = (
-  selector: string,
-  promptContext?: PromptProjectContext,
-): boolean =>
+const isWeakSelector = (selector: string, promptContext?: PromptProjectContext): boolean =>
   selector.includes(":nth-") ||
   selectorClassNames(selector).some((className) => {
     const kind = classifyClassName(className, promptContext).kind;
@@ -696,9 +774,10 @@ const selectorRiskNotes = (
 };
 
 const formatClassList = (classes: string[], suffix = ""): string =>
-  `${classes.slice(0, MAX_CLASS_HINTS).map((className) => `\`.${className}\``).join(", ")}${
-    classes.length > MAX_CLASS_HINTS ? ", ..." : ""
-  }${suffix}`;
+  `${classes
+    .slice(0, MAX_CLASS_HINTS)
+    .map((className) => `\`.${className}\``)
+    .join(", ")}${classes.length > MAX_CLASS_HINTS ? ", ..." : ""}${suffix}`;
 
 /** Ordered "how to locate this element in source" hints, most reliable first. */
 const elementIdentity = (
@@ -728,7 +807,8 @@ const elementIdentity = (
     classification: classifyClassName(className, promptContext),
   }));
   const moduleClassKeys = classifiedClasses.filter(
-    (entry) => entry.classification.kind === "css-module" && entry.classification.moduleKey !== undefined,
+    (entry) =>
+      entry.classification.kind === "css-module" && entry.classification.moduleKey !== undefined,
   );
 
   if (moduleClassKeys.length > 0) {
@@ -736,7 +816,9 @@ const elementIdentity = (
       `CSS Module/local-name clues: search source for ${moduleClassKeys
         .slice(0, MAX_CLASS_HINTS)
         .map((entry) => `\`${entry.classification.moduleKey}\``)
-        .join(", ")} (compiled class ${formatClassList(moduleClassKeys.map((entry) => entry.className))})`,
+        .join(
+          ", ",
+        )} (compiled class ${formatClassList(moduleClassKeys.map((entry) => entry.className))})`,
     );
   }
 
@@ -818,11 +900,19 @@ const preferredSourceTarget = (
     classification: classifyClassName(className, promptContext),
   }));
   const moduleClassKeys = classifiedClasses
-    .filter((entry) => entry.classification.kind === "css-module" && entry.classification.moduleKey !== undefined)
+    .filter(
+      (entry) =>
+        entry.classification.kind === "css-module" && entry.classification.moduleKey !== undefined,
+    )
     .map((entry) => entry.classification.moduleKey!);
 
   if (moduleClassKeys.length > 0) {
-    clues.push(`CSS Module key ${moduleClassKeys.slice(0, MAX_CLASS_HINTS).map((key) => `\`${key}\``).join(", ")}`);
+    clues.push(
+      `CSS Module key ${moduleClassKeys
+        .slice(0, MAX_CLASS_HINTS)
+        .map((key) => `\`${key}\``)
+        .join(", ")}`,
+    );
   }
 
   const stableClasses = classifiedClasses
@@ -840,9 +930,7 @@ const preferredSourceTarget = (
     }
   }
 
-  return clues.length === 0
-    ? null
-    : `Recommended source target: ${clues.slice(0, 4).join(" + ")}.`;
+  return clues.length === 0 ? null : `Recommended source target: ${clues.slice(0, 4).join(" + ")}.`;
 };
 
 const formatAccessibilityNotes = (notes: AccessibilityNote[]): string[] =>
@@ -850,6 +938,28 @@ const formatAccessibilityNotes = (notes: AccessibilityNote[]): string[] =>
     (note) =>
       `- ${note.severity.toUpperCase()}: ${note.title} - ${truncateText(note.message, 180)}`,
   );
+
+const motionImplementationNote = (changes: CollapsedStyleChange[]): string | null => {
+  const motionChanges = changes.filter(
+    (change) =>
+      change.property === "animation" ||
+      change.property.startsWith("animation-") ||
+      change.property === "transition" ||
+      change.property.startsWith("transition-"),
+  );
+
+  if (motionChanges.length === 0) {
+    return null;
+  }
+
+  const usesUiBuddyKeyframes = motionChanges.some((change) =>
+    /\bui-buddy-[\w-]+\b/.test(change.afterValue),
+  );
+
+  return usesUiBuddyKeyframes
+    ? "Motion note: reuse existing keyframes when present. If adding a `ui-buddy-*` keyframe, define it near the owning stylesheet and include a `prefers-reduced-motion` override when animation affects content movement."
+    : "Motion note: reuse the project's existing motion tokens, transition utilities, or keyframes when they match the intended effect.";
+};
 /** Explicit original -> final value for each changed property. */
 const changeDescriptions = (changes: CollapsedStyleChange[]): string[] =>
   changes.map((change) => {
@@ -913,6 +1023,58 @@ const formatMoveDetails = (details: Record<string, string>): string => {
   return parts.length === 0 ? "" : ` (${parts.join(", ")})`;
 };
 
+const formatRecordedSelector = (selector: string | undefined, fallback: string): string =>
+  selector !== undefined && selector.trim().length > 0 ? `\`${selector}\`` : fallback;
+
+const oneBasedPosition = (value: string | undefined): string | null => {
+  if (value === undefined) {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 0 ? String(parsed + 1) : value;
+};
+
+const confidenceSuffix = (details: Record<string, string>): string =>
+  details.confidence !== undefined ? ` (confidence: ${details.confidence})` : "";
+
+const implementationSentence = (details: Record<string, string>, fallback: string): string => {
+  const sentence = (details.implementationHint ?? fallback).trim();
+  return sentence.endsWith(".") ? sentence : `${sentence}.`;
+};
+
+const describeSemanticMove = (
+  selector: string,
+  edit: StructuralEdit,
+  repeatNote: string,
+): string | null => {
+  const { details } = edit;
+
+  if (details.intent === "reorder") {
+    const parent = formatRecordedSelector(details.parentSelector, "the recorded parent");
+    const before = oneBasedPosition(details.beforeIndex);
+    const after = oneBasedPosition(details.afterIndex);
+    const positions =
+      before !== null && after !== null ? ` from position ${before} to ${after}` : "";
+    return `- Reorder ${selector} within ${parent}${positions}${confidenceSuffix(details)}. ${implementationSentence(details, "Implement through source markup order or the project's existing flex/grid order mechanism; avoid pixel offsets")}${repeatNote}`;
+  }
+
+  if (details.intent === "relocate") {
+    const beforeParent = formatRecordedSelector(
+      details.beforeParentSelector,
+      "its original parent",
+    );
+    const afterParent = formatRecordedSelector(details.afterParentSelector, "its new parent");
+    return `- Relocate ${selector} from ${beforeParent} to ${afterParent}${confidenceSuffix(details)}. ${implementationSentence(details, "Move the source markup between the recorded source owners; avoid translate offsets when the intent is hierarchy/layout")}${repeatNote}`;
+  }
+
+  if (details.intent === "nudge") {
+    return `- Visual nudge ${selector}: ${edit.summary}${formatMoveDetails(details)}${confidenceSuffix(details)}. ${implementationSentence(details, "Implement as transform/translate, margin, or spacing only if the persistent visual offset is intentional; do not treat it as source order/layout")}${repeatNote}`;
+  }
+
+  return null;
+};
+
 const describeStructuralEdit = ({ count, edit }: CollapsedStructuralEdit): string => {
   const selector = `\`${edit.target.selector}\``;
   const repeatNote = structuralRepeatNote(count);
@@ -924,8 +1086,13 @@ const describeStructuralEdit = ({ count, edit }: CollapsedStructuralEdit): strin
       return `- Replace the image of ${selector} with \`${truncateText(edit.details.src ?? "", 120)}\`${repeatNote}`;
     case "delete":
       return `- Remove or hide ${selector}${repeatNote}`;
-    case "move":
-      return `- Layout movement observed for ${selector}: ${edit.summary}${formatMoveDetails(edit.details)}${repeatNote}`;
+    case "move": {
+      const semanticMove = describeSemanticMove(selector, edit, repeatNote);
+      return (
+        semanticMove ??
+        `- Layout movement observed for ${selector}: ${edit.summary}${formatMoveDetails(edit.details)}${repeatNote}`
+      );
+    }
   }
 };
 /**
@@ -946,6 +1113,9 @@ export const summarizeSessionAsAgentPrompt = (session: UIChangeSession): string 
     `- Page: ${session.pageUrl}`,
     `- Viewport at capture: ${session.viewport.width}x${session.viewport.height}`,
     `- Detected stack: ${stackGuidance.displayStack}`,
+    ...(stackGuidance.nonSourceHints.length > 0
+      ? [`- Observed runtime services: ${stackGuidance.nonSourceHints.join(", ")}`]
+      : []),
     `- Stack guidance confidence: ${stackGuidance.confidence}`,
     ...(stackGuidance.sourceModels.length > 0
       ? [`- Likely source model(s): ${stackGuidance.sourceModels.join("; ")}`]
@@ -956,6 +1126,14 @@ export const summarizeSessionAsAgentPrompt = (session: UIChangeSession): string 
     "",
     "## Element changes",
   ];
+
+  const editedTextCounts = new Map<string, number>();
+  for (const intent of session.elements) {
+    const key = sourceTextKey(intent.target.textPreview);
+    if (key !== null) {
+      editedTextCounts.set(key, (editedTextCounts.get(key) ?? 0) + 1);
+    }
+  }
 
   session.elements.forEach((intent, index) => {
     const target = intent.target;
@@ -970,6 +1148,12 @@ export const summarizeSessionAsAgentPrompt = (session: UIChangeSession): string 
     if (sourceTarget !== null) {
       lines.push(sourceTarget);
     }
+    const textKey = sourceTextKey(target.textPreview);
+    if (textKey !== null && (editedTextCounts.get(textKey) ?? 0) > 1) {
+      lines.push(
+        "Related source note: another edited element has the same visible text; map parent/child rules together when they belong to the same source unit.",
+      );
+    }
     lines.push("Find it in source (architecture-neutral clues, most reliable first):");
     for (const hint of elementIdentity(target, session.promptContext)) {
       lines.push(hint);
@@ -982,6 +1166,11 @@ export const summarizeSessionAsAgentPrompt = (session: UIChangeSession): string 
       lines.push(...descriptions);
     } else if (intent.changes.length > 0) {
       lines.push("No net style change remains after collapsing intermediate edits.");
+    }
+
+    const motionNote = motionImplementationNote(finalChanges);
+    if (motionNote !== null) {
+      lines.push(motionNote);
     }
 
     if (intent.accessibilityNotes.length > 0) {
@@ -1003,12 +1192,16 @@ export const summarizeSessionAsAgentPrompt = (session: UIChangeSession): string 
       finalChanges.length > 0 ? buildCssRulesFromChanges(target.selector, finalChanges) : "";
     const rawRule = intent.rawCss !== undefined ? rawCssToRule(target.selector, intent.rawCss) : "";
     const css = [ruleCss, rawRule].filter((part) => part.trim().length > 0).join("\n\n");
+    const illustratedCss =
+      css.length > 0 && isWeakSelector(target.selector, session.promptContext)
+        ? `/* Verification selector only: scope this to the real source owner before applying. */\n${css}`
+        : css;
 
-    if (css.length > 0) {
+    if (illustratedCss.length > 0) {
       lines.push(
         "Final style target (illustrative CSS -- translate/scope to the actual source mechanism before applying):",
         "```css",
-        css,
+        illustratedCss,
         "```",
       );
     }
@@ -1032,6 +1225,7 @@ export const summarizeSessionAsAgentPrompt = (session: UIChangeSession): string 
     "## Rules",
     "- Apply only the final values listed above; intermediate try-values are intentionally collapsed and should not be implemented.",
     "- Map each element to the real source owner using the identifiers above: component, template, view, stylesheet, CMS/theme file, Web Component, static markup, or email template as appropriate. Prefer ids, stable classes, `data-*` attributes, semantic attributes, or visible text over rendered selectors.",
+    "- If an edited element has no stable unique source hook, add a small semantic class or data attribute in the source markup and scope the style through that hook instead of broad global or positional selectors.",
     "- Treat generated/framework/utility/unverified classes and positional `:nth-of-type` selectors as browser verification clues, not source selectors.",
     "- Apply changes idiomatically for the verified stack. Do not assume a component framework, utility framework, or global stylesheet unless the project structure confirms it.",
     "- Reuse existing tokens/variables/utilities when a value matches one; avoid hardcoding literals that duplicate the design system.",
