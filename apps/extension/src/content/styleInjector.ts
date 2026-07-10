@@ -160,7 +160,10 @@ export class StyleInjector {
    * Rehydrate style + raw CSS edits after a page reload and re-inject them.
    * Rebuilds the raw-CSS undo stack so each restored raw block stays undoable.
    */
-  public restore(styleChanges: StyleChange[], rawCss: Array<{ selector: string; css: string }>): void {
+  public restore(
+    styleChanges: StyleChange[],
+    rawCss: Array<{ selector: string; css: string }>,
+  ): void {
     this.appliedChanges.length = 0;
     this.appliedChanges.push(...styleChanges);
     this.redoStack.length = 0;

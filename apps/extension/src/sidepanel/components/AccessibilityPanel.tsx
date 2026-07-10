@@ -185,8 +185,8 @@ export const AccessibilityPanel = () => {
   const contrastRatio = contrastRatioFromCssColors(
     selectedElement.computedStyles.color ?? "",
     selectedElement.effectiveBackgroundColor ??
-    selectedElement.computedStyles["background-color"] ??
-    "",
+      selectedElement.computedStyles["background-color"] ??
+      "",
   );
 
   return (

@@ -114,7 +114,9 @@ describe("Chrome messaging helpers", () => {
   it("injects the content script and retries when the receiving end is missing", async () => {
     const chromeMock = installChromeMock({ id: 5, url: "https://example.test" });
     chromeMock.tabSendMessage
-      .mockRejectedValueOnce(new Error("Could not establish connection. Receiving end does not exist."))
+      .mockRejectedValueOnce(
+        new Error("Could not establish connection. Receiving end does not exist."),
+      )
       .mockResolvedValueOnce({ ok: true });
     // runtime.sendMessage backs the inject-content-script background command.
     chromeMock.sendMessage.mockResolvedValue({ ok: true });

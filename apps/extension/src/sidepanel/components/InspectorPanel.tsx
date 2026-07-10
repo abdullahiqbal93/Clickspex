@@ -547,35 +547,19 @@ export const InspectorPanel = ({ selectedElement }: InspectorPanelProps) => {
       <section className="ub-card p-4">
         <h3 className="text-sm font-semibold tracking-tight">Tools</h3>
         <div className="mt-2.5 grid grid-cols-2 gap-1.5">
-          <button
-            className="ub-btn"
-            onClick={() => void pinCard("styles")}
-            type="button"
-          >
+          <button className="ub-btn" onClick={() => void pinCard("styles")} type="button">
             <Pin aria-hidden="true" size={13} />
             Pin styles
           </button>
-          <button
-            className="ub-btn"
-            onClick={() => void pinCard("audit")}
-            type="button"
-          >
+          <button className="ub-btn" onClick={() => void pinCard("audit")} type="button">
             <ShieldCheck aria-hidden="true" size={13} />
             Pin audit
           </button>
-          <button
-            className="ub-btn"
-            onClick={() => void startTextEdit()}
-            type="button"
-          >
+          <button className="ub-btn" onClick={() => void startTextEdit()} type="button">
             <Edit3 aria-hidden="true" size={13} />
             Edit text
           </button>
-          <button
-            className="ub-btn"
-            onClick={() => void clearPins()}
-            type="button"
-          >
+          <button className="ub-btn" onClick={() => void clearPins()} type="button">
             <Trash2 aria-hidden="true" size={13} />
             Clear pins
           </button>
@@ -691,43 +675,23 @@ ${elementCssResult.css}
             <Move aria-hidden="true" size={13} />
             {moveMode ? "Drag on" : "Drag"}
           </button>
-          <button
-            className="ub-btn"
-            onClick={() => void restorePosition()}
-            type="button"
-          >
+          <button className="ub-btn" onClick={() => void restorePosition()} type="button">
             <RotateCcw aria-hidden="true" size={13} />
             Restore
           </button>
-          <button
-            className="ub-btn"
-            onClick={() => void moveElement("previous")}
-            type="button"
-          >
+          <button className="ub-btn" onClick={() => void moveElement("previous")} type="button">
             <ArrowLeft aria-hidden="true" size={13} />
             Previous sibling
           </button>
-          <button
-            className="ub-btn"
-            onClick={() => void moveElement("next")}
-            type="button"
-          >
+          <button className="ub-btn" onClick={() => void moveElement("next")} type="button">
             <ArrowRight aria-hidden="true" size={13} />
             Next sibling
           </button>
-          <button
-            className="ub-btn"
-            onClick={() => void moveElement("out-before")}
-            type="button"
-          >
+          <button className="ub-btn" onClick={() => void moveElement("out-before")} type="button">
             <ArrowUpToLine aria-hidden="true" size={13} />
             Above parent
           </button>
-          <button
-            className="ub-btn"
-            onClick={() => void moveElement("out-after")}
-            type="button"
-          >
+          <button className="ub-btn" onClick={() => void moveElement("out-after")} type="button">
             <ArrowDownToLine aria-hidden="true" size={13} />
             Under parent
           </button>
@@ -793,35 +757,19 @@ ${elementCssResult.css}
           </div>
         ) : null}
         <div className="mt-3 grid grid-cols-4 gap-1.5">
-          <button
-            className="ub-btn"
-            onClick={() => void nudgeElement(0, -8)}
-            type="button"
-          >
+          <button className="ub-btn" onClick={() => void nudgeElement(0, -8)} type="button">
             <ArrowUp aria-hidden="true" size={13} />
             Up
           </button>
-          <button
-            className="ub-btn"
-            onClick={() => void nudgeElement(-8, 0)}
-            type="button"
-          >
+          <button className="ub-btn" onClick={() => void nudgeElement(-8, 0)} type="button">
             <ArrowLeft aria-hidden="true" size={13} />
             Left
           </button>
-          <button
-            className="ub-btn"
-            onClick={() => void nudgeElement(8, 0)}
-            type="button"
-          >
+          <button className="ub-btn" onClick={() => void nudgeElement(8, 0)} type="button">
             <ArrowRight aria-hidden="true" size={13} />
             Right
           </button>
-          <button
-            className="ub-btn"
-            onClick={() => void nudgeElement(0, 8)}
-            type="button"
-          >
+          <button className="ub-btn" onClick={() => void nudgeElement(0, 8)} type="button">
             <ArrowDown aria-hidden="true" size={13} />
             Down
           </button>

@@ -73,7 +73,12 @@ type NavGroup = {
 
 const navGroups: readonly NavGroup[] = [
   { id: "inspect", label: "Inspect", icon: Crosshair, tabs: ["inspect"] },
-  { id: "style", label: "Style", icon: Paintbrush, tabs: ["styles", "box", "typography", "motion"] },
+  {
+    id: "style",
+    label: "Style",
+    icon: Paintbrush,
+    tabs: ["styles", "box", "typography", "motion"],
+  },
   { id: "measure", label: "Measure", icon: Ruler, tabs: ["measure"] },
   { id: "assets", label: "Assets", icon: Palette, tabs: ["palette", "assets"] },
   { id: "review", label: "Review", icon: Accessibility, tabs: ["accessibility", "export"] },
@@ -213,7 +218,6 @@ export const App = () => {
     setSelectedElement,
   ]);
 
-
   useEffect(() => {
     const rescanFreshPage = () => {
       setPageScanLoading(true);
@@ -325,8 +329,7 @@ export const App = () => {
           ...history.filter((color) => color !== result.sRGBHex),
         ].slice(0, 24);
         await chrome.storage.local.set({ ubColorHistory: nextHistory });
-      } catch {
-      }
+      } catch {}
 
       setEyedropperFeedback(result.sRGBHex);
       setTimeout(() => setEyedropperFeedback(null), 2000);
@@ -486,10 +489,11 @@ export const App = () => {
             ) : null}
 
             <button
-              className={`ml-1 inline-flex h-9 items-center gap-1.5 rounded-2xl px-3.5 text-xs font-semibold transition-all active:scale-[0.97] ${pickerActive
-                ? "bg-rose-500 text-white shadow-soft hover:bg-rose-600"
-                : "bg-gradient-to-b from-accent to-accent-hover text-white shadow-accent-glow hover:brightness-105"
-                }`}
+              className={`ml-1 inline-flex h-9 items-center gap-1.5 rounded-2xl px-3.5 text-xs font-semibold transition-all active:scale-[0.97] ${
+                pickerActive
+                  ? "bg-rose-500 text-white shadow-soft hover:bg-rose-600"
+                  : "bg-gradient-to-b from-accent to-accent-hover text-white shadow-accent-glow hover:brightness-105"
+              }`}
               onClick={() => void togglePicker()}
               type="button"
             >
@@ -501,10 +505,11 @@ export const App = () => {
 
         <div className="px-3.5 pb-2.5 pt-2">
           <div
-            className={`flex items-center gap-2 rounded-2xl border px-3 py-1.5 transition-colors ${currentSelector
-              ? "border-accent-ring/60 bg-accent-softer"
-              : "border-line bg-panel-soft"
-              }`}
+            className={`flex items-center gap-2 rounded-2xl border px-3 py-1.5 transition-colors ${
+              currentSelector
+                ? "border-accent-ring/60 bg-accent-softer"
+                : "border-line bg-panel-soft"
+            }`}
           >
             <Crosshair
               aria-hidden="true"
@@ -512,8 +517,9 @@ export const App = () => {
               size={13}
             />
             <p
-              className={`min-w-0 truncate font-mono text-2xs ${currentSelector ? "text-accent-hover" : "text-slate-400"
-                }`}
+              className={`min-w-0 truncate font-mono text-2xs ${
+                currentSelector ? "text-accent-hover" : "text-slate-400"
+              }`}
               title={currentSelector ?? "No element selected"}
             >
               {currentSelector ?? "No element selected — press Pick to inspect"}
@@ -530,10 +536,11 @@ export const App = () => {
               return (
                 <button
                   aria-current={selected ? "page" : undefined}
-                  className={`flex flex-col items-center justify-center gap-1 rounded-xl py-2 text-[10px] font-semibold transition-all ${selected
-                    ? "bg-gradient-to-b from-accent to-accent-hover text-white shadow-accent-glow"
-                    : "text-muted hover:bg-accent-softer hover:text-accent"
-                    }`}
+                  className={`flex flex-col items-center justify-center gap-1 rounded-xl py-2 text-[10px] font-semibold transition-all ${
+                    selected
+                      ? "bg-gradient-to-b from-accent to-accent-hover text-white shadow-accent-glow"
+                      : "text-muted hover:bg-accent-softer hover:text-accent"
+                  }`}
                   key={group.id}
                   onClick={() => setActiveTab(group.tabs[0])}
                   type="button"
@@ -555,10 +562,11 @@ export const App = () => {
                 return (
                   <button
                     aria-current={selected ? "page" : undefined}
-                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold transition-all active:scale-95 ${selected
-                      ? "bg-accent-soft text-accent ring-1 ring-inset ring-accent-ring"
-                      : "text-muted hover:bg-panel-soft hover:text-ink"
-                      }`}
+                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold transition-all active:scale-95 ${
+                      selected
+                        ? "bg-accent-soft text-accent ring-1 ring-inset ring-accent-ring"
+                        : "text-muted hover:bg-panel-soft hover:text-ink"
+                    }`}
                     key={tabId}
                     onClick={() => setActiveTab(tabId)}
                     type="button"

@@ -182,12 +182,13 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
 
       <div className="mt-2.5 flex items-center gap-2 rounded-xl bg-slate-50 px-2.5 py-2 text-xs">
         <span
-          className={`inline-block h-2 w-2 shrink-0 rounded-full ${connection === "connected"
-            ? "bg-emerald-500 shadow-[0_0_0_3px_rgb(16_185_129_/_0.15)]"
-            : connection === "checking"
-              ? "animate-pulse bg-amber-400"
-              : "bg-slate-300"
-            }`}
+          className={`inline-block h-2 w-2 shrink-0 rounded-full ${
+            connection === "connected"
+              ? "bg-emerald-500 shadow-[0_0_0_3px_rgb(16_185_129_/_0.15)]"
+              : connection === "checking"
+                ? "animate-pulse bg-amber-400"
+                : "bg-slate-300"
+          }`}
         />
         {connection === "connected" ? (
           <span className="text-ink">
@@ -212,7 +213,12 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
 
       {connection === "connected" ? (
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <button className="ub-btn" disabled={busy} onClick={() => void runPreview()} type="button">
+          <button
+            className="ub-btn"
+            disabled={busy}
+            onClick={() => void runPreview()}
+            type="button"
+          >
             <FileCode2 aria-hidden="true" size={13} />
             Preview diff
           </button>

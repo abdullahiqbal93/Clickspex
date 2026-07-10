@@ -384,7 +384,11 @@ export const ExportPanel = () => {
               filename="ui-change-session.json"
               title="Session JSON (for CLI / MCP)"
             />
-            <ExportBlock content={markdownExport} filename="ui-buddy-session.md" title="Markdown summary" />
+            <ExportBlock
+              content={markdownExport}
+              filename="ui-buddy-session.md"
+              title="Markdown summary"
+            />
           </div>
         ) : null}
       </section>
