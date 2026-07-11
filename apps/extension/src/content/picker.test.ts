@@ -52,6 +52,37 @@ describe("ElementPickerController", () => {
     );
   });
 
+  it("scrolls tree-selected elements into the page viewport", () => {
+    const picker = new ElementPickerController(new OverlayController());
+    const card = document.getElementById("card");
+
+    if (card === null) {
+      throw new Error("Expected reveal fixture.");
+    }
+
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(card, "scrollIntoView", { configurable: true, value: scrollIntoView });
+    vi.spyOn(card, "getBoundingClientRect").mockReturnValue({
+      bottom: 1900,
+      height: 100,
+      left: 20,
+      right: 220,
+      top: 1800,
+      width: 200,
+      x: 20,
+      y: 1800,
+      toJSON: () => ({}),
+    });
+
+    picker.selectBySelector("#card");
+
+    expect(scrollIntoView).toHaveBeenCalledWith({
+      behavior: "auto",
+      block: "center",
+      inline: "nearest",
+    });
+  });
+
   it("pins multiple measurements without stopping measure mode", () => {
     const overlay = new OverlayController();
     const pinMeasurement = vi.spyOn(overlay, "pinMeasurement");

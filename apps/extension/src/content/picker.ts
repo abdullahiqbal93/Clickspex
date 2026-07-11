@@ -702,7 +702,7 @@ export class ElementPickerController {
       return;
     }
 
-    this.selectedElementNode.scrollIntoView({ block: "center", inline: "nearest" });
+    this.revealElementInViewport(this.selectedElementNode, true);
     this.refreshSelectedSnapshot();
   }
 
@@ -1431,7 +1431,31 @@ export class ElementPickerController {
 
     if (element !== null && isInspectableElement(element, this.overlay.hostElement)) {
       this.selectElement(element);
+      this.revealElementInViewport(element);
     }
+  }
+
+  private revealElementInViewport(element: Element, force = false): void {
+    const rect = element.getBoundingClientRect();
+    const viewportWidth = document.documentElement.clientWidth || window.innerWidth;
+    const viewportHeight = document.documentElement.clientHeight || window.innerHeight;
+    const intersectsViewport =
+      rect.width > 0 &&
+      rect.height > 0 &&
+      rect.bottom > 0 &&
+      rect.right > 0 &&
+      rect.top < viewportHeight &&
+      rect.left < viewportWidth;
+
+    if (force || !intersectsViewport) {
+      element.scrollIntoView({ behavior: "auto", block: "center", inline: "nearest" });
+    }
+
+    window.requestAnimationFrame(() => {
+      if (this.selectedElementNode === element && element.isConnected) {
+        this.overlay.showSelected(element.getBoundingClientRect());
+      }
+    });
   }
 
   public startTextEdit(): void {
