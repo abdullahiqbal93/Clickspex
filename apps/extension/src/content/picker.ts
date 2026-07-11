@@ -155,6 +155,8 @@ export class ElementPickerController {
   private readonly imageRedoStack: ImageEditEntry[] = [];
   private readonly attributeUndoStack: AttributeEditEntry[] = [];
   private readonly attributeRedoStack: AttributeEditEntry[] = [];
+  private domTreeObserver: MutationObserver | null = null;
+  private domTreeRefreshTimer: number | null = null;
 
   public constructor(
     private readonly overlay: OverlayController,
@@ -212,6 +214,7 @@ export class ElementPickerController {
   public clearSelection(notifyPanel = true): void {
     const hadSelection = this.selectedElementNode !== null || this.selectedSnapshot !== null;
 
+    this.unsubscribeDomTree();
     this.selectedElementNode = null;
     this.selectedSnapshot = null;
     this.overlay.clearSelected();
@@ -465,6 +468,79 @@ export class ElementPickerController {
     };
   }
 
+  private emitDomContext(): void {
+    void sendRuntimeMessage({ type: "DOM_CONTEXT_RESULT", payload: this.getDomContext() });
+  }
+
+  private scheduleDomTreeRefresh(): void {
+    if (this.domTreeRefreshTimer !== null) {
+      return;
+    }
+
+    this.domTreeRefreshTimer = window.setTimeout(() => {
+      this.domTreeRefreshTimer = null;
+
+      if (this.selectedElementNode === null) {
+        return;
+      }
+
+      if (!this.selectedElementNode.isConnected) {
+        this.clearSelection();
+        return;
+      }
+
+      const currentSelector = generateUniqueSelector(this.selectedElementNode);
+      const currentDomPath = getDomPath(this.selectedElementNode);
+
+      if (
+        this.selectedSnapshot !== null &&
+        (this.selectedSnapshot.selector !== currentSelector ||
+          this.selectedSnapshot.domPath !== currentDomPath)
+      ) {
+        this.refreshSelectedSnapshot();
+        return;
+      }
+
+      this.overlay.showSelected(this.selectedElementNode.getBoundingClientRect());
+      this.emitDomContext();
+    }, 120);
+  }
+
+  public subscribeDomTree(): void {
+    if (this.domTreeObserver !== null) {
+      this.emitDomContext();
+      return;
+    }
+
+    this.domTreeObserver = new MutationObserver((mutations) => {
+      const hasPageMutation = mutations.some(
+        (mutation) =>
+          mutation.target !== this.overlay.hostElement &&
+          !this.overlay.hostElement.contains(mutation.target),
+      );
+
+      if (hasPageMutation) {
+        this.scheduleDomTreeRefresh();
+      }
+    });
+    this.domTreeObserver.observe(document.documentElement, {
+      attributes: true,
+      characterData: true,
+      childList: true,
+      subtree: true,
+    });
+    this.emitDomContext();
+  }
+
+  public unsubscribeDomTree(): void {
+    this.domTreeObserver?.disconnect();
+    this.domTreeObserver = null;
+
+    if (this.domTreeRefreshTimer !== null) {
+      window.clearTimeout(this.domTreeRefreshTimer);
+      this.domTreeRefreshTimer = null;
+    }
+  }
   public getDomContext(): DomContextPayload {
     if (this.selectedElementNode === null || !this.selectedElementNode.isConnected) {
       return { ancestry: [], children: [], childrenBySelector: {}, selectedSelector: null };

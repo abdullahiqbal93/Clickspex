@@ -541,6 +541,53 @@ describe("ElementPickerController", () => {
     expect(clearHover).toHaveBeenCalledOnce();
     expect(showSelected).toHaveBeenCalledOnce();
   });
+  it("refreshes subscribed DOM context and clears a removed selection", async () => {
+    vi.useFakeTimers();
+    const picker = new ElementPickerController(new OverlayController());
+    const card = document.getElementById("card");
+
+    if (card === null) {
+      throw new Error("Expected live DOM fixture.");
+    }
+
+    try {
+      picker.enable("select");
+      card.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+      picker.subscribeDomTree();
+      mockedSendRuntimeMessage.mockClear();
+
+      card.setAttribute("data-state", "updated");
+      await Promise.resolve();
+      await vi.advanceTimersByTimeAsync(120);
+
+      expect(mockedSendRuntimeMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "DOM_CONTEXT_RESULT" }),
+      );
+
+      mockedSendRuntimeMessage.mockClear();
+      card.id = "account";
+      await Promise.resolve();
+      await vi.advanceTimersByTimeAsync(120);
+
+      expect(mockedSendRuntimeMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "ELEMENT_SELECTED",
+          payload: expect.objectContaining({ selector: "#account" }),
+        }),
+      );
+
+      mockedSendRuntimeMessage.mockClear();
+      card.remove();
+      await Promise.resolve();
+      await vi.advanceTimersByTimeAsync(120);
+
+      expect(mockedSendRuntimeMessage).toHaveBeenCalledWith({ type: "ELEMENT_UNSELECTED" });
+    } finally {
+      picker.unsubscribeDomTree();
+      vi.useRealTimers();
+    }
+  });
+
   it("edits element attributes with undo, redo, and export details", () => {
     const edits: StructuralEdit[] = [];
     const picker = new ElementPickerController(new OverlayController(), {

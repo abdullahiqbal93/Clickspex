@@ -521,6 +521,8 @@ export type ExtensionMessage =
   | { type: "ELEMENT_SEARCH_RESULT"; payload: { query: string; results: ElementSearchResult[] } }
   | { type: "SELECT_SEARCH_RESULT"; payload: { selector: string } }
   | { type: "DOM_CONTEXT_REQUEST" }
+  | { type: "DOM_TREE_SUBSCRIBE" }
+  | { type: "DOM_TREE_UNSUBSCRIBE" }
   | { type: "DOM_CONTEXT_RESULT"; payload: DomContextPayload }
   | { type: "DOM_CHILDREN_REQUEST"; payload: { selector: string; includeAll?: boolean } }
   | { type: "DOM_CHILDREN_RESULT"; payload: { selector: string; children: DomTreeNode[] } }
@@ -582,6 +584,8 @@ const MESSAGE_TYPES_WITHOUT_PAYLOAD = new Set<MessageType>([
   "GET_SELECTED_ELEMENT",
   "EXPORT_CHANGE_INTENT",
   "DOM_CONTEXT_REQUEST",
+  "DOM_TREE_SUBSCRIBE",
+  "DOM_TREE_UNSUBSCRIBE",
   "RULER_ENABLE",
   "RULER_DISABLE",
   "SCAN_PAGE",

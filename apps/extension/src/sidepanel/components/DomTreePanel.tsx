@@ -89,6 +89,7 @@ export const DomTreePanel = ({ selectedDomPath }: DomTreePanelProps) => {
   const requestedChildren = useRef(new Set<string>());
   const nodeButtons = useRef(new Map<string, HTMLButtonElement>());
   const selectedRow = useRef<HTMLDivElement | null>(null);
+  const selectedContextPath = useRef<string | null>(null);
 
   const activeContext = context?.ancestry.at(-1)?.domPath === selectedDomPath ? context : null;
   const root = activeContext?.ancestry[0] ?? null;
@@ -131,8 +132,11 @@ export const DomTreePanel = ({ selectedDomPath }: DomTreePanelProps) => {
   );
 
   useEffect(() => {
-    if (activeContext !== null) {
-      setExpanded(new Set(activeContext.ancestry.map((node) => node.selector)));
+    const nextPath = activeContext?.ancestry.at(-1)?.domPath ?? null;
+
+    if (nextPath !== null && selectedContextPath.current !== nextPath) {
+      selectedContextPath.current = nextPath;
+      setExpanded(new Set(activeContext?.ancestry.map((node) => node.selector) ?? []));
     }
   }, [activeContext]);
 
@@ -159,15 +163,21 @@ export const DomTreePanel = ({ selectedDomPath }: DomTreePanelProps) => {
     return () => window.cancelAnimationFrame(frame);
   }, [activeContext, selectedIsVisible]);
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    void sendMessageToActiveTab({ type: "DOM_TREE_SUBSCRIBE" }).catch((caughtError) => {
+      setError(
+        caughtError instanceof Error ? caughtError.message : "Unable to watch the page DOM.",
+      );
+    });
+
+    return () => {
+      void sendMessageToActiveTab({ type: "DOM_TREE_UNSUBSCRIBE" }).catch(() => undefined);
       void sendMessageToActiveTab({
         type: "HIGHLIGHT_DOM_NODE",
         payload: { selector: null },
       }).catch(() => undefined);
-    },
-    [],
-  );
+    };
+  }, [setError]);
 
   const refreshTree = async () => {
     setError(null);

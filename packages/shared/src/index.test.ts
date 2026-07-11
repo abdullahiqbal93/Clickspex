@@ -17,6 +17,8 @@ const node = {
 describe("DOM extension messages", () => {
   it("accepts DOM context and attribute-edit messages", () => {
     expect(isExtensionMessage({ type: "DOM_CONTEXT_REQUEST" })).toBe(true);
+    expect(isExtensionMessage({ type: "DOM_TREE_SUBSCRIBE" })).toBe(true);
+    expect(isExtensionMessage({ type: "DOM_TREE_UNSUBSCRIBE" })).toBe(true);
     expect(
       isExtensionMessage({
         type: "DOM_CONTEXT_RESULT",

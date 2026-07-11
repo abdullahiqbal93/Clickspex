@@ -267,6 +267,16 @@ if (window.__uiBuddyListenerAttached !== true) {
       return;
     }
 
+    if (message.type === "DOM_TREE_SUBSCRIBE") {
+      picker.subscribeDomTree();
+      return;
+    }
+
+    if (message.type === "DOM_TREE_UNSUBSCRIBE") {
+      picker.unsubscribeDomTree();
+      return;
+    }
+
     if (message.type === "DOM_CHILDREN_REQUEST") {
       void sendRuntimeMessage({
         type: "DOM_CHILDREN_RESULT",
