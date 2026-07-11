@@ -1,4 +1,4 @@
-import { ChevronRight, EyeOff, LocateFixed, RefreshCcw, Rows3 } from "lucide-react";
+import { ChevronRight, EyeOff, LoaderCircle, LocateFixed, RefreshCcw, Rows3 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { sendMessageToActiveTab } from "../../chrome/messaging";
@@ -9,6 +9,13 @@ import type { DomTreeNode } from "@ui-buddy/shared";
 type DomTreePanelProps = {
   selectedDomPath: string;
 };
+
+type ChildLoadState = {
+  status: "loading" | "error";
+  includeAll: boolean;
+};
+
+const CHILD_LOAD_TIMEOUT_MS = 3000;
 
 export type VisibleDomNode = {
   node: DomTreeNode;
@@ -86,7 +93,9 @@ export const DomTreePanel = ({ selectedDomPath }: DomTreePanelProps) => {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [requestVersion, setRequestVersion] = useState(0);
   const [loadTimedOut, setLoadTimedOut] = useState(false);
+  const [childLoadStates, setChildLoadStates] = useState<Record<string, ChildLoadState>>({});
   const requestedChildren = useRef(new Set<string>());
+  const childRequestTimers = useRef(new Map<string, number>());
   const nodeButtons = useRef(new Map<string, HTMLButtonElement>());
   const selectedRow = useRef<HTMLDivElement | null>(null);
   const selectedContextPath = useRef<string | null>(null);
@@ -102,6 +111,40 @@ export const DomTreePanel = ({ selectedDomPath }: DomTreePanelProps) => {
     (entry) => entry.node.selector === activeContext?.selectedSelector,
   );
 
+  const clearChildRequest = useCallback((selector: string) => {
+    for (const requestKey of Array.from(requestedChildren.current)) {
+      if (requestKey === selector || requestKey === selector + ":all") {
+        requestedChildren.current.delete(requestKey);
+        const timer = childRequestTimers.current.get(requestKey);
+
+        if (timer !== undefined) {
+          window.clearTimeout(timer);
+          childRequestTimers.current.delete(requestKey);
+        }
+      }
+    }
+
+    setChildLoadStates((current) => {
+      if (current[selector] === undefined) {
+        return current;
+      }
+
+      const next = { ...current };
+      delete next[selector];
+      return next;
+    });
+  }, []);
+
+  const resetChildRequests = useCallback(() => {
+    for (const timer of childRequestTimers.current.values()) {
+      window.clearTimeout(timer);
+    }
+
+    childRequestTimers.current.clear();
+    requestedChildren.current.clear();
+    setChildLoadStates({});
+  }, []);
+
   const requestChildren = useCallback(
     async (node: DomTreeNode, includeAll = false) => {
       const requestKey = node.selector + (includeAll ? ":all" : "");
@@ -115,6 +158,34 @@ export const DomTreePanel = ({ selectedDomPath }: DomTreePanelProps) => {
       }
 
       requestedChildren.current.add(requestKey);
+      setChildLoadStates((current) => ({
+        ...current,
+        [node.selector]: { status: "loading", includeAll },
+      }));
+
+      const markFailed = (message?: string) => {
+        requestedChildren.current.delete(requestKey);
+        const timer = childRequestTimers.current.get(requestKey);
+
+        if (timer !== undefined) {
+          window.clearTimeout(timer);
+          childRequestTimers.current.delete(requestKey);
+        }
+
+        setChildLoadStates((current) => ({
+          ...current,
+          [node.selector]: { status: "error", includeAll },
+        }));
+
+        if (message !== undefined) {
+          setError(message);
+        }
+      };
+
+      childRequestTimers.current.set(
+        requestKey,
+        window.setTimeout(() => markFailed(), CHILD_LOAD_TIMEOUT_MS),
+      );
 
       try {
         await sendMessageToActiveTab({
@@ -122,8 +193,7 @@ export const DomTreePanel = ({ selectedDomPath }: DomTreePanelProps) => {
           payload: { selector: node.selector, includeAll },
         });
       } catch (caughtError) {
-        requestedChildren.current.delete(requestKey);
-        setError(
+        markFailed(
           caughtError instanceof Error ? caughtError.message : "Unable to expand this DOM node.",
         );
       }
@@ -132,13 +202,32 @@ export const DomTreePanel = ({ selectedDomPath }: DomTreePanelProps) => {
   );
 
   useEffect(() => {
+    for (const selector of Object.keys(childrenBySelector)) {
+      clearChildRequest(selector);
+    }
+  }, [childrenBySelector, clearChildRequest]);
+
+  useEffect(() => {
+    for (const { node } of visibleNodes) {
+      if (
+        expanded.has(node.selector) &&
+        node.childCount > 0 &&
+        childrenBySelector[node.selector] === undefined &&
+        childLoadStates[node.selector] === undefined
+      ) {
+        void requestChildren(node);
+      }
+    }
+  }, [childLoadStates, childrenBySelector, expanded, requestChildren, visibleNodes]);
+  useEffect(() => {
     const nextPath = activeContext?.ancestry.at(-1)?.domPath ?? null;
 
     if (nextPath !== null && selectedContextPath.current !== nextPath) {
+      resetChildRequests();
       selectedContextPath.current = nextPath;
       setExpanded(new Set(activeContext?.ancestry.map((node) => node.selector) ?? []));
     }
-  }, [activeContext]);
+  }, [activeContext, resetChildRequests]);
 
   useEffect(() => {
     if (activeContext !== null) {
@@ -164,6 +253,9 @@ export const DomTreePanel = ({ selectedDomPath }: DomTreePanelProps) => {
   }, [activeContext, selectedIsVisible]);
 
   useEffect(() => {
+    const requestTimers = childRequestTimers.current;
+    const requested = requestedChildren.current;
+
     void sendMessageToActiveTab({ type: "DOM_TREE_SUBSCRIBE" }).catch((caughtError) => {
       setError(
         caughtError instanceof Error ? caughtError.message : "Unable to watch the page DOM.",
@@ -171,6 +263,12 @@ export const DomTreePanel = ({ selectedDomPath }: DomTreePanelProps) => {
     });
 
     return () => {
+      for (const timer of requestTimers.values()) {
+        window.clearTimeout(timer);
+      }
+
+      requestTimers.clear();
+      requested.clear();
       void sendMessageToActiveTab({ type: "DOM_TREE_UNSUBSCRIBE" }).catch(() => undefined);
       void sendMessageToActiveTab({
         type: "HIGHLIGHT_DOM_NODE",
@@ -182,7 +280,7 @@ export const DomTreePanel = ({ selectedDomPath }: DomTreePanelProps) => {
   const refreshTree = async () => {
     setError(null);
     setLoadTimedOut(false);
-    requestedChildren.current.clear();
+    resetChildRequests();
     setRequestVersion((version) => version + 1);
 
     try {
@@ -340,19 +438,19 @@ export const DomTreePanel = ({ selectedDomPath }: DomTreePanelProps) => {
     const isExpanded = expanded.has(node.selector);
     const isSelected = node.selector === activeContext?.selectedSelector;
     const children = childrenBySelector[node.selector];
+    const childLoadState = childLoadStates[node.selector];
     const attributes = displayedAttributes(node);
     const hasChildren = node.childCount > 0;
     const showInlineText = !hasChildren && node.textPreview.length > 0;
     const rowClassName =
-      "group flex h-7 w-max min-w-full items-center pr-2 text-[11px] outline-none transition-colors " +
-      (isSelected
-        ? "bg-blue-100 text-blue-950 ring-1 ring-inset ring-blue-300"
-        : "text-slate-700 hover:bg-blue-50");
+      "group flex h-[22px] w-max min-w-full items-center pr-2 text-[11px] leading-none outline-none " +
+      (isSelected ? "bg-[#cfe8ff] text-slate-950" : "text-slate-700 hover:bg-[#e8f2ff]");
 
     return (
       <div key={node.selector}>
         <div
           aria-expanded={hasChildren ? isExpanded : undefined}
+          aria-level={depth + 1}
           aria-selected={isSelected}
           className={rowClassName}
           onMouseEnter={() => highlightNode(node.selector)}
@@ -363,13 +461,13 @@ export const DomTreePanel = ({ selectedDomPath }: DomTreePanelProps) => {
             }
           }}
           role="treeitem"
-          style={{ paddingLeft: String(depth * 14 + 4) + "px" }}
+          style={{ paddingLeft: String(depth * 12 + 2) + "px" }}
         >
           <button
             aria-label={isExpanded ? "Collapse node" : "Expand node"}
             className={
-              "mr-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-slate-400 " +
-              (hasChildren ? "hover:bg-white hover:text-blue-700" : "invisible")
+              "inline-flex h-[22px] w-4 shrink-0 items-center justify-center text-slate-500 " +
+              (hasChildren ? "hover:text-blue-700" : "invisible")
             }
             onClick={() => void toggleNode(node)}
             tabIndex={-1}
@@ -383,7 +481,7 @@ export const DomTreePanel = ({ selectedDomPath }: DomTreePanelProps) => {
           </button>
           <button
             aria-current={isSelected ? "true" : undefined}
-            className="flex h-7 min-w-0 flex-1 items-center gap-0.5 whitespace-nowrap text-left font-mono outline-none"
+            className="flex h-[22px] min-w-0 flex-1 items-center gap-0.5 whitespace-nowrap text-left font-mono outline-none"
             onClick={() => void selectNode(node.selector)}
             onKeyDown={(event) => handleNodeKeyDown(event, node)}
             ref={(element) => {
@@ -434,27 +532,51 @@ export const DomTreePanel = ({ selectedDomPath }: DomTreePanelProps) => {
         </div>
         {isExpanded && children === undefined ? (
           <div
-            className="h-7 w-max min-w-full py-1.5 pr-2 font-mono text-[10px] text-slate-400"
-            style={{ paddingLeft: String((depth + 1) * 14 + 24) + "px" }}
+            className="flex h-7 w-max min-w-full items-center gap-1.5 pr-2 font-mono text-[10px] text-slate-500"
+            style={{ paddingLeft: String((depth + 1) * 12 + 18) + "px" }}
           >
-            Loading...
+            {childLoadState?.status === "error" ? (
+              <button
+                className="inline-flex h-6 items-center gap-1 text-blue-700 hover:underline"
+                onClick={() => void requestChildren(node)}
+                type="button"
+              >
+                <RefreshCcw aria-hidden="true" size={10} />
+                Retry loading children
+              </button>
+            ) : (
+              <>
+                <LoaderCircle aria-hidden="true" className="animate-spin" size={11} />
+                Loading child nodes
+              </>
+            )}
           </div>
         ) : null}
         {isExpanded ? children?.map((child) => renderNode(child, depth + 1)) : null}
         {isExpanded && children !== undefined && node.childCount > children.length ? (
           <button
-            className="h-7 w-max min-w-full py-1.5 pr-2 text-left font-mono text-[10px] text-blue-600 hover:bg-blue-50 hover:text-blue-800"
+            className="flex h-7 w-max min-w-full items-center gap-1.5 pr-2 text-left font-mono text-[10px] text-blue-700 hover:bg-[#e8f2ff] disabled:text-slate-500"
+            disabled={childLoadState?.status === "loading" && childLoadState.includeAll}
             onClick={() => void requestChildren(node, true)}
-            style={{ paddingLeft: String((depth + 1) * 14 + 24) + "px" }}
+            style={{ paddingLeft: String((depth + 1) * 12 + 18) + "px" }}
             type="button"
           >
-            Show {node.childCount - children.length} more elements
+            {childLoadState?.status === "loading" && childLoadState.includeAll ? (
+              <LoaderCircle aria-hidden="true" className="animate-spin" size={11} />
+            ) : childLoadState?.status === "error" && childLoadState.includeAll ? (
+              <RefreshCcw aria-hidden="true" size={10} />
+            ) : null}
+            {childLoadState?.status === "loading" && childLoadState.includeAll
+              ? "Loading remaining elements"
+              : childLoadState?.status === "error" && childLoadState.includeAll
+                ? "Retry loading remaining elements"
+                : "Show " + String(node.childCount - children.length) + " more elements"}
           </button>
         ) : null}
         {isExpanded && hasChildren ? (
           <div
-            className="h-6 w-max min-w-full whitespace-nowrap py-1 pr-2 font-mono text-[11px]"
-            style={{ paddingLeft: String(depth * 14 + 29) + "px" }}
+            className="h-[22px] w-max min-w-full whitespace-nowrap py-[5px] pr-2 font-mono text-[11px]"
+            style={{ paddingLeft: String(depth * 12 + 18) + "px" }}
           >
             <span className="text-slate-400">&lt;/</span>
             <span className="font-semibold text-fuchsia-700">{node.tagName}</span>
@@ -466,55 +588,62 @@ export const DomTreePanel = ({ selectedDomPath }: DomTreePanelProps) => {
   };
 
   return (
-    <section className="ub-card overflow-hidden">
-      <div className="flex items-center justify-between gap-2 border-b border-line px-3 py-2.5">
-        <div className="flex min-w-0 items-center gap-2">
-          <Rows3 aria-hidden="true" className="text-accent" size={14} />
-          <h2 className="text-sm font-semibold tracking-tight">Elements</h2>
+    <section className="overflow-hidden rounded-md border border-slate-300 bg-white shadow-sm">
+      <div className="flex h-9 items-center justify-between gap-2 border-b border-slate-300 bg-slate-50 px-2">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <Rows3 aria-hidden="true" className="text-slate-600" size={13} />
+          <h2 className="text-xs font-semibold text-slate-800">Elements</h2>
           {selectedNode === undefined ? null : (
             <span
-              className="ub-chip max-w-48 truncate"
+              className="max-w-48 truncate border-l border-slate-300 pl-2 font-mono text-[10px] text-slate-500"
               title={activeContext?.selectedSelector ?? ""}
             >
               {nodeLabel(selectedNode)}
             </span>
           )}
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex shrink-0 items-center">
           <button
-            className="ub-icon-btn h-7 w-7"
+            className="inline-flex h-7 w-7 items-center justify-center text-slate-600 hover:bg-slate-200 hover:text-blue-700 disabled:opacity-35"
             disabled={selectedNode === undefined}
             onClick={() => void revealSelected()}
             title="Reveal selected element"
             type="button"
           >
-            <LocateFixed aria-hidden="true" size={12} />
+            <LocateFixed aria-hidden="true" size={13} />
           </button>
           <button
-            className="ub-icon-btn h-7 w-7"
+            className="inline-flex h-7 w-7 items-center justify-center text-slate-600 hover:bg-slate-200 hover:text-blue-700"
             onClick={() => void refreshTree()}
             title="Refresh DOM tree"
             type="button"
           >
-            <RefreshCcw aria-hidden="true" size={12} />
+            <RefreshCcw aria-hidden="true" size={13} />
           </button>
         </div>
       </div>
       <div
         aria-label="Page DOM"
-        className="max-h-[420px] min-h-36 overflow-auto bg-[#fbfbfd] px-1 py-1.5"
+        className="max-h-[480px] min-h-56 overflow-auto bg-white py-1"
         onMouseLeave={() => highlightNode(null)}
         role="tree"
       >
         {root === null ? (
-          <div className="flex min-h-32 flex-col items-center justify-center gap-2 px-4 text-center text-2xs text-muted">
+          <div className="flex min-h-52 flex-col items-center justify-center gap-2 px-4 text-center text-[11px] text-slate-500">
+            {loadTimedOut ? null : (
+              <LoaderCircle aria-hidden="true" className="animate-spin" size={15} />
+            )}
             <span>
               {loadTimedOut
                 ? "The selected element tree is unavailable."
                 : "Reading the selected element tree..."}
             </span>
             {loadTimedOut ? (
-              <button className="ub-btn h-7" onClick={() => void refreshTree()} type="button">
+              <button
+                className="inline-flex h-7 items-center gap-1 border border-slate-300 bg-white px-2 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
+                onClick={() => void refreshTree()}
+                type="button"
+              >
                 <RefreshCcw aria-hidden="true" size={11} />
                 Retry
               </button>
@@ -524,10 +653,38 @@ export const DomTreePanel = ({ selectedDomPath }: DomTreePanelProps) => {
           renderNode(root, 0)
         )}
       </div>
-      <div className="flex items-center justify-between border-t border-line bg-panel-soft px-3 py-1.5 text-[10px] tabular-nums text-muted">
-        <span>{visibleNodes.length} nodes shown</span>
-        <span>{activeContext?.ancestry.length ?? 0} levels</span>
-      </div>
+      {activeContext === null ? null : (
+        <div
+          aria-label="Selected element ancestry"
+          className="edge-fade-x flex h-8 items-center overflow-x-auto border-t border-slate-300 bg-slate-50 px-2 font-mono text-[10px]"
+        >
+          {activeContext.ancestry.map((node, index) => {
+            const isCurrent = index === activeContext.ancestry.length - 1;
+
+            return (
+              <span className="flex shrink-0 items-center" key={node.domPath}>
+                {index === 0 ? null : (
+                  <ChevronRight aria-hidden="true" className="mx-0.5 text-slate-400" size={10} />
+                )}
+                <button
+                  aria-current={isCurrent ? "true" : undefined}
+                  className={
+                    "max-w-36 truncate px-1 py-1 " +
+                    (isCurrent
+                      ? "font-semibold text-blue-700"
+                      : "text-slate-600 hover:bg-slate-200 hover:text-slate-950")
+                  }
+                  onClick={() => void selectNode(node.selector)}
+                  title={node.selector}
+                  type="button"
+                >
+                  {nodeLabel(node)}
+                </button>
+              </span>
+            );
+          })}
+        </div>
+      )}
     </section>
   );
 };
