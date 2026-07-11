@@ -37,6 +37,9 @@ import { callBackground, sendMessageToActiveTab } from "../../chrome/messaging";
 import { readPageContext } from "../../chrome/session";
 import { usePanelStore } from "../store";
 
+import { AttributeEditor } from "./AttributeEditor";
+import { DomTreePanel } from "./DomTreePanel";
+
 import type {
   AlignEdge,
   DomMoveDirection,
@@ -485,7 +488,6 @@ export const InspectorPanel = ({ selectedElement }: InspectorPanelProps) => {
   }
 
   const rect = selectedElement.rect;
-  const attributes = Object.entries(selectedElement.attributes);
 
   return (
     <div className="space-y-3">
@@ -543,6 +545,8 @@ export const InspectorPanel = ({ selectedElement }: InspectorPanelProps) => {
           />
         </div>
       </div>
+
+      <DomTreePanel selectedSelector={selectedElement.selector} />
 
       <section className="ub-card p-4">
         <h3 className="text-sm font-semibold tracking-tight">Tools</h3>
@@ -831,24 +835,7 @@ ${elementCssResult.css}
         </dl>
       </div>
 
-      <div className="ub-card p-4">
-        <h3 className="text-sm font-semibold tracking-tight">Attributes</h3>
-        <div className="mt-2.5 max-h-48 overflow-auto rounded-xl border border-line">
-          {attributes.length > 0 ? (
-            attributes.map(([name, value]) => (
-              <div
-                className="grid grid-cols-[86px_minmax(0,1fr)] gap-2 border-b border-line/70 px-3 py-2 text-xs last:border-b-0 odd:bg-slate-50/60"
-                key={name}
-              >
-                <span className="font-medium text-muted">{name}</span>
-                <span className="break-words font-mono text-ink">{value}</span>
-              </div>
-            ))
-          ) : (
-            <div className="px-3 py-2 text-xs text-muted">None</div>
-          )}
-        </div>
-      </div>
+      <AttributeEditor element={selectedElement} />
     </div>
   );
 };

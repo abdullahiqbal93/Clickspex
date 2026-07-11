@@ -1086,6 +1086,21 @@ const describeStructuralEdit = ({ count, edit }: CollapsedStructuralEdit): strin
       return `- Replace the image of ${selector} with \`${truncateText(edit.details.src ?? "", 120)}\`${repeatNote}`;
     case "delete":
       return `- Remove or hide ${selector}${repeatNote}`;
+    case "attribute": {
+      const name = edit.details.name ?? "attribute";
+      const before = truncateText(edit.details.before ?? "", 80);
+      const after = truncateText(edit.details.after ?? "", 80);
+
+      if (edit.details.after === "(removed)") {
+        return `- Remove the \`${name}\` attribute from ${selector}${repeatNote}`;
+      }
+
+      if (edit.details.before === "(absent)") {
+        return `- Add the \`${name}\` attribute to ${selector} with value "${after}"${repeatNote}`;
+      }
+
+      return `- Update the \`${name}\` attribute of ${selector} from "${before}" to "${after}"${repeatNote}`;
+    }
     case "move": {
       const semanticMove = describeSemanticMove(selector, edit, repeatNote);
       return (

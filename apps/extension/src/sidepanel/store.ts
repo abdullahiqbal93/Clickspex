@@ -4,6 +4,8 @@ import { create } from "zustand";
 import type {
   A11yIssue,
   AccessibilityNote,
+  DomContextPayload,
+  DomTreeNode,
   ElementSearchResult,
   ElementSnapshot,
   PageScanResult,
@@ -61,6 +63,8 @@ export type PanelState = {
   activeTab: PanelTab;
   assetFetch: AssetFetchResult | null;
   changes: StyleChange[];
+  domChildrenBySelector: Record<string, DomTreeNode[]>;
+  domContext: DomContextPayload | null;
   elementCssResult: ElementCssResult | null;
   error: string | null;
   gridActive: boolean;
@@ -87,6 +91,8 @@ export type PanelState = {
   setA11yIssues: (issues: A11yIssue[] | null) => void;
   setA11yScanLoading: (loading: boolean) => void;
   setAssetFetch: (result: AssetFetchResult | null) => void;
+  setDomChildren: (selector: string, children: DomTreeNode[]) => void;
+  setDomContext: (context: DomContextPayload | null) => void;
   setElementCssResult: (result: ElementCssResult | null) => void;
   setMultiSelection: (state: MultiSelectionState) => void;
   setTech: (tech: PageTechInfo[] | null) => void;
@@ -178,6 +184,8 @@ export const usePanelStore = create<PanelState>((set, get) => ({
   activeTab: "inspect",
   assetFetch: null,
   changes: [],
+  domChildrenBySelector: {},
+  domContext: null,
   elementCssResult: null,
   error: null,
   gridActive: false,
@@ -200,6 +208,18 @@ export const usePanelStore = create<PanelState>((set, get) => ({
   setA11yIssues: (a11yIssues) => set({ a11yIssues, a11yScanLoading: false }),
   setA11yScanLoading: (a11yScanLoading) => set({ a11yScanLoading }),
   setAssetFetch: (assetFetch) => set({ assetFetch }),
+  setDomChildren: (selector, children) =>
+    set((state) => ({
+      domChildrenBySelector: { ...state.domChildrenBySelector, [selector]: children },
+    })),
+  setDomContext: (domContext) =>
+    set({
+      domContext,
+      domChildrenBySelector:
+        domContext === null || domContext.selectedSelector === null
+          ? {}
+          : { [domContext.selectedSelector]: domContext.children },
+    }),
   setElementCssResult: (elementCssResult) => set({ elementCssResult }),
   setMultiSelection: (multiSelection) => set({ multiSelection }),
   setTech: (tech) => set({ tech }),
@@ -264,6 +284,8 @@ export const usePanelStore = create<PanelState>((set, get) => ({
       accessibilityNotes: [],
       assetFetch: null,
       changes: [],
+      domChildrenBySelector: {},
+      domContext: null,
       elementCssResult: null,
       error: null,
       gridActive: false,

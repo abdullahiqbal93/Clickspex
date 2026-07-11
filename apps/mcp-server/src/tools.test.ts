@@ -213,15 +213,23 @@ describe("MCP tool handlers", () => {
           summary: "Hid element",
           details: {},
         },
+        {
+          id: "edit-2",
+          kind: "attribute",
+          timestamp: "2026-07-01T00:00:01.000Z",
+          target: { tagName: "button", classList: [], selector: "#save", domPath: "#save" },
+          summary: "Set aria-label",
+          details: { name: "aria-label", before: "(absent)", after: "Save profile" },
+        },
       ],
-      stats: { editedElements: 2, styleChanges: 2, structuralEdits: 1 },
+      stats: { editedElements: 2, styleChanges: 2, structuralEdits: 2 },
     };
 
     const result = handleGenerateSessionExport({ session });
     const data = result.data as {
       stats: { editedElements: number };
       elements: Array<{ selector: string; css: { content: string } }>;
-      structuralEdits: Array<{ selector: string }>;
+      structuralEdits: Array<{ kind: string; selector: string }>;
     };
 
     expect(result.ok).toBe(true);
@@ -229,6 +237,7 @@ describe("MCP tool handlers", () => {
     expect(data.elements.map((element) => element.selector)).toEqual(["#save", "#cancel"]);
     expect(data.elements[0]?.css.content).toContain("font-size: 16px;");
     expect(data.structuralEdits[0]?.selector).toBe("#gone");
+    expect(data.structuralEdits[1]).toMatchObject({ kind: "attribute", selector: "#save" });
   });
 
   it("returns structured errors for invalid input", async () => {

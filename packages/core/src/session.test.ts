@@ -444,4 +444,37 @@ describe("createUIChangeSession", () => {
     expect(prompt).toContain("`overflow-x`: `visible` -> `auto`");
     expect(prompt).toContain("overflow-x: auto;");
   });
+  it("includes attribute edits in the AI agent prompt", () => {
+    const edit: StructuralEdit = {
+      id: "attribute-1",
+      kind: "attribute",
+      timestamp: "2026-07-01T00:00:00.000Z",
+      target: {
+        tagName: "button",
+        id: "save",
+        classList: ["button"],
+        selector: "#save",
+        domPath: "html > body > button#save",
+      },
+      summary: "Set aria-label",
+      details: {
+        name: "aria-label",
+        before: "(absent)",
+        after: "Save profile",
+      },
+    };
+
+    const session = createUIChangeSession({
+      pageUrl: "https://example.com/settings",
+      viewport: { width: 1280, height: 720, devicePixelRatio: 1 },
+      elements: [],
+      structuralEdits: [edit],
+    });
+
+    const prompt = summarizeSessionAsAgentPrompt(session);
+
+    expect(prompt).toContain(
+      '- Add the `aria-label` attribute to `#save` with value "Save profile"',
+    );
+  });
 });

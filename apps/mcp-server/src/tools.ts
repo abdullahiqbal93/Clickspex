@@ -100,7 +100,7 @@ export type PatchPreviewInput = z.infer<typeof patchPreviewInputSchema>;
 
 const structuralEditSchema = z.object({
   id: z.string(),
-  kind: z.enum(["move", "delete", "text", "image"]),
+  kind: z.enum(["move", "delete", "text", "image", "attribute"]),
   timestamp: z.string(),
   target: z.object({
     tagName: z.string(),

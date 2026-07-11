@@ -114,6 +114,8 @@ export const App = () => {
   const setA11yIssues = usePanelStore((state) => state.setA11yIssues);
   const setAssetFetch = usePanelStore((state) => state.setAssetFetch);
   const setElementCssResult = usePanelStore((state) => state.setElementCssResult);
+  const setDomChildren = usePanelStore((state) => state.setDomChildren);
+  const setDomContext = usePanelStore((state) => state.setDomContext);
   const setMultiSelection = usePanelStore((state) => state.setMultiSelection);
   const resetForNavigation = usePanelStore((state) => state.resetForNavigation);
 
@@ -132,11 +134,14 @@ export const App = () => {
         if (!hadSelection) {
           setActiveTab("inspect");
         }
+
+        void sendMessageToActiveTab({ type: "DOM_CONTEXT_REQUEST" });
       }
 
       if (rawMessage.type === "ELEMENT_UNSELECTED") {
         setSelectedElement(null);
         setHoveredSelector(null);
+        setDomContext(null);
       }
 
       if (rawMessage.type === "ELEMENT_HOVERED") {
@@ -168,6 +173,14 @@ export const App = () => {
 
       if (rawMessage.type === "ELEMENT_CSS_RESULT") {
         setElementCssResult(rawMessage.payload);
+      }
+
+      if (rawMessage.type === "DOM_CONTEXT_RESULT") {
+        setDomContext(rawMessage.payload);
+      }
+
+      if (rawMessage.type === "DOM_CHILDREN_RESULT") {
+        setDomChildren(rawMessage.payload.selector, rawMessage.payload.children);
       }
 
       if (rawMessage.type === "A11Y_SCAN_RESULT") {
@@ -206,6 +219,8 @@ export const App = () => {
     setActiveTab,
     setAssetFetch,
     setElementCssResult,
+    setDomChildren,
+    setDomContext,
     setHoveredSelector,
     setMeasurementTarget,
     setMultiSelection,

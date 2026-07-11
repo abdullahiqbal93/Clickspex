@@ -451,4 +451,81 @@ describe("ElementPickerController", () => {
     expect(picker.isActive()).toBe(false);
     expect(mockedSendRuntimeMessage).toHaveBeenCalledWith({ type: "ELEMENT_UNSELECTED" });
   });
+  it("returns selected-element DOM context and child nodes", () => {
+    document.documentElement.innerHTML =
+      "<head></head><body><main id='root'><section id='card'><button id='action' aria-label='Save profile'>Save</button></section></main></body>";
+    const picker = new ElementPickerController(new OverlayController());
+    const action = document.getElementById("action");
+
+    if (action === null) {
+      throw new Error("Expected DOM context fixture.");
+    }
+
+    picker.enable("select");
+    action.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+
+    const context = picker.getDomContext();
+    expect(context.selectedSelector).toBe("#action");
+    expect(context.ancestry.map((node) => node.selector)).toEqual([
+      "html",
+      "body",
+      "#root",
+      "#card",
+      "#action",
+    ]);
+    expect(context.ancestry.at(-1)).toEqual(
+      expect.objectContaining({
+        tagName: "button",
+        attributes: expect.objectContaining({ "aria-label": "Save profile" }),
+        textPreview: "Save",
+      }),
+    );
+    expect(picker.getDomChildren("#card")).toEqual([
+      expect.objectContaining({ selector: "#action", tagName: "button" }),
+    ]);
+    expect(picker.getDomChildren("[")).toEqual([]);
+  });
+
+  it("edits element attributes with undo, redo, and export details", () => {
+    const edits: StructuralEdit[] = [];
+    const picker = new ElementPickerController(new OverlayController(), {
+      onStructuralEdit: (edit) => edits.push(edit),
+    });
+    const card = document.getElementById("card");
+
+    if (card === null) {
+      throw new Error("Expected attribute fixture.");
+    }
+
+    picker.enable("select");
+    card.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+
+    picker.updateElementAttribute("#card", "aria-label", "Account card");
+    expect(card.getAttribute("aria-label")).toBe("Account card");
+    expect(edits[0]).toEqual(
+      expect.objectContaining({
+        kind: "attribute",
+        summary: "Set aria-label",
+        details: {
+          name: "aria-label",
+          before: "Profile card",
+          after: "Account card",
+        },
+      }),
+    );
+
+    picker.undoAttributeEdit();
+    expect(card.getAttribute("aria-label")).toBe("Profile card");
+
+    picker.redoAttributeEdit();
+    expect(card.getAttribute("aria-label")).toBe("Account card");
+
+    picker.updateElementAttribute("#card", "aria-label", null);
+    expect(card.hasAttribute("aria-label")).toBe(false);
+    expect(edits[1]?.summary).toBe("Removed aria-label");
+
+    expect(() => picker.updateElementAttribute("#card", "bad name", "value")).toThrow(
+      "Enter a valid attribute name.",
+    );
+  });
 });

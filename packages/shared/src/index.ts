@@ -266,7 +266,7 @@ export type UIChangeIntent = {
   rawCss?: string;
 };
 
-export type StructuralEditKind = "move" | "delete" | "text" | "image";
+export type StructuralEditKind = "move" | "delete" | "text" | "image" | "attribute";
 
 export type StructuralEditTarget = {
   tagName: string;
@@ -475,6 +475,23 @@ export type ElementSearchResult = Pick<
   "tagName" | "id" | "classList" | "textPreview" | "selector" | "rect"
 >;
 
+export type DomTreeNode = {
+  selector: string;
+  tagName: string;
+  id: string;
+  classList: string[];
+  attributes: Record<string, string>;
+  textPreview: string;
+  childCount: number;
+  visible: boolean;
+};
+
+export type DomContextPayload = {
+  ancestry: DomTreeNode[];
+  children: DomTreeNode[];
+  selectedSelector: string | null;
+};
+
 export type PinCardKind = "styles" | "audit";
 
 export type DomMoveDirection = "previous" | "next" | "out-before" | "out-after";
@@ -501,6 +518,15 @@ export type ExtensionMessage =
   | { type: "SEARCH_ELEMENTS"; payload: { query: string } }
   | { type: "ELEMENT_SEARCH_RESULT"; payload: { query: string; results: ElementSearchResult[] } }
   | { type: "SELECT_SEARCH_RESULT"; payload: { selector: string } }
+  | { type: "DOM_CONTEXT_REQUEST" }
+  | { type: "DOM_CONTEXT_RESULT"; payload: DomContextPayload }
+  | { type: "DOM_CHILDREN_REQUEST"; payload: { selector: string } }
+  | { type: "DOM_CHILDREN_RESULT"; payload: { selector: string; children: DomTreeNode[] } }
+  | { type: "HIGHLIGHT_DOM_NODE"; payload: { selector: string | null } }
+  | {
+      type: "UPDATE_ELEMENT_ATTRIBUTE";
+      payload: { selector: string; name: string; value: string | null };
+    }
   | { type: "PIN_ELEMENT_CARD"; payload: { snapshot: ElementSnapshot; kind: PinCardKind } }
   | { type: "CLEAR_PINNED_CARDS" }
   | { type: "ELEMENT_MOVE_ENABLE" }
@@ -553,6 +579,7 @@ const MESSAGE_TYPES_WITHOUT_PAYLOAD = new Set<MessageType>([
   "REDO_CHANGE",
   "GET_SELECTED_ELEMENT",
   "EXPORT_CHANGE_INTENT",
+  "DOM_CONTEXT_REQUEST",
   "RULER_ENABLE",
   "RULER_DISABLE",
   "SCAN_PAGE",
@@ -661,7 +688,13 @@ export const isStyleChange = (value: unknown): value is StyleChange => {
   );
 };
 
-const STRUCTURAL_EDIT_KINDS: readonly StructuralEditKind[] = ["move", "delete", "text", "image"];
+const STRUCTURAL_EDIT_KINDS: readonly StructuralEditKind[] = [
+  "move",
+  "delete",
+  "text",
+  "image",
+  "attribute",
+];
 
 export const isStructuralEdit = (value: unknown): value is StructuralEdit => {
   if (!isRecord(value) || !isRecord(value.target) || !isRecord(value.details)) {
@@ -698,6 +731,17 @@ const isElementSearchResult = (value: unknown): value is ElementSearchResult => 
     isRectSnapshot(value.rect)
   );
 };
+
+const isDomTreeNode = (value: unknown): value is DomTreeNode =>
+  isRecord(value) &&
+  isString(value.selector) &&
+  isString(value.tagName) &&
+  isString(value.id) &&
+  isStringArray(value.classList) &&
+  isStringRecord(value.attributes) &&
+  isString(value.textPreview) &&
+  isNumber(value.childCount) &&
+  typeof value.visible === "boolean";
 
 const isPinCardKind = (value: unknown): value is PinCardKind =>
   value === "styles" || value === "audit";
@@ -762,6 +806,26 @@ export const isExtensionMessage = (value: unknown): value is ExtensionMessage =>
     );
   }
 
+  if (messageType === "DOM_CONTEXT_RESULT") {
+    return (
+      isRecord(value.payload) &&
+      Array.isArray(value.payload.ancestry) &&
+      value.payload.ancestry.every(isDomTreeNode) &&
+      Array.isArray(value.payload.children) &&
+      value.payload.children.every(isDomTreeNode) &&
+      (value.payload.selectedSelector === null || isString(value.payload.selectedSelector))
+    );
+  }
+
+  if (messageType === "DOM_CHILDREN_RESULT") {
+    return (
+      isRecord(value.payload) &&
+      isString(value.payload.selector) &&
+      Array.isArray(value.payload.children) &&
+      value.payload.children.every(isDomTreeNode)
+    );
+  }
+
   if (messageType === "PIN_ELEMENT_CARD") {
     return (
       isRecord(value.payload) &&
@@ -776,6 +840,26 @@ export const isExtensionMessage = (value: unknown): value is ExtensionMessage =>
 
   if (messageType === "SELECT_SEARCH_RESULT") {
     return isRecord(value.payload) && isString(value.payload.selector);
+  }
+
+  if (messageType === "DOM_CHILDREN_REQUEST") {
+    return isRecord(value.payload) && isString(value.payload.selector);
+  }
+
+  if (messageType === "HIGHLIGHT_DOM_NODE") {
+    return (
+      isRecord(value.payload) &&
+      (value.payload.selector === null || isString(value.payload.selector))
+    );
+  }
+
+  if (messageType === "UPDATE_ELEMENT_ATTRIBUTE") {
+    return (
+      isRecord(value.payload) &&
+      isString(value.payload.selector) &&
+      isString(value.payload.name) &&
+      (value.payload.value === null || isString(value.payload.value))
+    );
   }
 
   if (messageType === "MOVE_SELECTED_ELEMENT") {

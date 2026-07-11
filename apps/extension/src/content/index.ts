@@ -105,6 +105,9 @@ const undoPageAction = (action: PageAction): void => {
     case "image":
       picker.undoImageEdit();
       break;
+    case "attribute":
+      picker.undoAttributeEdit();
+      break;
   }
 };
 
@@ -127,6 +130,9 @@ const redoPageAction = (action: PageAction): void => {
       break;
     case "image":
       picker.redoImageEdit();
+      break;
+    case "attribute":
+      picker.redoAttributeEdit();
       break;
   }
 };
@@ -253,6 +259,36 @@ if (window.__uiBuddyListenerAttached !== true) {
 
     if (message.type === "SELECT_SEARCH_RESULT") {
       picker.selectBySelector(message.payload.selector);
+      return;
+    }
+
+    if (message.type === "DOM_CONTEXT_REQUEST") {
+      void sendRuntimeMessage({ type: "DOM_CONTEXT_RESULT", payload: picker.getDomContext() });
+      return;
+    }
+
+    if (message.type === "DOM_CHILDREN_REQUEST") {
+      void sendRuntimeMessage({
+        type: "DOM_CHILDREN_RESULT",
+        payload: {
+          selector: message.payload.selector,
+          children: picker.getDomChildren(message.payload.selector),
+        },
+      });
+      return;
+    }
+
+    if (message.type === "HIGHLIGHT_DOM_NODE") {
+      picker.highlightDomNode(message.payload.selector);
+      return;
+    }
+
+    if (message.type === "UPDATE_ELEMENT_ATTRIBUTE") {
+      picker.updateElementAttribute(
+        message.payload.selector,
+        message.payload.name,
+        message.payload.value,
+      );
       return;
     }
 

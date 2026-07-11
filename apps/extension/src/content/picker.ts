@@ -6,13 +6,17 @@ import { writePageContext } from "../chrome/session";
 import type { OverlayController } from "./overlay";
 import type {
   AlignEdge,
+  DomContextPayload,
   DomMoveDirection,
+  DomTreeNode,
   ElementSearchResult,
   ElementSnapshot,
   StructuralEdit,
   StructuralEditKind,
   StructuralEditTarget,
 } from "@ui-buddy/shared";
+
+const DOM_TREE_CHILD_LIMIT = 200;
 
 const createEditId = (): string =>
   typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
@@ -52,6 +56,13 @@ type TextEditEntry = {
   element: HTMLElement;
   before: string;
   after: string;
+};
+
+type AttributeEditEntry = {
+  element: Element;
+  name: string;
+  before: string | null;
+  after: string | null;
 };
 
 type DisableOptions = {
@@ -142,6 +153,8 @@ export class ElementPickerController {
   private readonly textRedoStack: TextEditEntry[] = [];
   private readonly imageUndoStack: ImageEditEntry[] = [];
   private readonly imageRedoStack: ImageEditEntry[] = [];
+  private readonly attributeUndoStack: AttributeEditEntry[] = [];
+  private readonly attributeRedoStack: AttributeEditEntry[] = [];
 
   public constructor(
     private readonly overlay: OverlayController,
@@ -354,6 +367,185 @@ export class ElementPickerController {
 
   public getSelectedElementNode(): Element | null {
     return this.selectedElementNode;
+  }
+
+  private getInspectableChildren(element: Element): Element[] {
+    return Array.from(element.children).filter((child) =>
+      isInspectableElement(child, this.overlay.hostElement),
+    );
+  }
+
+  private buildDomChildren(element: Element): DomTreeNode[] {
+    return this.getInspectableChildren(element)
+      .slice(0, DOM_TREE_CHILD_LIMIT)
+      .map((child) => this.buildDomTreeNode(child));
+  }
+
+  private buildDomTreeNode(element: Element): DomTreeNode {
+    const importantAttributes = Array.from(element.attributes)
+      .filter(
+        ({ name }) =>
+          name === "id" ||
+          name === "class" ||
+          name === "role" ||
+          name === "name" ||
+          name === "type" ||
+          name === "href" ||
+          name === "src" ||
+          name === "alt" ||
+          name.startsWith("aria-") ||
+          name.startsWith("data-"),
+      )
+      .slice(0, 12);
+    const attributes = Object.fromEntries(
+      importantAttributes.map(({ name, value }) => [name, value]),
+    );
+    const styles = element.ownerDocument.defaultView?.getComputedStyle(element);
+    const rect = element.getBoundingClientRect();
+
+    return {
+      selector: generateUniqueSelector(element),
+      tagName: element.tagName.toLowerCase(),
+      id: element.id,
+      classList: Array.from(element.classList),
+      attributes,
+      textPreview: (element.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 80),
+      childCount: this.getInspectableChildren(element).length,
+      visible:
+        rect.width > 0 &&
+        rect.height > 0 &&
+        styles?.display !== "none" &&
+        styles?.visibility !== "hidden",
+    };
+  }
+
+  public getDomContext(): DomContextPayload {
+    if (this.selectedElementNode === null || !this.selectedElementNode.isConnected) {
+      return { ancestry: [], children: [], selectedSelector: null };
+    }
+
+    const ancestry: Element[] = [];
+    let current: Element | null = this.selectedElementNode;
+
+    while (current !== null) {
+      ancestry.unshift(current);
+      current = current.parentElement;
+    }
+
+    return {
+      ancestry: ancestry.map((element) => this.buildDomTreeNode(element)),
+      children: this.buildDomChildren(this.selectedElementNode),
+      selectedSelector: generateUniqueSelector(this.selectedElementNode),
+    };
+  }
+
+  public getDomChildren(selector: string): DomTreeNode[] {
+    let element: Element | null = null;
+
+    try {
+      element = document.querySelector(selector);
+    } catch {
+      return [];
+    }
+
+    if (element === null) {
+      return [];
+    }
+
+    return this.buildDomChildren(element);
+  }
+
+  public highlightDomNode(selector: string | null): void {
+    if (selector === null) {
+      this.overlay.clearHover();
+      return;
+    }
+
+    try {
+      const element = document.querySelector(selector);
+
+      if (element !== null && isInspectableElement(element, this.overlay.hostElement)) {
+        this.overlay.showHover(captureElementSnapshot(element));
+      }
+    } catch {
+      this.overlay.clearHover();
+    }
+  }
+
+  private applyAttributeValue(element: Element, name: string, value: string | null): void {
+    if (value === null) {
+      element.removeAttribute(name);
+    } else {
+      element.setAttribute(name, value);
+    }
+  }
+
+  public updateElementAttribute(selector: string, rawName: string, value: string | null): void {
+    const name = rawName.trim();
+
+    if (name.length === 0 || /[\s"'<>/=]/.test(name)) {
+      throw new Error("Enter a valid attribute name.");
+    }
+
+    let element: Element | null = null;
+
+    try {
+      element = document.querySelector(selector);
+    } catch {
+      throw new Error("The element selector is no longer valid.");
+    }
+
+    if (element === null || !isInspectableElement(element, this.overlay.hostElement)) {
+      throw new Error("The selected element is no longer available.");
+    }
+
+    const before = element.getAttribute(name);
+
+    if (before === value) {
+      return;
+    }
+
+    const target = this.buildEditTarget(element);
+    this.applyAttributeValue(element, name, value);
+    this.attributeUndoStack.push({ element, name, before, after: value });
+    this.attributeRedoStack.length = 0;
+    this.callbacks.onStructuralEdit?.({
+      id: createEditId(),
+      kind: "attribute",
+      timestamp: new Date().toISOString(),
+      target,
+      summary: value === null ? `Removed ${name}` : `Set ${name}`,
+      details: {
+        name,
+        before: before ?? "(absent)",
+        after: value ?? "(removed)",
+      },
+    });
+    this.refreshSnapshotFor(element);
+  }
+
+  public undoAttributeEdit(): void {
+    const entry = this.attributeUndoStack.pop();
+
+    if (entry === undefined || !entry.element.isConnected) {
+      return;
+    }
+
+    this.applyAttributeValue(entry.element, entry.name, entry.before);
+    this.attributeRedoStack.push(entry);
+    this.refreshSnapshotFor(entry.element);
+  }
+
+  public redoAttributeEdit(): void {
+    const entry = this.attributeRedoStack.pop();
+
+    if (entry === undefined || !entry.element.isConnected) {
+      return;
+    }
+
+    this.applyAttributeValue(entry.element, entry.name, entry.after);
+    this.attributeUndoStack.push(entry);
+    this.refreshSnapshotFor(entry.element);
   }
 
   public scrollSelectedIntoView(): void {
