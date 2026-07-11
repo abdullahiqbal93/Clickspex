@@ -10,12 +10,15 @@ import {
 } from "@ui-buddy/shared";
 import {
   ChevronDown,
+  CircleAlert,
   Clipboard,
   Code2,
   Redo2,
   RotateCcw,
+  Search,
   SlidersHorizontal,
   Undo2,
+  X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -1049,8 +1052,6 @@ const RAW_CSS_NOISE_VALUES = new Set([
   "0px",
   "rgba(0, 0, 0, 0)",
 ]);
-
-// Order the seeded declarations the way a developer expects to read them.
 const RAW_CSS_SEED_PROPERTIES: SupportedStyleProperty[] = [
   "display",
   "position",
@@ -1060,9 +1061,9 @@ const RAW_CSS_SEED_PROPERTIES: SupportedStyleProperty[] = [
   "left",
   "z-index",
   "width",
+  "height",
   "min-width",
   "max-width",
-  "height",
   "min-height",
   "max-height",
   "margin-top",
@@ -1162,6 +1163,9 @@ const cssColorToHex = (value: string): string | null => {
   return `#${channels.join("")}`;
 };
 
+const isCssValueSupported = (property: string, value: string): boolean =>
+  value.trim().length === 0 || typeof CSS === "undefined" || CSS.supports(property, value);
+
 export const StylePanel = () => {
   const changes = usePanelStore((state) => state.changes);
   const historyUndoDepth = usePanelStore((state) => state.historyUndoDepth);
@@ -1184,16 +1188,26 @@ export const StylePanel = () => {
   const setSelectedElement = usePanelStore((state) => state.setSelectedElement);
   // Remember the element-unique selector so scope can be switched back.
   const uniqueSelectorRef = useRef<{ domPath: string; selector: string } | null>(null);
-
-  // ── Raw CSS editor ──────────────────────────────────────────
+  const selectedSelector = selectedElement?.selector ?? null;
+  // Raw CSS editor.
   const [rawCss, setRawCss] = useState("");
   const [rawCssApplied, setRawCssApplied] = useState(false);
+  const [rawCssExpanded, setRawCssExpanded] = useState(false);
   const seededRawCssRef = useRef("");
-  const selectedSelector = selectedElement?.selector ?? null;
+  const [quickProperty, setQuickProperty] = useState<SupportedStyleProperty>("color");
+  const [quickDraft, setQuickDraft] = useState("");
+  const [styleFilter, setStyleFilter] = useState("");
 
   useEffect(() => {
-    // Seed the editor with the element's current CSS (computed styles + any
-    // applied edits) so the user can see and edit it. Re-seeds per element.
+    const currentStyles = getCurrentStyleRecord(
+      { changes, selectedElement },
+      styleTargetState,
+      styleResponsiveTarget,
+    );
+    setQuickDraft(currentStyles[quickProperty] ?? "");
+  }, [changes, quickProperty, selectedElement, styleResponsiveTarget, styleTargetState]);
+
+  useEffect(() => {
     const element = usePanelStore.getState().selectedElement;
     const seeded =
       selectedSelector === null || element === null
@@ -1217,6 +1231,7 @@ export const StylePanel = () => {
         type: "APPLY_RAW_CSS",
         payload: { selector: selectedElement.selector, css },
       });
+      seededRawCssRef.current = css;
       setRawCssApplied(true);
       window.setTimeout(() => setRawCssApplied(false), 1500);
     } catch (caughtError) {
@@ -1225,8 +1240,7 @@ export const StylePanel = () => {
   };
 
   const applyRawCssIfEdited = () => {
-    // Don't push the untouched seed (it would force !important on everything);
-    // only apply once the user has actually changed the CSS.
+    // Avoid applying the untouched computed-style seed with !important.
     if (rawCss !== seededRawCssRef.current) {
       void applyRawCss();
     }
@@ -1323,6 +1337,7 @@ export const StylePanel = () => {
       await sendMessageToActiveTab({ type: "RESET_ELEMENT_CHANGES" });
       resetElementChanges();
       setRawCss("");
+      seededRawCssRef.current = "";
     } catch (caughtError) {
       setError(
         caughtError instanceof Error ? caughtError.message : "Unable to reset visual changes.",
@@ -1377,6 +1392,80 @@ export const StylePanel = () => {
 
       return record;
     }, {});
+
+    if (Object.keys(declarations).length === 0) {
+      return;
+    }
+
+    await writeCssToClipboard(
+      buildScopedCssRule(
+        selectedElement.selector,
+        declarations,
+        styleTargetState,
+        styleResponsiveTarget,
+      ),
+    );
+  };
+
+  const activeChangeMap = new Map<SupportedStyleProperty, StyleChange>();
+  for (const change of changes) {
+    if (
+      change.selector === selectedElement.selector &&
+      (change.state ?? "base") === styleTargetState &&
+      (change.responsiveTarget ?? "all") === styleResponsiveTarget
+    ) {
+      activeChangeMap.set(change.property, change);
+    }
+  }
+  const modifiedDeclarations = Array.from(activeChangeMap.values())
+    .filter((change) => change.afterValue.trim().length > 0)
+    .sort(
+      (left, right) =>
+        STYLE_FIELDS.findIndex((field) => field.property === left.property) -
+        STYLE_FIELDS.findIndex((field) => field.property === right.property),
+    );
+  const quickField =
+    STYLE_FIELDS.find((field) => field.property === quickProperty) ?? STYLE_FIELDS[0]!;
+  const quickGuidance = getFieldGuidance(quickProperty);
+  const quickSuggestions = getSuggestionValues(quickField, quickGuidance);
+  const quickValid = isCssValueSupported(quickProperty, quickDraft);
+  const normalizedStyleFilter = styleFilter.trim().toLowerCase();
+  const filteredStyleFieldGroups = styleFieldGroups
+    .map(
+      ([group, fields]) =>
+        [
+          group,
+          normalizedStyleFilter.length === 0
+            ? fields
+            : fields.filter(
+                (field) =>
+                  field.label.toLowerCase().includes(normalizedStyleFilter) ||
+                  field.property.includes(normalizedStyleFilter) ||
+                  field.group.toLowerCase().includes(normalizedStyleFilter),
+              ),
+        ] as const,
+    )
+    .filter(([, fields]) => fields.length > 0);
+
+  const selectQuickProperty = (property: SupportedStyleProperty) => {
+    setQuickProperty(property);
+    setQuickDraft(styles[property] ?? "");
+  };
+
+  const previewQuickValue = (nextValue: string) => {
+    setQuickDraft(nextValue);
+
+    if (isCssValueSupported(quickProperty, nextValue)) {
+      void commitChange(quickProperty, nextValue);
+    }
+  };
+
+  const copyCurrentRule = async () => {
+    const declarations = Object.fromEntries(
+      modifiedDeclarations
+        .filter((change) => change.afterValue.trim().length > 0)
+        .map((change) => [change.property, change.afterValue]),
+    );
 
     if (Object.keys(declarations).length === 0) {
       return;
@@ -1534,44 +1623,252 @@ export const StylePanel = () => {
         )}
       </div>
 
-      <section className="ub-card p-3.5">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 text-sm font-semibold tracking-tight">
+      <section className="ub-card overflow-hidden">
+        <div className="border-b border-line px-3.5 py-3">
+          <div className="flex items-center gap-2">
+            <SlidersHorizontal aria-hidden="true" className="text-accent" size={14} />
+            <h3 className="text-sm font-semibold tracking-tight">Quick edit</h3>
+          </div>
+          <p className="mt-0.5 text-2xs text-muted">
+            Pick any property and preview valid values as you type.
+          </p>
+        </div>
+        <div className="space-y-2.5 px-3.5 py-3">
+          <label className="block text-2xs font-medium text-muted" htmlFor="quick-style-property">
+            Property
+          </label>
+          <select
+            className="ub-input h-9 w-full font-mono text-xs"
+            id="quick-style-property"
+            onChange={(event) => selectQuickProperty(event.target.value as SupportedStyleProperty)}
+            value={quickProperty}
+          >
+            {styleFieldGroups.map(([group, fields]) => (
+              <optgroup key={group} label={group}>
+                {fields.map((field) => (
+                  <option key={field.property} value={field.property}>
+                    {field.label} ({field.property})
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+          <div className="flex min-w-0 items-center gap-2">
+            {cssColorToHex(quickDraft) === null ? null : (
+              <input
+                aria-label={quickField.label + " color"}
+                className="h-9 w-10 shrink-0 cursor-pointer rounded-xl border border-line bg-transparent p-0.5"
+                onChange={(event) => previewQuickValue(event.target.value)}
+                type="color"
+                value={cssColorToHex(quickDraft) ?? "#000000"}
+              />
+            )}
+            {quickField.options === undefined ? (
+              <>
+                <input
+                  aria-invalid={!quickValid}
+                  className="ub-input h-9 min-w-0 flex-1 font-mono text-xs"
+                  id="quick-style-value"
+                  list={quickSuggestions.length === 0 ? undefined : "quick-style-suggestions"}
+                  onChange={(event) => previewQuickValue(event.target.value)}
+                  placeholder={quickGuidance.placeholder ?? "Enter a CSS value"}
+                  spellCheck={false}
+                  value={quickDraft}
+                />
+                {quickSuggestions.length === 0 ? null : (
+                  <datalist id="quick-style-suggestions">
+                    {quickSuggestions.map((suggestion) => (
+                      <option key={suggestion} value={suggestion} />
+                    ))}
+                  </datalist>
+                )}
+              </>
+            ) : (
+              <select
+                className="ub-input h-9 min-w-0 flex-1"
+                id="quick-style-value"
+                onChange={(event) => previewQuickValue(event.target.value)}
+                value={quickDraft}
+              >
+                {getSelectOptions(quickField.options, quickDraft).map((option) => (
+                  <option key={option || "no-override"} value={option}>
+                    {getOptionLabel(option, quickField.options ?? [], quickDraft)}
+                  </option>
+                ))}
+              </select>
+            )}
+            <button
+              aria-label={"Clear " + quickField.label}
+              className="ub-icon-btn"
+              onClick={() => previewQuickValue("")}
+              title={"Clear " + quickField.label}
+              type="button"
+            >
+              <X aria-hidden="true" size={13} />
+            </button>
+          </div>
+          {quickValid ? null : (
+            <div className="flex items-center gap-1.5 text-[10px] text-rose-600">
+              <CircleAlert aria-hidden="true" size={12} />
+              This value is not valid for {quickProperty}; it has not been applied.
+            </div>
+          )}
+          {(quickGuidance.presets?.length ?? 0) === 0 ? null : (
+            <div className="flex flex-wrap gap-1.5">
+              {quickGuidance.presets?.map((fieldPreset) => (
+                <button
+                  className="max-w-[130px] truncate rounded-xl bg-accent-softer px-2 py-1 text-[10px] font-medium text-muted transition hover:bg-accent-soft hover:text-ink"
+                  key={fieldPreset.label + fieldPreset.value}
+                  onClick={() => previewQuickValue(fieldPreset.value)}
+                  title={getPresetTitle(quickField, fieldPreset)}
+                  type="button"
+                >
+                  {fieldPreset.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+
+      {modifiedDeclarations.length === 0 ? null : (
+        <section className="ub-card overflow-hidden">
+          <div className="flex items-center justify-between border-b border-line px-3.5 py-2.5">
+            <div>
+              <h3 className="text-sm font-semibold tracking-tight">Modified</h3>
+              <p className="text-[10px] text-muted">
+                {modifiedDeclarations.length} in {styleTargetState} / {styleResponsiveTarget}
+              </p>
+            </div>
+            <button
+              className="ub-icon-btn h-7 w-7"
+              onClick={() => void copyCurrentRule()}
+              title="Copy the current scoped rule"
+              type="button"
+            >
+              <Clipboard aria-hidden="true" size={12} />
+            </button>
+          </div>
+          <div className="divide-y divide-line/70">
+            {modifiedDeclarations.map((change) => (
+              <div
+                className="grid grid-cols-[minmax(90px,0.8fr)_minmax(0,1fr)_28px] items-center gap-2 px-3.5 py-2"
+                key={change.property}
+              >
+                <button
+                  className="truncate text-left font-mono text-[10px] font-semibold text-accent-hover"
+                  onClick={() => selectQuickProperty(change.property)}
+                  title={"Edit " + change.property}
+                  type="button"
+                >
+                  {change.property}
+                </button>
+                <code className="truncate text-[10px] text-slate-600" title={change.afterValue}>
+                  {change.afterValue}
+                </code>
+                <button
+                  aria-label={"Remove " + change.property}
+                  className="ub-icon-btn h-7 w-7"
+                  onClick={() => void commitChange(change.property, "")}
+                  title={"Remove " + change.property}
+                  type="button"
+                >
+                  <X aria-hidden="true" size={12} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <div className="ub-card p-3">
+        <label className="relative block" htmlFor="style-property-search">
+          <Search
+            aria-hidden="true"
+            className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"
+            size={13}
+          />
+          <input
+            className="ub-input h-9 w-full pl-8 pr-8 text-xs"
+            id="style-property-search"
+            onChange={(event) => setStyleFilter(event.target.value)}
+            placeholder="Find a CSS property..."
+            type="search"
+            value={styleFilter}
+          />
+          {styleFilter.length === 0 ? null : (
+            <button
+              aria-label="Clear property search"
+              className="absolute right-1.5 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-slate-400 hover:bg-accent-softer hover:text-ink"
+              onClick={() => setStyleFilter("")}
+              type="button"
+            >
+              <X aria-hidden="true" size={12} />
+            </button>
+          )}
+        </label>
+      </div>
+
+      <section className="ub-card overflow-hidden">
+        <button
+          aria-expanded={rawCssExpanded}
+          className="flex w-full items-center justify-between gap-2 px-3.5 py-3 text-left hover:bg-slate-50"
+          onClick={() => setRawCssExpanded((expanded) => !expanded)}
+          type="button"
+        >
+          <span className="flex items-center gap-2 text-sm font-semibold tracking-tight">
+            <ChevronDown
+              aria-hidden="true"
+              className={"text-muted transition-transform " + (rawCssExpanded ? "" : "-rotate-90")}
+              size={14}
+            />
             <Code2 aria-hidden="true" className="text-accent" size={14} />
             Raw CSS
-          </div>
+          </span>
           {rawCssApplied ? (
             <span className="rounded-xl bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-200">
               Applied
             </span>
           ) : null}
-        </div>
-        <p className="mt-1 text-2xs leading-4 text-muted">
-          Current CSS for{" "}
-          <code className="font-mono text-[10px] text-slate-600">{selectedElement.selector}</code>.
-          Edit or add declarations - applied with <span className="font-mono">!important</span> on
-          Apply (or when you edit and blur).
-        </p>
-        <textarea
-          className="mt-2 h-32 w-full resize-y rounded-xl bg-[#211d3d] p-2.5 font-mono text-2xs leading-4 text-slate-100 outline-none ring-1 ring-inset ring-transparent transition focus:ring-accent"
-          onBlur={applyRawCssIfEdited}
-          onChange={(event) => setRawCss(event.target.value)}
-          placeholder={"color: #6366f1;\nfont-size: 18px;\nborder-radius: 8px;"}
-          spellCheck={false}
-          value={rawCss}
-        />
-        <div className="mt-2 flex items-center gap-2">
-          <button className="ub-btn-primary" onClick={() => void applyRawCss()} type="button">
-            Apply CSS
-          </button>
-          <button className="ub-btn" onClick={clearRawCss} type="button">
-            Clear
-          </button>
-        </div>
+        </button>
+        {rawCssExpanded ? (
+          <div className="border-t border-line px-3.5 pb-3.5 pt-3">
+            <p className="text-2xs leading-4 text-muted">
+              Current CSS for{" "}
+              <code className="font-mono text-[10px] text-slate-600">
+                {selectedElement.selector}
+              </code>
+              . Edit or add declarations; they apply with{" "}
+              <span className="font-mono">!important</span> on Apply or blur.
+            </p>
+            <textarea
+              className="mt-2 h-32 w-full resize-y rounded-xl bg-[#211d3d] p-2.5 font-mono text-2xs leading-4 text-slate-100 outline-none ring-1 ring-inset ring-transparent transition focus:ring-accent"
+              onBlur={applyRawCssIfEdited}
+              onChange={(event) => setRawCss(event.target.value)}
+              placeholder={"color: #6366f1;\nfont-size: 18px;\nborder-radius: 8px;"}
+              spellCheck={false}
+              value={rawCss}
+            />
+            <div className="mt-2 flex items-center gap-2">
+              <button className="ub-btn-primary" onClick={() => void applyRawCss()} type="button">
+                Apply CSS
+              </button>
+              <button className="ub-btn" onClick={clearRawCss} type="button">
+                Clear
+              </button>
+            </div>
+          </div>
+        ) : null}
       </section>
 
-      {styleFieldGroups.map(([group, fields]) => {
-        const isExpanded = expandedGroups.has(group);
+      {filteredStyleFieldGroups.length === 0 ? (
+        <div className="ub-card px-4 py-6 text-center text-xs text-muted">
+          No CSS properties match <code>{styleFilter.trim()}</code>.
+        </div>
+      ) : null}
+
+      {filteredStyleFieldGroups.map(([group, fields]) => {
+        const isExpanded = normalizedStyleFilter.length > 0 || expandedGroups.has(group);
         const contentId = `style-group-${group.toLowerCase().replace(/\s+/g, "-")}`;
 
         return (
