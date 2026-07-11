@@ -1,4 +1,4 @@
-import { captureElementSnapshot, generateUniqueSelector } from "@ui-buddy/core";
+import { captureElementSnapshot, generateUniqueSelector, getDomPath } from "@ui-buddy/core";
 
 import { sendRuntimeMessage } from "../chrome/messaging";
 import { writePageContext } from "../chrome/session";
@@ -16,7 +16,7 @@ import type {
   StructuralEditTarget,
 } from "@ui-buddy/shared";
 
-const DOM_TREE_CHILD_LIMIT = 200;
+const DOM_TREE_CHILD_LIMIT = 100;
 
 const createEditId = (): string =>
   typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
@@ -375,10 +375,55 @@ export class ElementPickerController {
     );
   }
 
-  private buildDomChildren(element: Element): DomTreeNode[] {
-    return this.getInspectableChildren(element)
-      .slice(0, DOM_TREE_CHILD_LIMIT)
+  private directChildToward(ancestor: Element, descendant: Element | null): Element | null {
+    if (descendant === null || ancestor === descendant || !ancestor.contains(descendant)) {
+      return null;
+    }
+
+    let current: Element = descendant;
+
+    while (current.parentElement !== null && current.parentElement !== ancestor) {
+      current = current.parentElement;
+    }
+
+    return current.parentElement === ancestor ? current : null;
+  }
+
+  private buildDomChildren(
+    element: Element,
+    preferredChild: Element | null = null,
+    includeAll = false,
+  ): DomTreeNode[] {
+    const children = this.getInspectableChildren(element);
+
+    if (includeAll || children.length <= DOM_TREE_CHILD_LIMIT) {
+      return children.map((child) => this.buildDomTreeNode(child));
+    }
+
+    const preferredIndex = preferredChild === null ? -1 : children.indexOf(preferredChild);
+    const start =
+      preferredIndex < 0
+        ? 0
+        : Math.max(
+            0,
+            Math.min(
+              preferredIndex - Math.floor(DOM_TREE_CHILD_LIMIT / 2),
+              children.length - DOM_TREE_CHILD_LIMIT,
+            ),
+          );
+
+    return children
+      .slice(start, start + DOM_TREE_CHILD_LIMIT)
       .map((child) => this.buildDomTreeNode(child));
+  }
+
+  private getDomTextPreview(element: Element): string {
+    const directText = Array.from(element.childNodes)
+      .filter((node) => node.nodeType === 3)
+      .map((node) => node.textContent ?? "")
+      .join(" ");
+    const source = element.childElementCount === 0 ? (element.textContent ?? "") : directText;
+    return source.replace(/\s+/g, " ").trim().slice(0, 80);
   }
 
   private buildDomTreeNode(element: Element): DomTreeNode {
@@ -401,27 +446,28 @@ export class ElementPickerController {
       importantAttributes.map(({ name, value }) => [name, value]),
     );
     const styles = element.ownerDocument.defaultView?.getComputedStyle(element);
-    const rect = element.getBoundingClientRect();
 
     return {
       selector: generateUniqueSelector(element),
+      domPath: getDomPath(element),
       tagName: element.tagName.toLowerCase(),
       id: element.id,
       classList: Array.from(element.classList),
       attributes,
-      textPreview: (element.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 80),
+      textPreview: this.getDomTextPreview(element),
       childCount: this.getInspectableChildren(element).length,
       visible:
-        rect.width > 0 &&
-        rect.height > 0 &&
+        !element.hasAttribute("hidden") &&
+        element.getAttribute("aria-hidden") !== "true" &&
         styles?.display !== "none" &&
-        styles?.visibility !== "hidden",
+        styles?.visibility !== "hidden" &&
+        styles?.contentVisibility !== "hidden",
     };
   }
 
   public getDomContext(): DomContextPayload {
     if (this.selectedElementNode === null || !this.selectedElementNode.isConnected) {
-      return { ancestry: [], children: [], selectedSelector: null };
+      return { ancestry: [], children: [], childrenBySelector: {}, selectedSelector: null };
     }
 
     const ancestry: Element[] = [];
@@ -432,14 +478,31 @@ export class ElementPickerController {
       current = current.parentElement;
     }
 
+    const ancestryNodes = ancestry.map((element) => this.buildDomTreeNode(element));
+    const childrenBySelector: Record<string, DomTreeNode[]> = {};
+
+    for (const [index, element] of ancestry.entries()) {
+      const node = ancestryNodes[index];
+
+      if (node !== undefined) {
+        childrenBySelector[node.selector] = this.buildDomChildren(
+          element,
+          ancestry[index + 1] ?? null,
+        );
+      }
+    }
+
+    const selectedSelector = generateUniqueSelector(this.selectedElementNode);
+
     return {
-      ancestry: ancestry.map((element) => this.buildDomTreeNode(element)),
-      children: this.buildDomChildren(this.selectedElementNode),
-      selectedSelector: generateUniqueSelector(this.selectedElementNode),
+      ancestry: ancestryNodes,
+      children: childrenBySelector[selectedSelector] ?? [],
+      childrenBySelector,
+      selectedSelector,
     };
   }
 
-  public getDomChildren(selector: string): DomTreeNode[] {
+  public getDomChildren(selector: string, includeAll = false): DomTreeNode[] {
     let element: Element | null = null;
 
     try {
@@ -452,12 +515,21 @@ export class ElementPickerController {
       return [];
     }
 
-    return this.buildDomChildren(element);
+    return this.buildDomChildren(
+      element,
+      this.directChildToward(element, this.selectedElementNode),
+      includeAll,
+    );
   }
 
   public highlightDomNode(selector: string | null): void {
     if (selector === null) {
       this.overlay.clearHover();
+
+      if (this.selectedElementNode !== null && this.selectedElementNode.isConnected) {
+        this.overlay.showSelected(this.selectedElementNode.getBoundingClientRect());
+      }
+
       return;
     }
 
@@ -465,10 +537,11 @@ export class ElementPickerController {
       const element = document.querySelector(selector);
 
       if (element !== null && isInspectableElement(element, this.overlay.hostElement)) {
+        this.overlay.clearSelected();
         this.overlay.showHover(captureElementSnapshot(element));
       }
     } catch {
-      this.overlay.clearHover();
+      this.highlightDomNode(null);
     }
   }
 

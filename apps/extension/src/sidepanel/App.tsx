@@ -130,6 +130,7 @@ export const App = () => {
         setSelectedElement(rawMessage.payload);
         setPickerActive(true);
         setHoveredSelector(null);
+        setDomContext(null);
 
         if (!hadSelection) {
           setActiveTab("inspect");

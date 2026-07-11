@@ -486,6 +486,61 @@ describe("ElementPickerController", () => {
     expect(picker.getDomChildren("[")).toEqual([]);
   });
 
+  it("keeps the selected branch in bounded DOM context results", () => {
+    const siblings = Array.from(
+      { length: 150 },
+      (_, index) => '<span id="item-' + String(index) + '">Item ' + String(index) + "</span>",
+    ).join("");
+    document.documentElement.innerHTML =
+      '<head></head><body><main id="large-list">' + siblings + "</main></body>";
+    const picker = new ElementPickerController(new OverlayController());
+    const selected = document.getElementById("item-140");
+
+    if (selected === null) {
+      throw new Error("Expected large DOM fixture.");
+    }
+
+    picker.enable("select");
+    selected.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+
+    const context = picker.getDomContext();
+    const listChildren = context.childrenBySelector["#large-list"] ?? [];
+
+    expect(listChildren).toHaveLength(100);
+    expect(listChildren.some((node) => node.selector === "#item-140")).toBe(true);
+    expect(picker.getDomChildren("#large-list", true)).toHaveLength(150);
+  });
+
+  it("temporarily replaces the selected overlay while revealing a tree node", () => {
+    const overlay = new OverlayController();
+    const clearHover = vi.spyOn(overlay, "clearHover");
+    const clearSelected = vi.spyOn(overlay, "clearSelected");
+    const showHover = vi.spyOn(overlay, "showHover");
+    const showSelected = vi.spyOn(overlay, "showSelected");
+    const picker = new ElementPickerController(overlay);
+    const card = document.getElementById("card");
+
+    if (card === null) {
+      throw new Error("Expected highlight fixture.");
+    }
+
+    picker.enable("select");
+    card.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    clearHover.mockClear();
+    clearSelected.mockClear();
+    showHover.mockClear();
+    showSelected.mockClear();
+
+    picker.highlightDomNode("#save");
+
+    expect(clearSelected).toHaveBeenCalledOnce();
+    expect(showHover).toHaveBeenCalledWith(expect.objectContaining({ selector: "#save" }));
+
+    picker.highlightDomNode(null);
+
+    expect(clearHover).toHaveBeenCalledOnce();
+    expect(showSelected).toHaveBeenCalledOnce();
+  });
   it("edits element attributes with undo, redo, and export details", () => {
     const edits: StructuralEdit[] = [];
     const picker = new ElementPickerController(new OverlayController(), {

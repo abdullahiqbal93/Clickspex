@@ -477,6 +477,7 @@ export type ElementSearchResult = Pick<
 
 export type DomTreeNode = {
   selector: string;
+  domPath: string;
   tagName: string;
   id: string;
   classList: string[];
@@ -489,6 +490,7 @@ export type DomTreeNode = {
 export type DomContextPayload = {
   ancestry: DomTreeNode[];
   children: DomTreeNode[];
+  childrenBySelector: Record<string, DomTreeNode[]>;
   selectedSelector: string | null;
 };
 
@@ -520,7 +522,7 @@ export type ExtensionMessage =
   | { type: "SELECT_SEARCH_RESULT"; payload: { selector: string } }
   | { type: "DOM_CONTEXT_REQUEST" }
   | { type: "DOM_CONTEXT_RESULT"; payload: DomContextPayload }
-  | { type: "DOM_CHILDREN_REQUEST"; payload: { selector: string } }
+  | { type: "DOM_CHILDREN_REQUEST"; payload: { selector: string; includeAll?: boolean } }
   | { type: "DOM_CHILDREN_RESULT"; payload: { selector: string; children: DomTreeNode[] } }
   | { type: "HIGHLIGHT_DOM_NODE"; payload: { selector: string | null } }
   | {
@@ -735,6 +737,7 @@ const isElementSearchResult = (value: unknown): value is ElementSearchResult => 
 const isDomTreeNode = (value: unknown): value is DomTreeNode =>
   isRecord(value) &&
   isString(value.selector) &&
+  isString(value.domPath) &&
   isString(value.tagName) &&
   isString(value.id) &&
   isStringArray(value.classList) &&
@@ -742,6 +745,12 @@ const isDomTreeNode = (value: unknown): value is DomTreeNode =>
   isString(value.textPreview) &&
   isNumber(value.childCount) &&
   typeof value.visible === "boolean";
+
+const isDomChildrenRecord = (value: unknown): value is Record<string, DomTreeNode[]> =>
+  isRecord(value) &&
+  Object.values(value).every(
+    (children) => Array.isArray(children) && children.every(isDomTreeNode),
+  );
 
 const isPinCardKind = (value: unknown): value is PinCardKind =>
   value === "styles" || value === "audit";
@@ -813,6 +822,7 @@ export const isExtensionMessage = (value: unknown): value is ExtensionMessage =>
       value.payload.ancestry.every(isDomTreeNode) &&
       Array.isArray(value.payload.children) &&
       value.payload.children.every(isDomTreeNode) &&
+      isDomChildrenRecord(value.payload.childrenBySelector) &&
       (value.payload.selectedSelector === null || isString(value.payload.selectedSelector))
     );
   }
@@ -843,7 +853,11 @@ export const isExtensionMessage = (value: unknown): value is ExtensionMessage =>
   }
 
   if (messageType === "DOM_CHILDREN_REQUEST") {
-    return isRecord(value.payload) && isString(value.payload.selector);
+    return (
+      isRecord(value.payload) &&
+      isString(value.payload.selector) &&
+      (value.payload.includeAll === undefined || typeof value.payload.includeAll === "boolean")
+    );
   }
 
   if (messageType === "HIGHLIGHT_DOM_NODE") {

@@ -272,7 +272,10 @@ if (window.__uiBuddyListenerAttached !== true) {
         type: "DOM_CHILDREN_RESULT",
         payload: {
           selector: message.payload.selector,
-          children: picker.getDomChildren(message.payload.selector),
+          children: picker.getDomChildren(
+            message.payload.selector,
+            message.payload.includeAll === true,
+          ),
         },
       });
       return;

@@ -546,7 +546,7 @@ export const InspectorPanel = ({ selectedElement }: InspectorPanelProps) => {
         </div>
       </div>
 
-      <DomTreePanel selectedSelector={selectedElement.selector} />
+      <DomTreePanel selectedDomPath={selectedElement.domPath} />
 
       <section className="ub-card p-4">
         <h3 className="text-sm font-semibold tracking-tight">Tools</h3>

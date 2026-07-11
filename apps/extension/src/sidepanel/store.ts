@@ -215,10 +215,7 @@ export const usePanelStore = create<PanelState>((set, get) => ({
   setDomContext: (domContext) =>
     set({
       domContext,
-      domChildrenBySelector:
-        domContext === null || domContext.selectedSelector === null
-          ? {}
-          : { [domContext.selectedSelector]: domContext.children },
+      domChildrenBySelector: domContext?.childrenBySelector ?? {},
     }),
   setElementCssResult: (elementCssResult) => set({ elementCssResult }),
   setMultiSelection: (multiSelection) => set({ multiSelection }),

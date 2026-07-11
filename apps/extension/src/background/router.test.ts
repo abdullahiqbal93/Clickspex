@@ -25,7 +25,12 @@ describe("background message router", () => {
     expect(
       shouldForwardToSidePanel({
         type: "DOM_CONTEXT_RESULT",
-        payload: { ancestry: [], children: [], selectedSelector: null },
+        payload: {
+          ancestry: [],
+          children: [],
+          childrenBySelector: {},
+          selectedSelector: null,
+        },
       }),
     ).toBe(true);
     expect(

@@ -70,4 +70,41 @@ describe("sidepanel store", () => {
 
     expect(getCurrentStyleRecord(usePanelStore.getState()).color).toBe("white");
   });
+  it("hydrates all focused DOM branches from a context response", () => {
+    const rootNode = {
+      selector: "html",
+      domPath: "html",
+      tagName: "html",
+      id: "",
+      classList: [],
+      attributes: {},
+      textPreview: "",
+      childCount: 1,
+      visible: true,
+    };
+    const selectedNode = {
+      ...rootNode,
+      selector: "#save",
+      domPath: "html > body > button#save",
+      tagName: "button",
+      id: "save",
+      textPreview: "Save",
+      childCount: 0,
+    };
+
+    usePanelStore.getState().setDomContext({
+      ancestry: [rootNode, selectedNode],
+      children: [],
+      childrenBySelector: {
+        html: [selectedNode],
+        "#save": [],
+      },
+      selectedSelector: "#save",
+    });
+
+    expect(usePanelStore.getState().domChildrenBySelector).toEqual({
+      html: [selectedNode],
+      "#save": [],
+    });
+  });
 });

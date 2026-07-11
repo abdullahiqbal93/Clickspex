@@ -4,6 +4,7 @@ import { isExtensionMessage } from "./index";
 
 const node = {
   selector: "#save",
+  domPath: "html > body > button#save",
   tagName: "button",
   id: "save",
   classList: ["button"],
@@ -22,8 +23,15 @@ describe("DOM extension messages", () => {
         payload: {
           ancestry: [node],
           children: [],
+          childrenBySelector: {},
           selectedSelector: "#save",
         },
+      }),
+    ).toBe(true);
+    expect(
+      isExtensionMessage({
+        type: "DOM_CHILDREN_REQUEST",
+        payload: { selector: "#save", includeAll: true },
       }),
     ).toBe(true);
     expect(
@@ -47,6 +55,7 @@ describe("DOM extension messages", () => {
         payload: {
           ancestry: [{ ...node, childCount: "0" }],
           children: [],
+          childrenBySelector: {},
           selectedSelector: "#save",
         },
       }),
