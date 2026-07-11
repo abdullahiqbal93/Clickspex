@@ -22,6 +22,18 @@ describe("background message router", () => {
         payload: { query: "button", results: [] },
       }),
     ).toBe(true);
+    expect(
+      shouldForwardToSidePanel({
+        type: "DOM_CONTEXT_RESULT",
+        payload: { ancestry: [], children: [], selectedSelector: null },
+      }),
+    ).toBe(true);
+    expect(
+      shouldForwardToSidePanel({
+        type: "DOM_CHILDREN_RESULT",
+        payload: { selector: "#save", children: [] },
+      }),
+    ).toBe(true);
   });
 
   it("forwards session sync and restored-edits messages to the side panel", () => {
