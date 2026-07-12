@@ -1,7 +1,11 @@
-import { buildCssRulesFromChanges, buildScopedCssRule, escapeCssIdentifier } from "@ui-buddy/core";
+import {
+  buildCssRulesFromChanges,
+  buildScopedCssRule,
+  buildStyleTargetSelector,
+  escapeCssIdentifier,
+} from "@ui-buddy/core";
 import {
   STYLE_RESPONSIVE_TARGET_DEFINITIONS,
-  type ElementSnapshot,
   type StyleChange,
   type StyleResponsiveTarget,
   type StyleResponsiveTargetDefinition,
@@ -26,6 +30,7 @@ import { sendMessageToActiveTab } from "../../chrome/messaging";
 import { getCurrentStyleRecord, usePanelStore } from "../store";
 
 import { CommitInput } from "./CommitInput";
+import { RawCssRuleEditor } from "./RawCssRuleEditor";
 
 type StylePreset = {
   label: string;
@@ -1040,111 +1045,14 @@ const groupedFields = STYLE_FIELDS.reduce<Record<string, StyleField[]>>((groups,
 const styleFieldGroups = Object.entries(groupedFields);
 const defaultExpandedGroup = styleFieldGroups[0]?.[0];
 
-// Computed values that carry no useful information for an editable CSS block.
-const RAW_CSS_NOISE_VALUES = new Set([
-  "",
-  "none",
-  "auto",
-  "normal",
-  "visible",
-  "static",
-  "0s",
-  "0px",
-  "rgba(0, 0, 0, 0)",
-]);
-const RAW_CSS_SEED_PROPERTIES: SupportedStyleProperty[] = [
-  "display",
-  "position",
-  "top",
-  "right",
-  "bottom",
-  "left",
-  "z-index",
-  "width",
-  "height",
-  "min-width",
-  "max-width",
-  "min-height",
-  "max-height",
-  "margin-top",
-  "margin-right",
-  "margin-bottom",
-  "margin-left",
-  "padding-top",
-  "padding-right",
-  "padding-bottom",
-  "padding-left",
-  "flex-direction",
-  "flex-wrap",
-  "justify-content",
-  "align-items",
-  "align-content",
-  "align-self",
-  "gap",
-  "flex-grow",
-  "flex-shrink",
-  "flex-basis",
-  "order",
-  "color",
-  "background-color",
-  "font-family",
-  "font-size",
-  "font-weight",
-  "font-style",
-  "line-height",
-  "letter-spacing",
-  "text-align",
-  "text-transform",
-  "text-decoration-line",
-  "border-width",
-  "border-style",
-  "border-color",
-  "border-radius",
-  "box-shadow",
-  "opacity",
-  "transform",
-  "transform-origin",
-  "filter",
-  "transition",
-  "cursor",
-  "overflow",
-];
+const CSS_WIDE_KEYWORDS = ["inherit", "initial", "unset", "revert", "revert-layer"];
 
-/**
- * Build an editable CSS declaration block for the selected element: its current
- * computed styles (minus default/empty noise), with any already-applied edits
- * layered on top so what the user sees matches the live page.
- */
-const buildEditableCssForElement = (snapshot: ElementSnapshot, changes: StyleChange[]): string => {
-  const declarations = new Map<string, string>();
+const getRawCssValueSuggestions = (property: string): string[] => {
+  const field = STYLE_FIELDS.find((candidate) => candidate.property === property);
+  const fieldValues =
+    field === undefined ? [] : getSuggestionValues(field, getFieldGuidance(field.property));
 
-  for (const property of RAW_CSS_SEED_PROPERTIES) {
-    const value = (snapshot.computedStyles[property] ?? "").trim();
-
-    if (!RAW_CSS_NOISE_VALUES.has(value)) {
-      declarations.set(property, value);
-    }
-  }
-
-  for (const change of changes) {
-    if (
-      change.selector !== snapshot.selector ||
-      (change.state ?? "base") !== "base" ||
-      (change.responsiveTarget ?? "all") !== "all"
-    ) {
-      continue;
-    }
-
-    if (change.afterValue.trim().length === 0) {
-      declarations.delete(change.property);
-    } else {
-      declarations.set(change.property, change.afterValue.trim());
-    }
-  }
-
-  return Array.from(declarations.entries())
-    .map(([property, value]) => `${property}: ${value};`)
-    .join("\n");
+  return [...new Set([...fieldValues, ...CSS_WIDE_KEYWORDS])];
 };
 
 const cssColorToHex = (value: string): string | null => {
@@ -1168,6 +1076,7 @@ const isCssValueSupported = (property: string, value: string): boolean =>
 
 export const StylePanel = () => {
   const changes = usePanelStore((state) => state.changes);
+  const rawCssEntries = usePanelStore((state) => state.rawCssEntries);
   const historyUndoDepth = usePanelStore((state) => state.historyUndoDepth);
   const historyRedoDepth = usePanelStore((state) => state.historyRedoDepth);
   const selectedElement = usePanelStore((state) => state.selectedElement);
@@ -1189,11 +1098,17 @@ export const StylePanel = () => {
   // Remember the element-unique selector so scope can be switched back.
   const uniqueSelectorRef = useRef<{ domPath: string; selector: string } | null>(null);
   const selectedSelector = selectedElement?.selector ?? null;
+  const rawCssSelector =
+    selectedSelector === null ? "" : buildStyleTargetSelector(selectedSelector, styleTargetState);
+  const selectedRawCss =
+    rawCssSelector.length === 0
+      ? ""
+      : (rawCssEntries.find((entry) => entry.selector === rawCssSelector)?.css ?? "");
   // Raw CSS editor.
-  const [rawCss, setRawCss] = useState("");
+  const [rawCss, setRawCss] = useState(selectedRawCss);
   const [rawCssApplied, setRawCssApplied] = useState(false);
-  const [rawCssExpanded, setRawCssExpanded] = useState(false);
-  const seededRawCssRef = useRef("");
+  const [rawCssExpanded, setRawCssExpanded] = useState(true);
+  const rawCssAppliedTimer = useRef<number | null>(null);
   const [quickProperty, setQuickProperty] = useState<SupportedStyleProperty>("color");
   const [quickDraft, setQuickDraft] = useState("");
   const [styleFilter, setStyleFilter] = useState("");
@@ -1208,49 +1123,53 @@ export const StylePanel = () => {
   }, [changes, quickProperty, selectedElement, styleResponsiveTarget, styleTargetState]);
 
   useEffect(() => {
-    const element = usePanelStore.getState().selectedElement;
-    const seeded =
-      selectedSelector === null || element === null
-        ? ""
-        : buildEditableCssForElement(element, usePanelStore.getState().changes);
+    setRawCss(selectedRawCss);
+  }, [rawCssSelector, selectedRawCss]);
 
-    seededRawCssRef.current = seeded;
-    setRawCss(seeded);
-  }, [selectedSelector]);
+  useEffect(
+    () => () => {
+      if (rawCssAppliedTimer.current !== null) {
+        window.clearTimeout(rawCssAppliedTimer.current);
+      }
+    },
+    [],
+  );
 
-  const applyRawCss = async (cssOverride?: string) => {
+  const applyRawCss = async (css: string, coalesce = false) => {
     if (selectedElement === null) {
       return;
     }
 
-    const css = cssOverride ?? rawCss;
     setError(null);
 
     try {
       await sendMessageToActiveTab({
         type: "APPLY_RAW_CSS",
-        payload: { selector: selectedElement.selector, css },
+        payload: { selector: rawCssSelector, css, coalesce },
       });
-      seededRawCssRef.current = css;
       setRawCssApplied(true);
-      window.setTimeout(() => setRawCssApplied(false), 1500);
+
+      if (rawCssAppliedTimer.current !== null) {
+        window.clearTimeout(rawCssAppliedTimer.current);
+      }
+      rawCssAppliedTimer.current = window.setTimeout(() => {
+        rawCssAppliedTimer.current = null;
+        setRawCssApplied(false);
+      }, 800);
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : "Unable to apply raw CSS.");
     }
   };
 
-  const applyRawCssIfEdited = () => {
-    // Avoid applying the untouched computed-style seed with !important.
-    if (rawCss !== seededRawCssRef.current) {
-      void applyRawCss();
-    }
+  const updateRawCss = (css: string) => {
+    setRawCss(css);
+    void applyRawCss(css, true);
   };
 
   const clearRawCss = () => {
     setRawCss("");
     void applyRawCss("");
   };
-
   const classSelector =
     selectedElement !== null && selectedElement.classList.length > 0
       ? `${selectedElement.tagName}${selectedElement.classList
@@ -1337,7 +1256,6 @@ export const StylePanel = () => {
       await sendMessageToActiveTab({ type: "RESET_ELEMENT_CHANGES" });
       resetElementChanges();
       setRawCss("");
-      seededRawCssRef.current = "";
     } catch (caughtError) {
       setError(
         caughtError instanceof Error ? caughtError.message : "Unable to reset visual changes.",
@@ -1809,58 +1727,41 @@ export const StylePanel = () => {
         </label>
       </div>
 
-      <section className="ub-card overflow-hidden">
+      <section className="overflow-hidden border-y border-slate-300 bg-white">
         <button
           aria-expanded={rawCssExpanded}
-          className="flex w-full items-center justify-between gap-2 px-3.5 py-3 text-left hover:bg-slate-50"
+          className="flex h-10 w-full items-center justify-between gap-2 bg-slate-50 px-3 text-left hover:bg-slate-100"
           onClick={() => setRawCssExpanded((expanded) => !expanded)}
           type="button"
         >
-          <span className="flex items-center gap-2 text-sm font-semibold tracking-tight">
+          <span className="flex items-center gap-2 text-xs font-semibold text-slate-800">
             <ChevronDown
               aria-hidden="true"
-              className={"text-muted transition-transform " + (rawCssExpanded ? "" : "-rotate-90")}
-              size={14}
+              className={
+                "text-slate-500 transition-transform " + (rawCssExpanded ? "" : "-rotate-90")
+              }
+              size={13}
             />
-            <Code2 aria-hidden="true" className="text-accent" size={14} />
+            <Code2 aria-hidden="true" className="text-slate-600" size={13} />
             Raw CSS
           </span>
-          {rawCssApplied ? (
-            <span className="rounded-xl bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-200">
-              Applied
-            </span>
-          ) : null}
+          <span className="font-mono text-[10px] text-slate-500">
+            {rawCss.trim().length === 0 ? "All screens" : "Live | All screens"}
+          </span>
         </button>
         {rawCssExpanded ? (
-          <div className="border-t border-line px-3.5 pb-3.5 pt-3">
-            <p className="text-2xs leading-4 text-muted">
-              Current CSS for{" "}
-              <code className="font-mono text-[10px] text-slate-600">
-                {selectedElement.selector}
-              </code>
-              . Edit or add declarations; they apply with{" "}
-              <span className="font-mono">!important</span> on Apply or blur.
-            </p>
-            <textarea
-              className="mt-2 h-32 w-full resize-y rounded-xl bg-[#211d3d] p-2.5 font-mono text-2xs leading-4 text-slate-100 outline-none ring-1 ring-inset ring-transparent transition focus:ring-accent"
-              onBlur={applyRawCssIfEdited}
-              onChange={(event) => setRawCss(event.target.value)}
-              placeholder={"color: #6366f1;\nfont-size: 18px;\nborder-radius: 8px;"}
-              spellCheck={false}
-              value={rawCss}
+          <div className="border-t border-slate-300 p-2">
+            <RawCssRuleEditor
+              applied={rawCssApplied}
+              css={rawCss}
+              getValueSuggestions={getRawCssValueSuggestions}
+              onChange={updateRawCss}
+              onClear={clearRawCss}
+              selector={rawCssSelector}
             />
-            <div className="mt-2 flex items-center gap-2">
-              <button className="ub-btn-primary" onClick={() => void applyRawCss()} type="button">
-                Apply CSS
-              </button>
-              <button className="ub-btn" onClick={clearRawCss} type="button">
-                Clear
-              </button>
-            </div>
           </div>
         ) : null}
       </section>
-
       {filteredStyleFieldGroups.length === 0 ? (
         <div className="ub-card px-4 py-6 text-center text-xs text-muted">
           No CSS properties match <code>{styleFilter.trim()}</code>.

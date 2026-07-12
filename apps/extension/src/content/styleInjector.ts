@@ -10,6 +10,8 @@ import {
   type StyleResponsiveTarget,
 } from "@ui-buddy/shared";
 
+import { buildImportantCssDeclarations } from "../cssDeclarations";
+
 // Live preview rules use !important so temporary edits reliably win over the
 // page's own (often more specific or inline) styles. Exported CSS stays clean.
 const buildImportantCssRule = (selector: string, styles: Record<string, string>): string => {
@@ -127,30 +129,23 @@ const applyChangeToRules = (rulesByTarget: RulesByResponsiveTarget, change: Styl
   }
 };
 
-/**
- * Force `!important` on any declaration that doesn't already carry it, so raw
- * CSS reliably wins over the page's own rules (matching the live-preview
- * behaviour of the structured fields). Comments and empty fragments are dropped.
- */
-const enforceImportant = (rawCss: string): string =>
-  rawCss
-    .replace(/\/\*[\s\S]*?\*\//g, "")
-    .split(";")
-    .map((declaration) => declaration.trim())
-    .filter((declaration) => declaration.includes(":"))
-    .map((declaration) =>
-      /!important\s*$/i.test(declaration) ? declaration : `${declaration} !important`,
-    )
-    .map((declaration) => `  ${declaration};`)
-    .join("\n");
-
 export class StyleInjector {
   private readonly appliedChanges: StyleChange[] = [];
   private readonly redoStack: StyleChange[] = [];
   // Free-form CSS entered in the Styles → Raw CSS editor, keyed by selector.
   private readonly rawCssBySelector = new Map<string, string>();
-  private readonly rawCssUndoStack: Array<{ selector: string; before: string; after: string }> = [];
-  private readonly rawCssRedoStack: Array<{ selector: string; before: string; after: string }> = [];
+  private readonly rawCssUndoStack: Array<{
+    selector: string;
+    before: string;
+    after: string;
+    timestamp: number;
+  }> = [];
+  private readonly rawCssRedoStack: Array<{
+    selector: string;
+    before: string;
+    after: string;
+    timestamp: number;
+  }> = [];
 
   public getAppliedChanges(): StyleChange[] {
     return [...this.appliedChanges];
@@ -178,7 +173,7 @@ export class StyleInjector {
       }
 
       this.rawCssBySelector.set(selector, css);
-      this.rawCssUndoStack.push({ selector, before: "", after: css });
+      this.rawCssUndoStack.push({ selector, before: "", after: css, timestamp: 0 });
     }
 
     this.render();
@@ -200,7 +195,7 @@ export class StyleInjector {
   }
 
   /** Apply raw CSS for a selector as an undoable step. Returns true if it changed. */
-  public applyRawCss(selector: string, css: string): boolean {
+  public applyRawCss(selector: string, css: string, coalesce = false): boolean {
     const before = this.rawCssBySelector.get(selector) ?? "";
     const after = css.trim();
 
@@ -208,8 +203,28 @@ export class StyleInjector {
       return false;
     }
 
+    const timestamp = Date.now();
+    const last = this.rawCssUndoStack.at(-1);
+
     this.setRawCssValue(selector, after);
-    this.rawCssUndoStack.push({ selector, before, after });
+
+    if (
+      coalesce &&
+      last !== undefined &&
+      last.selector === selector &&
+      timestamp - last.timestamp < 1000
+    ) {
+      this.rawCssUndoStack[this.rawCssUndoStack.length - 1] = {
+        ...last,
+        after,
+        timestamp,
+      };
+      this.rawCssRedoStack.length = 0;
+      this.render();
+      return false;
+    }
+
+    this.rawCssUndoStack.push({ selector, before, after, timestamp });
     this.rawCssRedoStack.length = 0;
     this.render();
     return true;
@@ -312,7 +327,7 @@ export class StyleInjector {
   private buildRawCss(): string {
     return Array.from(this.rawCssBySelector.entries())
       .map(([selector, css]) => {
-        const declarations = enforceImportant(css);
+        const declarations = buildImportantCssDeclarations(css);
         return declarations.length === 0 ? "" : `${selector} {\n${declarations}\n}`;
       })
       .filter((block) => block.length > 0)

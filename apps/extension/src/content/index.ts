@@ -425,8 +425,13 @@ if (window.__uiBuddyListenerAttached !== true) {
     }
 
     if (message.type === "APPLY_RAW_CSS") {
-      if (styleInjector.applyRawCss(message.payload.selector, message.payload.css)) {
+      const coalesce =
+        message.payload.coalesce === true && actionUndoLog.at(-1)?.kind === "raw-css";
+
+      if (styleInjector.applyRawCss(message.payload.selector, message.payload.css, coalesce)) {
         recordPageAction({ kind: "raw-css" });
+      } else {
+        sendSessionSync();
       }
       return;
     }

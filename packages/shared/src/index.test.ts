@@ -21,6 +21,12 @@ describe("DOM extension messages", () => {
     expect(isExtensionMessage({ type: "DOM_TREE_UNSUBSCRIBE" })).toBe(true);
     expect(
       isExtensionMessage({
+        type: "APPLY_RAW_CSS",
+        payload: { selector: "#save", css: "color: red;", coalesce: true },
+      }),
+    ).toBe(true);
+    expect(
+      isExtensionMessage({
         type: "DOM_CONTEXT_RESULT",
         payload: {
           ancestry: [node],
@@ -66,6 +72,12 @@ describe("DOM extension messages", () => {
       isExtensionMessage({
         type: "UPDATE_ELEMENT_ATTRIBUTE",
         payload: { selector: "#save", name: "aria-label", value: 42 },
+      }),
+    ).toBe(false);
+    expect(
+      isExtensionMessage({
+        type: "APPLY_RAW_CSS",
+        payload: { selector: "#save", css: "color: red;", coalesce: "yes" },
       }),
     ).toBe(false);
   });

@@ -558,7 +558,10 @@ export type ExtensionMessage =
   | { type: "SCROLL_SELECTED_INTO_VIEW" }
   | { type: "MARK_SELECTED_FOR_SOURCE" }
   | { type: "SET_CAPTURE_MODE"; payload: { active: boolean } }
-  | { type: "APPLY_RAW_CSS"; payload: { selector: string; css: string } }
+  | {
+      type: "APPLY_RAW_CSS";
+      payload: { selector: string; css: string; coalesce?: boolean };
+    }
   | { type: "EDITS_RESTORED"; payload: { count: number } }
   | { type: "MULTI_SELECTION_CHANGED"; payload: { count: number; selectors: string[] } }
   | {
@@ -975,7 +978,10 @@ export const isExtensionMessage = (value: unknown): value is ExtensionMessage =>
 
   if (messageType === "APPLY_RAW_CSS") {
     return (
-      isRecord(value.payload) && isString(value.payload.selector) && isString(value.payload.css)
+      isRecord(value.payload) &&
+      isString(value.payload.selector) &&
+      isString(value.payload.css) &&
+      (value.payload.coalesce === undefined || typeof value.payload.coalesce === "boolean")
     );
   }
 

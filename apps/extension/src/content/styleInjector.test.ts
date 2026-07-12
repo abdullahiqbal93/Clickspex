@@ -141,6 +141,33 @@ describe("StyleInjector", () => {
     expect(styleElement()).toBeNull();
   });
 
+  it("keeps disabled raw declarations out of the live rule and parses quoted semicolons", () => {
+    const injector = new StyleInjector();
+
+    injector.applyRawCss(
+      "#save",
+      'background-image: url("data:image/svg+xml;charset=utf-8;demo"); /* display: none; */',
+    );
+
+    const css = styleElement()?.textContent ?? "";
+    expect(css).toContain(
+      'background-image: url("data:image/svg+xml;charset=utf-8;demo") !important;',
+    );
+    expect(css).not.toContain("display: none");
+  });
+
+  it("coalesces rapid raw CSS previews into one undo step", () => {
+    const injector = new StyleInjector();
+
+    expect(injector.applyRawCss("#save", "color: r;", true)).toBe(true);
+    expect(injector.applyRawCss("#save", "color: re;", true)).toBe(false);
+    expect(injector.applyRawCss("#save", "color: red;", true)).toBe(false);
+
+    injector.undoRawCss();
+    expect(injector.getRawCssEntries()).toEqual([]);
+    expect(styleElement()).toBeNull();
+  });
+
   it("restores persisted style and raw CSS edits and re-injects them", () => {
     const injector = new StyleInjector();
 
