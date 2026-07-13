@@ -100,7 +100,7 @@ describe("DOM tree navigation", () => {
 
     act(() =>
       usePanelStore.getState().setDomContext({
-        ancestry: [html],
+        ancestry: [{ ...html, attributes: { lang: "en" } }],
         children: [],
         childrenBySelector: {},
         selectedSelector: "html",
@@ -159,5 +159,103 @@ describe("DOM tree navigation", () => {
     expect(container.textContent).not.toContain("Loading child nodes");
     expect(container.textContent).not.toContain("Retry loading children");
     expect(container.textContent).toContain("<body>");
+  });
+
+  it("searches the page DOM after a short debounce", async () => {
+    vi.useFakeTimers();
+    const html = node("html");
+
+    act(() => {
+      usePanelStore.getState().setDomContext({
+        ancestry: [html],
+        children: [],
+        childrenBySelector: { html: [] },
+        selectedSelector: "html",
+      });
+      reactRoot.render(createElement(DomTreePanel, { selectedDomPath: "html" }));
+    });
+    await act(async () => Promise.resolve());
+
+    const input = container.querySelector<HTMLInputElement>(
+      'input[aria-label="Search DOM elements"]',
+    );
+    expect(input).not.toBeNull();
+
+    act(() => {
+      if (input !== null) {
+        const valueSetter = Object.getOwnPropertyDescriptor(
+          HTMLInputElement.prototype,
+          "value",
+        )?.set;
+        valueSetter?.call(input, "button.primary");
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+    });
+
+    await act(async () => vi.advanceTimersByTimeAsync(179));
+    expect(
+      mockedSendMessageToActiveTab.mock.calls.some(
+        ([message]) => message.type === "SEARCH_ELEMENTS",
+      ),
+    ).toBe(false);
+
+    await act(async () => vi.advanceTimersByTimeAsync(1));
+    expect(mockedSendMessageToActiveTab).toHaveBeenCalledWith({
+      type: "SEARCH_ELEMENTS",
+      payload: { query: "button.primary" },
+    });
+  });
+
+  it("keeps the tree stable while a new selection context is loading", async () => {
+    const html = node("html", 1);
+    const body = node("body");
+
+    act(() => {
+      usePanelStore.getState().setDomContext({
+        ancestry: [html],
+        children: [body],
+        childrenBySelector: { html: [body] },
+        selectedSelector: "html",
+      });
+      reactRoot.render(createElement(DomTreePanel, { selectedDomPath: "html" }));
+    });
+    await act(async () => Promise.resolve());
+
+    act(() => {
+      reactRoot.render(createElement(DomTreePanel, { selectedDomPath: "body" }));
+    });
+
+    expect(container.textContent).toContain("<html");
+    expect(container.textContent).toContain("Syncing");
+    expect(container.textContent).not.toContain("Reading the live document tree");
+  });
+
+  it("never uses page-level scrollIntoView during live selection updates", async () => {
+    const html = node("html", 1);
+    const body = node("body");
+    const pageScroll = vi.mocked(HTMLElement.prototype.scrollIntoView);
+
+    act(() => {
+      usePanelStore.getState().setDomContext({
+        ancestry: [html],
+        children: [body],
+        childrenBySelector: { html: [body] },
+        selectedSelector: "html",
+      });
+      reactRoot.render(createElement(DomTreePanel, { selectedDomPath: "html" }));
+    });
+
+    act(() => {
+      usePanelStore.getState().setDomContext({
+        ancestry: [html, body],
+        children: [],
+        childrenBySelector: { html: [body], body: [] },
+        selectedSelector: "body",
+      });
+      reactRoot.render(createElement(DomTreePanel, { selectedDomPath: "body" }));
+    });
+    await act(async () => new Promise((resolve) => window.setTimeout(resolve, 20)));
+
+    expect(pageScroll).not.toHaveBeenCalled();
   });
 });

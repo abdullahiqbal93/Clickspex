@@ -5,7 +5,6 @@ import {
   type StyleResponsiveTarget,
   type StyleResponsiveTargetDefinition,
   type StyleTargetState,
-  type SupportedStyleProperty,
 } from "@ui-buddy/shared";
 
 const INDENT = "  ";
@@ -61,7 +60,7 @@ export const buildStyleTargetSelector = (
 
 export const createStyleChange = (
   selector: string,
-  property: SupportedStyleProperty,
+  property: string,
   beforeValue: string,
   afterValue: string,
   timestamp = new Date().toISOString(),

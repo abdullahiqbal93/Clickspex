@@ -81,4 +81,30 @@ describe("DOM extension messages", () => {
       }),
     ).toBe(false);
   });
+  it("accepts arbitrary valid CSS properties in style changes", () => {
+    const baseChange = {
+      type: "APPLY_STYLE_CHANGE",
+      payload: {
+        selector: "#save",
+        property: "grid-template-columns",
+        beforeValue: "none",
+        afterValue: "1fr 1fr",
+        timestamp: "2026-07-13T00:00:00.000Z",
+      },
+    };
+
+    expect(isExtensionMessage(baseChange)).toBe(true);
+    expect(
+      isExtensionMessage({
+        ...baseChange,
+        payload: { ...baseChange.payload, property: "--brand-color", afterValue: "#7c3aed" },
+      }),
+    ).toBe(true);
+    expect(
+      isExtensionMessage({
+        ...baseChange,
+        payload: { ...baseChange.payload, property: "color; display" },
+      }),
+    ).toBe(false);
+  });
 });

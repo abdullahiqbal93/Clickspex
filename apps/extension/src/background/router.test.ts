@@ -41,6 +41,20 @@ describe("background message router", () => {
     ).toBe(true);
   });
 
+  it("forwards matched style results to the side panel", () => {
+    expect(
+      shouldForwardToSidePanel({
+        type: "MATCHED_STYLES_RESULT",
+        payload: {
+          selector: "#save",
+          rules: [],
+          computed: {},
+          variables: {},
+          unreadableStylesheets: 0,
+        },
+      }),
+    ).toBe(true);
+  });
   it("forwards session sync and restored-edits messages to the side panel", () => {
     expect(
       shouldForwardToSidePanel({

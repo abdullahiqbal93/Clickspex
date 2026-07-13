@@ -38,7 +38,6 @@ import { readPageContext } from "../../chrome/session";
 import { usePanelStore } from "../store";
 
 import { AttributeEditor } from "./AttributeEditor";
-import { DomTreePanel } from "./DomTreePanel";
 
 import type {
   AlignEdge,
@@ -545,9 +544,6 @@ export const InspectorPanel = ({ selectedElement }: InspectorPanelProps) => {
           />
         </div>
       </div>
-
-      <DomTreePanel selectedDomPath={selectedElement.domPath} />
-
       <section className="ub-card p-4">
         <h3 className="text-sm font-semibold tracking-tight">Tools</h3>
         <div className="mt-2.5 grid grid-cols-2 gap-1.5">

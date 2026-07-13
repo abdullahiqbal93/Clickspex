@@ -107,4 +107,22 @@ describe("sidepanel store", () => {
       "#save": [],
     });
   });
+  it("creates and layers arbitrary CSS property changes", () => {
+    usePanelStore.getState().setSelectedElement(createSnapshot("#layout", {}));
+
+    const change = usePanelStore
+      .getState()
+      .prepareStyleChange("grid-template-columns", "1fr 2fr", "base", "desktop");
+
+    expect(change).toMatchObject({
+      property: "grid-template-columns",
+      responsiveTarget: "desktop",
+    });
+
+    usePanelStore.getState().applyLocalStyleChange(change!);
+
+    expect(
+      getCurrentStyleRecord(usePanelStore.getState(), "base", "desktop")["grid-template-columns"],
+    ).toBe("1fr 2fr");
+  });
 });

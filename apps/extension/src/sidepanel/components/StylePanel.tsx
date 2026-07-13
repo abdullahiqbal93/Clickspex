@@ -1,12 +1,8 @@
-import {
-  buildCssRulesFromChanges,
-  buildScopedCssRule,
-  buildStyleTargetSelector,
-  escapeCssIdentifier,
-} from "@ui-buddy/core";
+import { buildCssRulesFromChanges, buildScopedCssRule, escapeCssIdentifier } from "@ui-buddy/core";
 import {
   STYLE_RESPONSIVE_TARGET_DEFINITIONS,
   type StyleChange,
+  isSupportedStyleProperty,
   type StyleResponsiveTarget,
   type StyleResponsiveTargetDefinition,
   type StyleTargetState,
@@ -16,7 +12,6 @@ import {
   ChevronDown,
   CircleAlert,
   Clipboard,
-  Code2,
   Redo2,
   RotateCcw,
   Search,
@@ -29,8 +24,8 @@ import { useEffect, useRef, useState } from "react";
 import { sendMessageToActiveTab } from "../../chrome/messaging";
 import { getCurrentStyleRecord, usePanelStore } from "../store";
 
+import { CascadeExplorer } from "./CascadeExplorer";
 import { CommitInput } from "./CommitInput";
-import { RawCssRuleEditor } from "./RawCssRuleEditor";
 
 type StylePreset = {
   label: string;
@@ -1045,16 +1040,6 @@ const groupedFields = STYLE_FIELDS.reduce<Record<string, StyleField[]>>((groups,
 const styleFieldGroups = Object.entries(groupedFields);
 const defaultExpandedGroup = styleFieldGroups[0]?.[0];
 
-const CSS_WIDE_KEYWORDS = ["inherit", "initial", "unset", "revert", "revert-layer"];
-
-const getRawCssValueSuggestions = (property: string): string[] => {
-  const field = STYLE_FIELDS.find((candidate) => candidate.property === property);
-  const fieldValues =
-    field === undefined ? [] : getSuggestionValues(field, getFieldGuidance(field.property));
-
-  return [...new Set([...fieldValues, ...CSS_WIDE_KEYWORDS])];
-};
-
 const cssColorToHex = (value: string): string | null => {
   const match = value.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
 
@@ -1076,10 +1061,10 @@ const isCssValueSupported = (property: string, value: string): boolean =>
 
 export const StylePanel = () => {
   const changes = usePanelStore((state) => state.changes);
-  const rawCssEntries = usePanelStore((state) => state.rawCssEntries);
   const historyUndoDepth = usePanelStore((state) => state.historyUndoDepth);
   const historyRedoDepth = usePanelStore((state) => state.historyRedoDepth);
   const selectedElement = usePanelStore((state) => state.selectedElement);
+  const matchedStyles = usePanelStore((state) => state.matchedStyles);
   const [styleTargetState, setStyleTargetState] = useState<StyleTargetState>("base");
   const [styleResponsiveTarget, setStyleResponsiveTarget] = useState<StyleResponsiveTarget>("all");
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(
@@ -1097,18 +1082,6 @@ export const StylePanel = () => {
   const setSelectedElement = usePanelStore((state) => state.setSelectedElement);
   // Remember the element-unique selector so scope can be switched back.
   const uniqueSelectorRef = useRef<{ domPath: string; selector: string } | null>(null);
-  const selectedSelector = selectedElement?.selector ?? null;
-  const rawCssSelector =
-    selectedSelector === null ? "" : buildStyleTargetSelector(selectedSelector, styleTargetState);
-  const selectedRawCss =
-    rawCssSelector.length === 0
-      ? ""
-      : (rawCssEntries.find((entry) => entry.selector === rawCssSelector)?.css ?? "");
-  // Raw CSS editor.
-  const [rawCss, setRawCss] = useState(selectedRawCss);
-  const [rawCssApplied, setRawCssApplied] = useState(false);
-  const [rawCssExpanded, setRawCssExpanded] = useState(true);
-  const rawCssAppliedTimer = useRef<number | null>(null);
   const [quickProperty, setQuickProperty] = useState<SupportedStyleProperty>("color");
   const [quickDraft, setQuickDraft] = useState("");
   const [styleFilter, setStyleFilter] = useState("");
@@ -1122,54 +1095,6 @@ export const StylePanel = () => {
     setQuickDraft(currentStyles[quickProperty] ?? "");
   }, [changes, quickProperty, selectedElement, styleResponsiveTarget, styleTargetState]);
 
-  useEffect(() => {
-    setRawCss(selectedRawCss);
-  }, [rawCssSelector, selectedRawCss]);
-
-  useEffect(
-    () => () => {
-      if (rawCssAppliedTimer.current !== null) {
-        window.clearTimeout(rawCssAppliedTimer.current);
-      }
-    },
-    [],
-  );
-
-  const applyRawCss = async (css: string, coalesce = false) => {
-    if (selectedElement === null) {
-      return;
-    }
-
-    setError(null);
-
-    try {
-      await sendMessageToActiveTab({
-        type: "APPLY_RAW_CSS",
-        payload: { selector: rawCssSelector, css, coalesce },
-      });
-      setRawCssApplied(true);
-
-      if (rawCssAppliedTimer.current !== null) {
-        window.clearTimeout(rawCssAppliedTimer.current);
-      }
-      rawCssAppliedTimer.current = window.setTimeout(() => {
-        rawCssAppliedTimer.current = null;
-        setRawCssApplied(false);
-      }, 800);
-    } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : "Unable to apply raw CSS.");
-    }
-  };
-
-  const updateRawCss = (css: string) => {
-    setRawCss(css);
-    void applyRawCss(css, true);
-  };
-
-  const clearRawCss = () => {
-    setRawCss("");
-    void applyRawCss("");
-  };
   const classSelector =
     selectedElement !== null && selectedElement.classList.length > 0
       ? `${selectedElement.tagName}${selectedElement.classList
@@ -1203,7 +1128,7 @@ export const StylePanel = () => {
     }
   };
 
-  const commitChange = async (property: SupportedStyleProperty, afterValue: string) => {
+  const commitChange = async (property: string, afterValue: string) => {
     setError(null);
     const change = prepareStyleChange(
       property,
@@ -1255,7 +1180,6 @@ export const StylePanel = () => {
     try {
       await sendMessageToActiveTab({ type: "RESET_ELEMENT_CHANGES" });
       resetElementChanges();
-      setRawCss("");
     } catch (caughtError) {
       setError(
         caughtError instanceof Error ? caughtError.message : "Unable to reset visual changes.",
@@ -1325,7 +1249,7 @@ export const StylePanel = () => {
     );
   };
 
-  const activeChangeMap = new Map<SupportedStyleProperty, StyleChange>();
+  const activeChangeMap = new Map<string, StyleChange>();
   for (const change of changes) {
     if (
       change.selector === selectedElement.selector &&
@@ -1459,7 +1383,7 @@ export const StylePanel = () => {
             <button
               className="ub-btn px-2.5"
               onClick={() => void resetChanges()}
-              title="Remove every style and raw-CSS edit from this whole session"
+              title="Remove every style edit from this whole session"
               type="button"
             >
               <RotateCcw aria-hidden="true" size={13} />
@@ -1540,6 +1464,17 @@ export const StylePanel = () => {
           </div>
         )}
       </div>
+
+      <CascadeExplorer
+        changes={changes}
+        onCommit={commitChange}
+        onPickProperty={selectQuickProperty}
+        result={matchedStyles}
+        responsiveTarget={styleResponsiveTarget}
+        scopeLabel={`${styleTargetState} / ${activeResponsiveDefinition.shortLabel}`}
+        selectedSelector={selectedElement.selector}
+        targetState={styleTargetState}
+      />
 
       <section className="ub-card overflow-hidden">
         <div className="border-b border-line px-3.5 py-3">
@@ -1675,8 +1610,13 @@ export const StylePanel = () => {
               >
                 <button
                   className="truncate text-left font-mono text-[10px] font-semibold text-accent-hover"
-                  onClick={() => selectQuickProperty(change.property)}
-                  title={"Edit " + change.property}
+                  disabled={!isSupportedStyleProperty(change.property)}
+                  onClick={() => {
+                    if (isSupportedStyleProperty(change.property)) {
+                      selectQuickProperty(change.property);
+                    }
+                  }}
+                  title={`Edit ${change.property} in Cascade studio`}
                   type="button"
                 >
                   {change.property}
@@ -1727,41 +1667,6 @@ export const StylePanel = () => {
         </label>
       </div>
 
-      <section className="overflow-hidden border-y border-slate-300 bg-white">
-        <button
-          aria-expanded={rawCssExpanded}
-          className="flex h-10 w-full items-center justify-between gap-2 bg-slate-50 px-3 text-left hover:bg-slate-100"
-          onClick={() => setRawCssExpanded((expanded) => !expanded)}
-          type="button"
-        >
-          <span className="flex items-center gap-2 text-xs font-semibold text-slate-800">
-            <ChevronDown
-              aria-hidden="true"
-              className={
-                "text-slate-500 transition-transform " + (rawCssExpanded ? "" : "-rotate-90")
-              }
-              size={13}
-            />
-            <Code2 aria-hidden="true" className="text-slate-600" size={13} />
-            Raw CSS
-          </span>
-          <span className="font-mono text-[10px] text-slate-500">
-            {rawCss.trim().length === 0 ? "All screens" : "Live | All screens"}
-          </span>
-        </button>
-        {rawCssExpanded ? (
-          <div className="border-t border-slate-300 p-2">
-            <RawCssRuleEditor
-              applied={rawCssApplied}
-              css={rawCss}
-              getValueSuggestions={getRawCssValueSuggestions}
-              onChange={updateRawCss}
-              onClear={clearRawCss}
-              selector={rawCssSelector}
-            />
-          </div>
-        ) : null}
-      </section>
       {filteredStyleFieldGroups.length === 0 ? (
         <div className="ub-card px-4 py-6 text-center text-xs text-muted">
           No CSS properties match <code>{styleFilter.trim()}</code>.

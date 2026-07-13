@@ -215,12 +215,46 @@ export type ElementSnapshot = {
 
 export type StyleChange = {
   selector: string;
-  property: SupportedStyleProperty;
+  property: string;
   beforeValue: string;
   afterValue: string;
   timestamp: string;
   state?: StyleTargetState;
   responsiveTarget?: StyleResponsiveTarget;
+};
+
+export type MatchedStyleDeclaration = {
+  property: string;
+  value: string;
+  important: boolean;
+  active: boolean;
+  overridden: boolean;
+  inherited: boolean;
+};
+
+export type MatchedStyleSource = {
+  label: string;
+  url: string | null;
+};
+
+export type MatchedStyleRule = {
+  id: string;
+  selector: string;
+  specificity: [number, number, number];
+  origin: "inspector" | "inline" | "author";
+  source: MatchedStyleSource;
+  declarations: MatchedStyleDeclaration[];
+  active: boolean;
+  conditional: string | null;
+  inheritedFrom: { selector: string; tagName: string } | null;
+};
+
+export type MatchedStylesResult = {
+  selector: string;
+  rules: MatchedStyleRule[];
+  computed: Record<string, string>;
+  variables: Record<string, string>;
+  unreadableStylesheets: number;
 };
 
 export type AccessibilityNote = {
@@ -545,6 +579,8 @@ export type ExtensionMessage =
   | { type: "SET_ANIMATION_SPEED"; payload: { speed: number } }
   | { type: "PAGE_SCAN_RESULT"; payload: PageScanResult }
   | { type: "COPY_ELEMENT_CSS"; payload: { includeChildren: boolean } }
+  | { type: "GET_MATCHED_STYLES" }
+  | { type: "MATCHED_STYLES_RESULT"; payload: MatchedStylesResult }
   | {
       type: "ELEMENT_CSS_RESULT";
       payload: { css: string; html: string | null; source: "authored" | "computed" };
@@ -588,6 +624,7 @@ const MESSAGE_TYPES_WITHOUT_PAYLOAD = new Set<MessageType>([
   "EXPORT_CHANGE_INTENT",
   "DOM_CONTEXT_REQUEST",
   "DOM_TREE_SUBSCRIBE",
+  "GET_MATCHED_STYLES",
   "DOM_TREE_UNSUBSCRIBE",
   "RULER_ENABLE",
   "RULER_DISABLE",
@@ -622,6 +659,8 @@ const isStringArray = (value: unknown): value is string[] =>
 
 export const isSupportedStyleProperty = (value: unknown): value is SupportedStyleProperty =>
   isString(value) && SUPPORTED_STYLE_PROPERTIES.includes(value as SupportedStyleProperty);
+export const isCssPropertyName = (value: unknown): value is string =>
+  isString(value) && (/^--[a-z0-9_-]+$/i.test(value) || /^-?[a-z][a-z0-9-]*$/i.test(value));
 
 export const isStyleTargetState = (value: unknown): value is StyleTargetState =>
   isString(value) && STYLE_TARGET_STATES.includes(value as StyleTargetState);
@@ -688,7 +727,7 @@ export const isStyleChange = (value: unknown): value is StyleChange => {
 
   return (
     isString(value.selector) &&
-    isSupportedStyleProperty(value.property) &&
+    isCssPropertyName(value.property) &&
     isString(value.beforeValue) &&
     isString(value.afterValue) &&
     isString(value.timestamp) &&
@@ -761,6 +800,44 @@ const isDomChildrenRecord = (value: unknown): value is Record<string, DomTreeNod
 
 const isPinCardKind = (value: unknown): value is PinCardKind =>
   value === "styles" || value === "audit";
+
+const isMatchedStyleDeclaration = (value: unknown): value is MatchedStyleDeclaration =>
+  isRecord(value) &&
+  isString(value.property) &&
+  isString(value.value) &&
+  typeof value.important === "boolean" &&
+  typeof value.active === "boolean" &&
+  typeof value.overridden === "boolean" &&
+  typeof value.inherited === "boolean";
+
+const isMatchedStyleRule = (value: unknown): value is MatchedStyleRule =>
+  isRecord(value) &&
+  isString(value.id) &&
+  isString(value.selector) &&
+  Array.isArray(value.specificity) &&
+  value.specificity.length === 3 &&
+  value.specificity.every(isNumber) &&
+  (value.origin === "inspector" || value.origin === "inline" || value.origin === "author") &&
+  isRecord(value.source) &&
+  isString(value.source.label) &&
+  (value.source.url === null || isString(value.source.url)) &&
+  Array.isArray(value.declarations) &&
+  value.declarations.every(isMatchedStyleDeclaration) &&
+  typeof value.active === "boolean" &&
+  (value.conditional === null || isString(value.conditional)) &&
+  (value.inheritedFrom === null ||
+    (isRecord(value.inheritedFrom) &&
+      isString(value.inheritedFrom.selector) &&
+      isString(value.inheritedFrom.tagName)));
+
+const isMatchedStylesResult = (value: unknown): value is MatchedStylesResult =>
+  isRecord(value) &&
+  isString(value.selector) &&
+  Array.isArray(value.rules) &&
+  value.rules.every(isMatchedStyleRule) &&
+  isStringRecord(value.computed) &&
+  isStringRecord(value.variables) &&
+  isNumber(value.unreadableStylesheets);
 
 const isA11yIssue = (value: unknown): value is A11yIssue =>
   isRecord(value) &&
@@ -899,6 +976,10 @@ export const isExtensionMessage = (value: unknown): value is ExtensionMessage =>
 
   if (messageType === "COPY_ELEMENT_CSS") {
     return isRecord(value.payload) && typeof value.payload.includeChildren === "boolean";
+  }
+
+  if (messageType === "MATCHED_STYLES_RESULT") {
+    return isMatchedStylesResult(value.payload);
   }
 
   if (messageType === "ELEMENT_CSS_RESULT") {

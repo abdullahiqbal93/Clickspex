@@ -14,6 +14,7 @@ import {
   PlaySquare,
   Redo2,
   RefreshCcw,
+  Rows3,
   Ruler,
   SquareMousePointer,
   Type,
@@ -26,6 +27,7 @@ import { createReconnectingSidePanelPort, sendMessageToActiveTab } from "../chro
 import { AccessibilityPanel } from "./components/AccessibilityPanel";
 import { AssetsPanel } from "./components/AssetsPanel";
 import { BoxModelPanel } from "./components/BoxModelPanel";
+import { DomTreePanel } from "./components/DomTreePanel";
 import { ExportPanel } from "./components/ExportPanel";
 import { InspectorPanel } from "./components/InspectorPanel";
 import { MeasurePanel } from "./components/MeasurePanel";
@@ -52,7 +54,8 @@ declare global {
 type TabUpdatedListener = Parameters<typeof chrome.tabs.onUpdated.addListener>[0];
 
 const tabMeta = {
-  inspect: { label: "Inspect", icon: Crosshair },
+  elements: { label: "Elements", icon: Rows3 },
+  inspect: { label: "Details", icon: Crosshair },
   styles: { label: "Styles", icon: Paintbrush },
   box: { label: "Box", icon: Box },
   typography: { label: "Type", icon: Type },
@@ -72,7 +75,7 @@ type NavGroup = {
 };
 
 const navGroups: readonly NavGroup[] = [
-  { id: "inspect", label: "Inspect", icon: Crosshair, tabs: ["inspect"] },
+  { id: "inspect", label: "Inspect", icon: Crosshair, tabs: ["elements", "inspect"] },
   {
     id: "style",
     label: "Style",
@@ -114,6 +117,7 @@ export const App = () => {
   const setA11yIssues = usePanelStore((state) => state.setA11yIssues);
   const setAssetFetch = usePanelStore((state) => state.setAssetFetch);
   const setElementCssResult = usePanelStore((state) => state.setElementCssResult);
+  const setMatchedStyles = usePanelStore((state) => state.setMatchedStyles);
   const setDomChildren = usePanelStore((state) => state.setDomChildren);
   const setDomContext = usePanelStore((state) => state.setDomContext);
   const setMultiSelection = usePanelStore((state) => state.setMultiSelection);
@@ -130,13 +134,13 @@ export const App = () => {
         setSelectedElement(rawMessage.payload);
         setPickerActive(true);
         setHoveredSelector(null);
-        setDomContext(null);
 
         if (!hadSelection) {
-          setActiveTab("inspect");
+          setActiveTab("styles");
         }
 
         void sendMessageToActiveTab({ type: "DOM_CONTEXT_REQUEST" });
+        void sendMessageToActiveTab({ type: "GET_MATCHED_STYLES" });
       }
 
       if (rawMessage.type === "ELEMENT_UNSELECTED") {
@@ -174,6 +178,10 @@ export const App = () => {
 
       if (rawMessage.type === "ELEMENT_CSS_RESULT") {
         setElementCssResult(rawMessage.payload);
+      }
+
+      if (rawMessage.type === "MATCHED_STYLES_RESULT") {
+        setMatchedStyles(rawMessage.payload);
       }
 
       if (rawMessage.type === "DOM_CONTEXT_RESULT") {
@@ -222,6 +230,7 @@ export const App = () => {
     setElementCssResult,
     setDomChildren,
     setDomContext,
+    setMatchedStyles,
     setHoveredSelector,
     setMeasurementTarget,
     setMultiSelection,
@@ -628,7 +637,31 @@ export const App = () => {
           </div>
         ) : null}
 
-        {activeTab === "inspect" ? (
+        {activeTab === "elements" ? (
+          selectedElement === null ? (
+            <section className="ub-card flex min-h-72 flex-col items-center justify-center px-6 text-center">
+              <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent-soft text-accent">
+                <Rows3 aria-hidden="true" size={22} />
+              </span>
+              <h2 className="mt-3 text-sm font-semibold tracking-tight">Inspect the live DOM</h2>
+              <p className="mt-1 max-w-64 text-xs leading-5 text-muted">
+                Pick any element on the page to reveal its hierarchy, attributes, content, and
+                surrounding nodes.
+              </p>
+              <button
+                className="ub-btn-primary mt-4"
+                onClick={() => void togglePicker()}
+                type="button"
+              >
+                <SquareMousePointer aria-hidden="true" size={14} />
+                Pick an element
+              </button>
+              <span className="ub-kbd mt-3">Alt + Shift + P</span>
+            </section>
+          ) : (
+            <DomTreePanel selectedDomPath={selectedElement.domPath} />
+          )
+        ) : activeTab === "inspect" ? (
           <InspectorPanel selectedElement={selectedElement} />
         ) : activeTab === "styles" ? (
           <StylePanel />

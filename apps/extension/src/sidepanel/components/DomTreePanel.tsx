@@ -1,4 +1,16 @@
-import { ChevronRight, EyeOff, LoaderCircle, LocateFixed, RefreshCcw, Rows3 } from "lucide-react";
+import {
+  Check,
+  ChevronRight,
+  ChevronsUp,
+  Copy,
+  EyeOff,
+  LoaderCircle,
+  LocateFixed,
+  RefreshCcw,
+  Rows3,
+  Search,
+  X,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { sendMessageToActiveTab } from "../../chrome/messaging";
@@ -89,8 +101,12 @@ const displayedAttributes = (node: DomTreeNode): Array<[string, string]> => {
 export const DomTreePanel = ({ selectedDomPath }: DomTreePanelProps) => {
   const context = usePanelStore((state) => state.domContext);
   const childrenBySelector = usePanelStore((state) => state.domChildrenBySelector);
+  const searchResults = usePanelStore((state) => state.searchResults);
   const setError = usePanelStore((state) => state.setError);
+  const setSearchResults = usePanelStore((state) => state.setSearchResults);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [query, setQuery] = useState("");
+  const [copied, setCopied] = useState(false);
   const [requestVersion, setRequestVersion] = useState(0);
   const [loadTimedOut, setLoadTimedOut] = useState(false);
   const [childLoadStates, setChildLoadStates] = useState<Record<string, ChildLoadState>>({});
@@ -98,9 +114,13 @@ export const DomTreePanel = ({ selectedDomPath }: DomTreePanelProps) => {
   const childRequestTimers = useRef(new Map<string, number>());
   const nodeButtons = useRef(new Map<string, HTMLButtonElement>());
   const selectedRow = useRef<HTMLDivElement | null>(null);
+  const treeViewport = useRef<HTMLDivElement | null>(null);
   const selectedContextPath = useRef<string | null>(null);
 
-  const activeContext = context?.ancestry.at(-1)?.domPath === selectedDomPath ? context : null;
+  // Keep the previous tree mounted while the newly selected element context is
+  // in flight. Replacing it with a loader makes the whole side panel jump.
+  const activeContext = context;
+  const contextIsCurrent = context?.ancestry.at(-1)?.domPath === selectedDomPath;
   const root = activeContext?.ancestry[0] ?? null;
   const selectedNode = activeContext?.ancestry.at(-1);
   const visibleNodes = useMemo(
@@ -230,7 +250,28 @@ export const DomTreePanel = ({ selectedDomPath }: DomTreePanelProps) => {
   }, [activeContext, resetChildRequests]);
 
   useEffect(() => {
-    if (activeContext !== null) {
+    const normalizedQuery = query.trim();
+
+    if (normalizedQuery.length === 0) {
+      setSearchResults([]);
+      return;
+    }
+
+    setSearchResults([]);
+    const timer = window.setTimeout(() => {
+      void sendMessageToActiveTab({
+        type: "SEARCH_ELEMENTS",
+        payload: { query: normalizedQuery },
+      }).catch((caughtError) => {
+        setError(caughtError instanceof Error ? caughtError.message : "Unable to search the DOM.");
+      });
+    }, 180);
+
+    return () => window.clearTimeout(timer);
+  }, [query, setError, setSearchResults]);
+
+  useEffect(() => {
+    if (contextIsCurrent) {
       setLoadTimedOut(false);
       return;
     }
@@ -238,19 +279,46 @@ export const DomTreePanel = ({ selectedDomPath }: DomTreePanelProps) => {
     setLoadTimedOut(false);
     const timer = window.setTimeout(() => setLoadTimedOut(true), 2500);
     return () => window.clearTimeout(timer);
-  }, [activeContext, requestVersion, selectedDomPath]);
+  }, [contextIsCurrent, requestVersion, selectedDomPath]);
 
-  useEffect(() => {
-    if (activeContext === null || !selectedIsVisible) {
+  const scrollSelectedInsideTree = useCallback((center = false) => {
+    const viewport = treeViewport.current;
+    const row = selectedRow.current;
+
+    if (viewport === null || row === null) {
       return;
     }
 
-    const frame = window.requestAnimationFrame(() => {
-      selectedRow.current?.scrollIntoView({ block: "center", inline: "nearest" });
-    });
+    const viewportRect = viewport.getBoundingClientRect();
+    const rowRect = row.getBoundingClientRect();
+    const rowAboveViewport = rowRect.top < viewportRect.top;
+    const rowBelowViewport = rowRect.bottom > viewportRect.bottom;
 
+    if (!center && !rowAboveViewport && !rowBelowViewport) {
+      return;
+    }
+
+    const targetOffset = center
+      ? rowRect.top - viewportRect.top - (viewport.clientHeight - rowRect.height) / 2
+      : rowAboveViewport
+        ? rowRect.top - viewportRect.top
+        : rowRect.bottom - viewportRect.bottom;
+    viewport.scrollTop += targetOffset;
+  }, []);
+
+  useEffect(() => {
+    if (!contextIsCurrent || !selectedIsVisible) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => scrollSelectedInsideTree());
     return () => window.cancelAnimationFrame(frame);
-  }, [activeContext, selectedIsVisible]);
+  }, [
+    activeContext?.selectedSelector,
+    contextIsCurrent,
+    scrollSelectedInsideTree,
+    selectedIsVisible,
+  ]);
 
   useEffect(() => {
     const requestTimers = childRequestTimers.current;
@@ -421,7 +489,8 @@ export const DomTreePanel = ({ selectedDomPath }: DomTreePanelProps) => {
   };
 
   const revealSelected = async () => {
-    selectedRow.current?.scrollIntoView({ block: "center", inline: "nearest" });
+    setExpanded(new Set(activeContext?.ancestry.map((node) => node.selector) ?? []));
+    window.requestAnimationFrame(() => scrollSelectedInsideTree(true));
 
     try {
       await sendMessageToActiveTab({ type: "SCROLL_SELECTED_INTO_VIEW" });
@@ -431,6 +500,20 @@ export const DomTreePanel = ({ selectedDomPath }: DomTreePanelProps) => {
           ? caughtError.message
           : "Unable to reveal the selected element.",
       );
+    }
+  };
+
+  const copySelectedSelector = async () => {
+    if (activeContext?.selectedSelector === null || activeContext?.selectedSelector === undefined) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(activeContext.selectedSelector);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1400);
+    } catch {
+      setError("Unable to copy the selector.");
     }
   };
 
@@ -588,59 +671,167 @@ export const DomTreePanel = ({ selectedDomPath }: DomTreePanelProps) => {
   };
 
   return (
-    <section className="overflow-hidden rounded-md border border-slate-300 bg-white shadow-sm">
-      <div className="flex h-9 items-center justify-between gap-2 border-b border-slate-300 bg-slate-50 px-2">
-        <div className="flex min-w-0 items-center gap-1.5">
-          <Rows3 aria-hidden="true" className="text-slate-600" size={13} />
-          <h2 className="text-xs font-semibold text-slate-800">Elements</h2>
-          {selectedNode === undefined ? null : (
-            <span
-              className="max-w-48 truncate border-l border-slate-300 pl-2 font-mono text-[10px] text-slate-500"
-              title={activeContext?.selectedSelector ?? ""}
-            >
-              {nodeLabel(selectedNode)}
+    <section className="ub-card overflow-hidden">
+      <div className="border-b border-line bg-gradient-to-r from-panel via-panel to-accent-softer/60 p-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent">
+              <Rows3 aria-hidden="true" size={15} />
             </span>
-          )}
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-semibold tracking-tight text-ink">Elements</h2>
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-700 ring-1 ring-inset ring-emerald-200">
+                  <span
+                    className={`h-1.5 w-1.5 rounded-full ${
+                      contextIsCurrent ? "bg-emerald-500" : "animate-pulse bg-amber-500"
+                    }`}
+                  />
+                  {contextIsCurrent ? "Live" : loadTimedOut ? "Stale" : "Syncing"}
+                </span>
+              </div>
+              <p
+                className="truncate font-mono text-[10px] text-muted"
+                title={activeContext?.selectedSelector ?? ""}
+              >
+                {selectedNode === undefined ? "Page document tree" : nodeLabel(selectedNode)}
+              </p>
+            </div>
+          </div>
+          <div className="flex shrink-0 items-center gap-0.5">
+            <button
+              className="ub-icon-btn h-8 w-8 rounded-xl"
+              disabled={selectedNode === undefined}
+              onClick={() => void copySelectedSelector()}
+              title="Copy unique selector"
+              type="button"
+            >
+              {copied ? (
+                <Check aria-hidden="true" className="text-emerald-600" size={14} />
+              ) : (
+                <Copy aria-hidden="true" size={14} />
+              )}
+            </button>
+            <button
+              className="ub-icon-btn h-8 w-8 rounded-xl"
+              onClick={() => setExpanded(new Set())}
+              title="Collapse all branches"
+              type="button"
+            >
+              <ChevronsUp aria-hidden="true" size={14} />
+            </button>
+            <button
+              className="ub-icon-btn h-8 w-8 rounded-xl"
+              disabled={selectedNode === undefined}
+              onClick={() => void revealSelected()}
+              title="Reveal selected element"
+              type="button"
+            >
+              <LocateFixed aria-hidden="true" size={14} />
+            </button>
+            <button
+              className="ub-icon-btn h-8 w-8 rounded-xl"
+              onClick={() => void refreshTree()}
+              title="Refresh DOM tree"
+              type="button"
+            >
+              <RefreshCcw aria-hidden="true" size={14} />
+            </button>
+          </div>
         </div>
-        <div className="flex shrink-0 items-center">
-          <button
-            className="inline-flex h-7 w-7 items-center justify-center text-slate-600 hover:bg-slate-200 hover:text-blue-700 disabled:opacity-35"
-            disabled={selectedNode === undefined}
-            onClick={() => void revealSelected()}
-            title="Reveal selected element"
-            type="button"
-          >
-            <LocateFixed aria-hidden="true" size={13} />
-          </button>
-          <button
-            className="inline-flex h-7 w-7 items-center justify-center text-slate-600 hover:bg-slate-200 hover:text-blue-700"
-            onClick={() => void refreshTree()}
-            title="Refresh DOM tree"
-            type="button"
-          >
-            <RefreshCcw aria-hidden="true" size={13} />
-          </button>
+
+        <div className="relative mt-3">
+          <Search
+            aria-hidden="true"
+            className="pointer-events-none absolute left-3 top-2.5 text-slate-400"
+            size={13}
+          />
+          <input
+            aria-label="Search DOM elements"
+            className="ub-input h-8 rounded-xl py-1 pl-8 pr-8 font-mono text-[11px]"
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                setQuery("");
+              } else if (event.key === "Enter" && searchResults[0] !== undefined) {
+                void selectNode(searchResults[0].selector);
+                setQuery("");
+              }
+            }}
+            placeholder="Search selector, text, role, aria-label..."
+            spellCheck={false}
+            value={query}
+          />
+          {query.length > 0 ? (
+            <button
+              aria-label="Clear DOM search"
+              className="absolute right-2 top-1.5 flex h-5 w-5 items-center justify-center rounded-md text-slate-400 hover:bg-slate-200 hover:text-slate-700"
+              onClick={() => setQuery("")}
+              type="button"
+            >
+              <X aria-hidden="true" size={12} />
+            </button>
+          ) : null}
+          {query.trim().length > 0 ? (
+            <div className="absolute inset-x-0 top-9 z-20 max-h-64 overflow-auto rounded-xl border border-line bg-panel p-1.5 shadow-pop">
+              {searchResults.length === 0 ? (
+                <p className="px-3 py-4 text-center text-[11px] text-muted">No matching elements</p>
+              ) : (
+                searchResults.map((result) => (
+                  <button
+                    className="flex w-full items-start gap-2 rounded-lg px-2.5 py-2 text-left hover:bg-accent-softer"
+                    key={result.selector}
+                    onClick={() => {
+                      void selectNode(result.selector);
+                      setQuery("");
+                    }}
+                    onMouseEnter={() => highlightNode(result.selector)}
+                    onMouseLeave={() => highlightNode(null)}
+                    type="button"
+                  >
+                    <Search aria-hidden="true" className="mt-0.5 shrink-0 text-accent" size={12} />
+                    <span className="min-w-0">
+                      <span className="block truncate font-mono text-[11px] font-semibold text-ink">
+                        {nodeLabel({
+                          ...result,
+                          domPath: result.selector,
+                          attributes: {},
+                          childCount: 0,
+                          visible: true,
+                        })}
+                      </span>
+                      <span className="block truncate text-[10px] text-muted">
+                        {result.textPreview || result.selector}
+                      </span>
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+          ) : null}
         </div>
       </div>
+
       <div
         aria-label="Page DOM"
-        className="max-h-[480px] min-h-56 overflow-auto bg-white py-1"
+        className="max-h-[560px] min-h-72 overflow-auto bg-panel py-1.5"
         onMouseLeave={() => highlightNode(null)}
+        ref={treeViewport}
         role="tree"
       >
         {root === null ? (
-          <div className="flex min-h-52 flex-col items-center justify-center gap-2 px-4 text-center text-[11px] text-slate-500">
+          <div className="flex min-h-72 flex-col items-center justify-center gap-2 px-4 text-center text-[11px] text-muted">
             {loadTimedOut ? null : (
-              <LoaderCircle aria-hidden="true" className="animate-spin" size={15} />
+              <LoaderCircle aria-hidden="true" className="animate-spin text-accent" size={16} />
             )}
             <span>
               {loadTimedOut
                 ? "The selected element tree is unavailable."
-                : "Reading the selected element tree..."}
+                : "Reading the live document tree..."}
             </span>
             {loadTimedOut ? (
               <button
-                className="inline-flex h-7 items-center gap-1 border border-slate-300 bg-white px-2 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
+                className="ub-btn mt-1 py-1.5"
                 onClick={() => void refreshTree()}
                 type="button"
               >
@@ -653,36 +844,50 @@ export const DomTreePanel = ({ selectedDomPath }: DomTreePanelProps) => {
           renderNode(root, 0)
         )}
       </div>
-      {activeContext === null ? null : (
-        <div
-          aria-label="Selected element ancestry"
-          className="edge-fade-x flex h-8 items-center overflow-x-auto border-t border-slate-300 bg-slate-50 px-2 font-mono text-[10px]"
-        >
-          {activeContext.ancestry.map((node, index) => {
-            const isCurrent = index === activeContext.ancestry.length - 1;
 
-            return (
-              <span className="flex shrink-0 items-center" key={node.domPath}>
-                {index === 0 ? null : (
-                  <ChevronRight aria-hidden="true" className="mx-0.5 text-slate-400" size={10} />
-                )}
-                <button
-                  aria-current={isCurrent ? "true" : undefined}
-                  className={
-                    "max-w-36 truncate px-1 py-1 " +
-                    (isCurrent
-                      ? "font-semibold text-blue-700"
-                      : "text-slate-600 hover:bg-slate-200 hover:text-slate-950")
-                  }
-                  onClick={() => void selectNode(node.selector)}
-                  title={node.selector}
-                  type="button"
-                >
-                  {nodeLabel(node)}
-                </button>
+      {activeContext === null ? null : (
+        <div className="border-t border-line bg-panel-soft">
+          <div
+            aria-label="Selected element ancestry"
+            className="edge-fade-x flex h-9 items-center overflow-x-auto px-2 font-mono text-[10px]"
+          >
+            {activeContext.ancestry.map((node, index) => {
+              const isCurrent = index === activeContext.ancestry.length - 1;
+              return (
+                <span className="flex shrink-0 items-center" key={node.domPath}>
+                  {index === 0 ? null : (
+                    <ChevronRight aria-hidden="true" className="mx-0.5 text-slate-400" size={10} />
+                  )}
+                  <button
+                    aria-current={isCurrent ? "true" : undefined}
+                    className={
+                      "max-w-40 truncate rounded-md px-1.5 py-1 " +
+                      (isCurrent
+                        ? "bg-accent-soft font-semibold text-accent-hover"
+                        : "text-muted hover:bg-panel hover:text-ink")
+                    }
+                    onClick={() => void selectNode(node.selector)}
+                    title={node.selector}
+                    type="button"
+                  >
+                    {nodeLabel(node)}
+                  </button>
+                </span>
+              );
+            })}
+          </div>
+          {selectedNode === undefined ? null : (
+            <div className="flex items-center justify-between border-t border-line/70 px-3 py-2 text-[10px] text-muted">
+              <span>
+                {selectedNode.childCount} direct{" "}
+                {selectedNode.childCount === 1 ? "child" : "children"} ·{" "}
+                {displayedAttributes(selectedNode).length} attributes
               </span>
-            );
-          })}
+              <span className={selectedNode.visible ? "text-emerald-700" : "text-slate-500"}>
+                {selectedNode.visible ? "Visible" : "Hidden"}
+              </span>
+            </div>
+          )}
         </div>
       )}
     </section>

@@ -8,13 +8,13 @@ import type {
   DomTreeNode,
   ElementSearchResult,
   ElementSnapshot,
+  MatchedStylesResult,
   PageScanResult,
   PageTechInfo,
   StructuralEdit,
   StyleChange,
   StyleResponsiveTarget,
   StyleTargetState,
-  SupportedStyleProperty,
 } from "@ui-buddy/shared";
 
 export type RawCssEntry = { selector: string; css: string };
@@ -45,6 +45,7 @@ export type MultiSelectionState = {
 };
 
 export type PanelTab =
+  | "elements"
   | "inspect"
   | "styles"
   | "box"
@@ -66,6 +67,7 @@ export type PanelState = {
   domChildrenBySelector: Record<string, DomTreeNode[]>;
   domContext: DomContextPayload | null;
   elementCssResult: ElementCssResult | null;
+  matchedStyles: MatchedStylesResult | null;
   error: string | null;
   gridActive: boolean;
   hoveredSelector: string | null;
@@ -94,10 +96,11 @@ export type PanelState = {
   setDomChildren: (selector: string, children: DomTreeNode[]) => void;
   setDomContext: (context: DomContextPayload | null) => void;
   setElementCssResult: (result: ElementCssResult | null) => void;
+  setMatchedStyles: (result: MatchedStylesResult | null) => void;
   setMultiSelection: (state: MultiSelectionState) => void;
   setTech: (tech: PageTechInfo[] | null) => void;
   prepareStyleChange: (
-    property: SupportedStyleProperty,
+    property: string,
     afterValue: string,
     state?: StyleTargetState,
     responsiveTarget?: StyleResponsiveTarget,
@@ -181,12 +184,13 @@ export const usePanelStore = create<PanelState>((set, get) => ({
   a11yIssues: null,
   a11yScanLoading: false,
   accessibilityNotes: [],
-  activeTab: "inspect",
+  activeTab: "elements",
   assetFetch: null,
   changes: [],
   domChildrenBySelector: {},
   domContext: null,
   elementCssResult: null,
+  matchedStyles: null,
   error: null,
   gridActive: false,
   hoveredSelector: null,
@@ -213,11 +217,25 @@ export const usePanelStore = create<PanelState>((set, get) => ({
       domChildrenBySelector: { ...state.domChildrenBySelector, [selector]: children },
     })),
   setDomContext: (domContext) =>
-    set({
-      domContext,
-      domChildrenBySelector: domContext?.childrenBySelector ?? {},
+    set((state) => {
+      // Busy applications can mutate their DOM many times per second. Avoid
+      // repainting the entire tree when the bounded inspector snapshot did not
+      // actually change.
+      if (
+        state.domContext !== null &&
+        domContext !== null &&
+        JSON.stringify(state.domContext) === JSON.stringify(domContext)
+      ) {
+        return state;
+      }
+
+      return {
+        domContext,
+        domChildrenBySelector: domContext?.childrenBySelector ?? {},
+      };
     }),
   setElementCssResult: (elementCssResult) => set({ elementCssResult }),
+  setMatchedStyles: (matchedStyles) => set({ matchedStyles }),
   setMultiSelection: (multiSelection) => set({ multiSelection }),
   setTech: (tech) => set({ tech }),
   applyLocalStyleChange: (change) =>
@@ -284,6 +302,7 @@ export const usePanelStore = create<PanelState>((set, get) => ({
       domChildrenBySelector: {},
       domContext: null,
       elementCssResult: null,
+      matchedStyles: null,
       error: null,
       gridActive: false,
       historyRedoDepth: 0,
@@ -327,6 +346,10 @@ export const usePanelStore = create<PanelState>((set, get) => ({
       return {
         accessibilityNotes: selectedElement === null ? [] : getAccessibilityNotes(selectedElement),
         elementCssResult: null,
+        matchedStyles:
+          selectedElement !== null && state.selectedElement?.domPath === selectedElement.domPath
+            ? state.matchedStyles
+            : null,
         measurementTarget: null,
         selectedElement,
         snapshotBySelector,
