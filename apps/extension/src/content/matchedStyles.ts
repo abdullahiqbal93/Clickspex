@@ -2,6 +2,7 @@ import { generateUniqueSelector } from "@ui-buddy/core";
 
 import type {
   MatchedStyleDeclaration,
+  MatchedStyleDeclarationMutation,
   MatchedStyleRule,
   MatchedStylesResult,
 } from "@ui-buddy/shared";
@@ -465,6 +466,111 @@ const collectComputed = (
   }
 
   return { computed, variables };
+};
+
+const findMutableStyleRule = (
+  rules: CSSRuleList,
+  sheetIndex: number,
+  targetSheetIndex: number,
+  targetOrder: number,
+  order: { value: number },
+): CSSStyleRule | null => {
+  for (const rule of Array.from(rules)) {
+    const styleRule = rule as CSSStyleRule;
+
+    if (typeof styleRule.selectorText === "string" && styleRule.style !== undefined) {
+      if (sheetIndex === targetSheetIndex && order.value === targetOrder) {
+        return styleRule;
+      }
+
+      order.value += 1;
+      continue;
+    }
+
+    const groupingRule = rule as CSSRule & { cssRules?: CSSRuleList };
+
+    if (groupingRule.cssRules === undefined) {
+      order.value += 1;
+      continue;
+    }
+
+    const nested = findMutableStyleRule(
+      groupingRule.cssRules,
+      sheetIndex,
+      targetSheetIndex,
+      targetOrder,
+      order,
+    );
+
+    if (nested !== null) {
+      return nested;
+    }
+  }
+
+  return null;
+};
+
+const mutableDeclarationForRule = (
+  element: Element,
+  mutation: MatchedStyleDeclarationMutation,
+): CSSStyleDeclaration | null => {
+  if (mutation.ruleId.startsWith("inline-")) {
+    const target =
+      mutation.inheritedSelector === null
+        ? element
+        : element.ownerDocument.querySelector(mutation.inheritedSelector);
+
+    return target instanceof HTMLElement ? target.style : null;
+  }
+
+  const match = /^rule-(\d+)-(\d+)-/.exec(mutation.ruleId);
+
+  if (match === null) {
+    return null;
+  }
+
+  const sheetIndex = Number.parseInt(match[1] ?? "", 10);
+  const targetOrder = Number.parseInt(match[2] ?? "", 10);
+  const order = { value: 0 };
+
+  for (const [index, sheet] of Array.from(element.ownerDocument.styleSheets).entries()) {
+    try {
+      const styleRule = findMutableStyleRule(sheet.cssRules, index, sheetIndex, targetOrder, order);
+
+      if (styleRule !== null) {
+        return styleRule.style;
+      }
+    } catch {
+      // Cross-origin stylesheets are intentionally read-only.
+    }
+  }
+
+  return null;
+};
+
+export const mutateMatchedStyleDeclaration = (
+  element: Element,
+  mutation: MatchedStyleDeclarationMutation,
+): boolean => {
+  const style = mutableDeclarationForRule(element, mutation);
+
+  if (style === null || style.getPropertyValue(mutation.property).length === 0) {
+    return false;
+  }
+
+  if (mutation.nextProperty === mutation.property) {
+    return true;
+  }
+
+  const value = style.getPropertyValue(mutation.property);
+  const priority = style.getPropertyPriority(mutation.property);
+  style.removeProperty(mutation.property);
+
+  if (mutation.nextProperty !== null) {
+    style.setProperty(mutation.nextProperty, value, priority);
+  }
+
+  return true;
 };
 
 export const collectMatchedStyles = (element: Element): MatchedStylesResult => {

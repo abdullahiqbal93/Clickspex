@@ -107,4 +107,40 @@ describe("DOM extension messages", () => {
       }),
     ).toBe(false);
   });
+
+  it("validates matched declaration mutation messages", () => {
+    expect(
+      isExtensionMessage({
+        type: "MUTATE_MATCHED_STYLE_DECLARATION",
+        payload: {
+          ruleId: "rule-0-2-selected",
+          inheritedSelector: null,
+          property: "padding-left",
+          nextProperty: "padding-inline-start",
+        },
+      }),
+    ).toBe(true);
+    expect(
+      isExtensionMessage({
+        type: "MUTATE_MATCHED_STYLE_DECLARATION",
+        payload: {
+          ruleId: "inline-selected",
+          inheritedSelector: null,
+          property: "color",
+          nextProperty: null,
+        },
+      }),
+    ).toBe(true);
+    expect(
+      isExtensionMessage({
+        type: "MUTATE_MATCHED_STYLE_DECLARATION",
+        payload: {
+          ruleId: "rule-0-2-selected",
+          inheritedSelector: null,
+          property: "color; display",
+          nextProperty: null,
+        },
+      }),
+    ).toBe(false);
+  });
 });

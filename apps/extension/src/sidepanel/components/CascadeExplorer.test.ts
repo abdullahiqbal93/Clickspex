@@ -2,6 +2,8 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { sendMessageToActiveTab } from "../../chrome/messaging";
+
 import {
   CascadeExplorer,
   buildLiveOverrideRule,
@@ -11,6 +13,12 @@ import {
 } from "./CascadeExplorer";
 
 import type { MatchedStyleRule, MatchedStylesResult, StyleChange } from "@ui-buddy/shared";
+
+vi.mock("../../chrome/messaging", () => ({
+  sendMessageToActiveTab: vi.fn().mockResolvedValue(undefined),
+}));
+
+const mockedSendMessageToActiveTab = vi.mocked(sendMessageToActiveTab);
 
 const rule = (conditional: string | null): MatchedStyleRule => ({
   id: conditional ?? "base",
@@ -133,6 +141,7 @@ describe("CascadeExplorer interactions", () => {
     container = document.createElement("div");
     document.body.append(container);
     reactRoot = createRoot(container);
+    mockedSendMessageToActiveTab.mockClear();
     onCommit = vi.fn().mockResolvedValue(undefined);
 
     act(() => {
@@ -190,13 +199,13 @@ describe("CascadeExplorer interactions", () => {
   });
 
   it("can focus the cascade on winning declarations", () => {
-    expect(container.textContent).toContain("opacity");
+    expect(container.querySelector('input[aria-label="Rename opacity from .card"]')).not.toBeNull();
     const overriddenButton = findButton(container, "Overridden shown");
     expect(overriddenButton).toBeDefined();
 
     act(() => overriddenButton?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 
-    expect(container.textContent).not.toContain("opacity");
+    expect(container.querySelector('input[aria-label="Rename opacity from .card"]')).toBeNull();
     expect(container.textContent).toContain("Winners only");
   });
 
@@ -209,5 +218,53 @@ describe("CascadeExplorer interactions", () => {
     act(() => collapseButton?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 
     expect(container.textContent).toContain("2 declarations / 1 winning");
+  });
+
+  it("renames an authored declaration property", async () => {
+    const propertyInput = container.querySelector<HTMLInputElement>(
+      'input[aria-label="Rename color from .card"]',
+    );
+    expect(propertyInput).not.toBeNull();
+
+    act(() => propertyInput?.focus());
+    if (propertyInput !== null) {
+      setInputValue(propertyInput, "background-color");
+    }
+    await act(async () => {
+      propertyInput?.blur();
+      await Promise.resolve();
+    });
+
+    expect(mockedSendMessageToActiveTab).toHaveBeenCalledWith({
+      type: "MUTATE_MATCHED_STYLE_DECLARATION",
+      payload: {
+        ruleId: "base",
+        inheritedSelector: null,
+        property: "color",
+        nextProperty: "background-color",
+      },
+    });
+  });
+
+  it("removes an authored declaration from its source rule", async () => {
+    const removeButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Remove color from .card"]',
+    );
+    expect(removeButton).not.toBeNull();
+
+    await act(async () => {
+      removeButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(mockedSendMessageToActiveTab).toHaveBeenCalledWith({
+      type: "MUTATE_MATCHED_STYLE_DECLARATION",
+      payload: {
+        ruleId: "base",
+        inheritedSelector: null,
+        property: "color",
+        nextProperty: null,
+      },
+    });
   });
 });

@@ -249,6 +249,13 @@ export type MatchedStyleRule = {
   inheritedFrom: { selector: string; tagName: string } | null;
 };
 
+export type MatchedStyleDeclarationMutation = {
+  ruleId: string;
+  inheritedSelector: string | null;
+  property: string;
+  nextProperty: string | null;
+};
+
 export type MatchedStylesResult = {
   selector: string;
   rules: MatchedStyleRule[];
@@ -580,6 +587,10 @@ export type ExtensionMessage =
   | { type: "PAGE_SCAN_RESULT"; payload: PageScanResult }
   | { type: "COPY_ELEMENT_CSS"; payload: { includeChildren: boolean } }
   | { type: "GET_MATCHED_STYLES" }
+  | {
+      type: "MUTATE_MATCHED_STYLE_DECLARATION";
+      payload: MatchedStyleDeclarationMutation;
+    }
   | { type: "MATCHED_STYLES_RESULT"; payload: MatchedStylesResult }
   | {
       type: "ELEMENT_CSS_RESULT";
@@ -967,6 +978,16 @@ export const isExtensionMessage = (value: unknown): value is ExtensionMessage =>
   if (messageType === "NUDGE_SELECTED_ELEMENT") {
     return (
       isRecord(value.payload) && isNumber(value.payload.deltaX) && isNumber(value.payload.deltaY)
+    );
+  }
+
+  if (messageType === "MUTATE_MATCHED_STYLE_DECLARATION") {
+    return (
+      isRecord(value.payload) &&
+      isString(value.payload.ruleId) &&
+      (value.payload.inheritedSelector === null || isString(value.payload.inheritedSelector)) &&
+      isCssPropertyName(value.payload.property) &&
+      (value.payload.nextProperty === null || isCssPropertyName(value.payload.nextProperty))
     );
   }
 

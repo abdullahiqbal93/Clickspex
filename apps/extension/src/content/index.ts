@@ -4,7 +4,7 @@ import { clearEdits, currentEditsUrl, loadEdits, persistEdits } from "../chrome/
 import { runA11yAudit } from "./a11yAudit";
 import { extractElementCss } from "./cssExtractor";
 import { GridController } from "./grid";
-import { collectMatchedStyles } from "./matchedStyles";
+import { collectMatchedStyles, mutateMatchedStyleDeclaration } from "./matchedStyles";
 import { OverlayController } from "./overlay";
 import { scanPage } from "./pageScanner";
 import { ElementPickerController } from "./picker";
@@ -357,6 +357,17 @@ if (window.__uiBuddyListenerAttached !== true) {
       if (element !== null) {
         const result = extractElementCss(element, message.payload.includeChildren);
         void sendRuntimeMessage({ type: "ELEMENT_CSS_RESULT", payload: result });
+      }
+      return;
+    }
+
+    if (message.type === "MUTATE_MATCHED_STYLE_DECLARATION") {
+      const element = picker.getSelectedElementNode();
+
+      if (element !== null) {
+        mutateMatchedStyleDeclaration(element, message.payload);
+        const result = collectMatchedStyles(element);
+        void sendRuntimeMessage({ type: "MATCHED_STYLES_RESULT", payload: result });
       }
       return;
     }

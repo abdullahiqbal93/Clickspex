@@ -23,6 +23,7 @@ import {
   Plus,
   RefreshCw,
   Search,
+  Trash2,
   Sparkles,
   Variable,
   X,
@@ -216,12 +217,52 @@ const RuleDeclaration = ({
   const visualProperty = isSupportedStyleProperty(declaration.property)
     ? declaration.property
     : null;
+  const [propertyDraft, setPropertyDraft] = useState(declaration.property);
+  const [propertyEditing, setPropertyEditing] = useState(false);
+  const [mutating, setMutating] = useState(false);
   const muted = declaration.overridden || !declaration.active;
   const preview = colorPreview(declaration.property, declaration.value);
+  const propertyDraftValid = isCssPropertyName(propertyDraft.trim());
+
+  useEffect(() => {
+    if (!propertyEditing) {
+      setPropertyDraft(declaration.property);
+    }
+  }, [declaration.property, propertyEditing]);
+
+  const mutateProperty = async (nextProperty: string | null) => {
+    if (mutating || nextProperty === declaration.property) {
+      return;
+    }
+
+    setMutating(true);
+
+    try {
+      if (rule.origin === "inspector") {
+        await onCommit(declaration.property, "");
+
+        if (nextProperty !== null) {
+          await onCommit(nextProperty, declaration.value);
+        }
+      } else {
+        await sendMessageToActiveTab({
+          type: "MUTATE_MATCHED_STYLE_DECLARATION",
+          payload: {
+            ruleId: rule.id,
+            inheritedSelector: rule.inheritedFrom?.selector ?? null,
+            property: declaration.property,
+            nextProperty,
+          },
+        });
+      }
+    } finally {
+      setMutating(false);
+    }
+  };
 
   return (
     <div
-      className={`group grid grid-cols-[16px_minmax(104px,0.78fr)_minmax(0,1fr)] items-center gap-2 px-3 py-1.5 transition-colors hover:bg-accent-softer/50 ${
+      className={`group grid grid-cols-[16px_minmax(104px,0.78fr)_minmax(0,1fr)_24px] items-center gap-2 px-3 py-1.5 transition-colors hover:bg-accent-softer/50 ${
         muted ? "opacity-55" : ""
       }`}
     >
@@ -248,25 +289,45 @@ const RuleDeclaration = ({
               : "Winning declaration"
         }
       />
-      <button
-        className={`truncate text-left font-mono text-[11px] font-semibold ${
+      <input
+        aria-label={`Rename ${declaration.property} from ${rule.selector}`}
+        aria-invalid={!propertyDraftValid}
+        className={`min-w-0 rounded-md border border-transparent bg-transparent px-1 py-0.5 font-mono text-[11px] font-semibold outline-none transition hover:border-line focus:border-accent focus:bg-white focus:ring-2 focus:ring-accent-ring/40 ${
           muted ? "text-slate-500 line-through" : "text-violet-700"
         }`}
-        disabled={visualProperty === null}
-        onClick={() => {
+        disabled={mutating}
+        list="css-property-suggestions"
+        onBlur={(event) => {
+          setPropertyEditing(false);
+          const nextProperty = event.currentTarget.value.trim();
+
+          if (isCssPropertyName(nextProperty)) {
+            setPropertyDraft(nextProperty);
+            void mutateProperty(nextProperty);
+          } else {
+            setPropertyDraft(declaration.property);
+          }
+        }}
+        onChange={(event) => setPropertyDraft(event.target.value)}
+        onDoubleClick={() => {
           if (visualProperty !== null) {
             onPickProperty(visualProperty);
           }
         }}
-        title={
-          visualProperty !== null
-            ? `Open ${declaration.property} in the property lab`
-            : `${declaration.property} is visible here but not yet supported by the visual editor`
-        }
-        type="button"
-      >
-        {declaration.property}
-      </button>
+        onFocus={() => setPropertyEditing(true)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.currentTarget.blur();
+          } else if (event.key === "Escape") {
+            event.currentTarget.value = declaration.property;
+            setPropertyDraft(declaration.property);
+            event.currentTarget.blur();
+          }
+        }}
+        spellCheck={false}
+        title="Edit the property name. Double-click to open Quick edit when supported."
+        value={propertyDraft}
+      />
       <div className="flex min-w-0 items-center gap-1">
         {preview === null ? null : (
           <span
@@ -278,7 +339,7 @@ const RuleDeclaration = ({
         {editableProperty !== null ? (
           <CommitInput
             aria-label={`Override ${declaration.property} from ${rule.selector}`}
-            className={`min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 py-0.5 font-mono text-[11px] outline-none transition focus:border-accent focus:bg-white focus:ring-2 focus:ring-accent-ring/40 ${
+            className={`min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 py-0.5 font-mono text-[11px] outline-none transition hover:border-line focus:border-accent focus:bg-white focus:ring-2 focus:ring-accent-ring/40 ${
               muted ? "line-through" : "text-slate-700"
             }`}
             onCommit={(value) => void onCommit(editableProperty, value)}
@@ -303,10 +364,19 @@ const RuleDeclaration = ({
           </span>
         ) : null}
       </div>
+      <button
+        aria-label={`Remove ${declaration.property} from ${rule.selector}`}
+        className="inline-flex h-6 w-6 items-center justify-center rounded-md text-slate-300 opacity-60 transition hover:bg-rose-50 hover:text-rose-600 group-hover:opacity-100 disabled:opacity-30"
+        disabled={mutating}
+        onClick={() => void mutateProperty(null)}
+        title="Remove declaration"
+        type="button"
+      >
+        <Trash2 aria-hidden="true" size={11} />
+      </button>
     </div>
   );
 };
-
 const RuleAddDeclaration = ({
   rule,
   onCommit,
