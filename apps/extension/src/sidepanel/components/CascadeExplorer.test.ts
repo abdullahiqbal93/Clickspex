@@ -1,13 +1,16 @@
-import { describe, expect, it } from "vitest";
+import { act, createElement } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  CascadeExplorer,
   buildLiveOverrideRule,
   getRuleResponsiveTarget,
   ruleAppliesToResponsiveTarget,
   isCssDeclarationValueValid,
 } from "./CascadeExplorer";
 
-import type { MatchedStyleRule, StyleChange } from "@ui-buddy/shared";
+import type { MatchedStyleRule, MatchedStylesResult, StyleChange } from "@ui-buddy/shared";
 
 const rule = (conditional: string | null): MatchedStyleRule => ({
   id: conditional ?? "base",
@@ -72,5 +75,139 @@ describe("CascadeExplorer responsive rules", () => {
     expect(isCssDeclarationValueValid("--brand-color", "#7c3aed")).toBe(true);
     expect(isCssDeclarationValueValid("color; display", "red")).toBe(false);
     expect(isCssDeclarationValueValid("color", "")).toBe(false);
+  });
+});
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+const matchedResult: MatchedStylesResult = {
+  selector: ".card",
+  rules: [
+    {
+      ...rule(null),
+      declarations: [
+        {
+          property: "color",
+          value: "rgb(15, 23, 42)",
+          important: false,
+          active: true,
+          overridden: false,
+          inherited: false,
+        },
+        {
+          property: "opacity",
+          value: "0.5",
+          important: false,
+          active: true,
+          overridden: true,
+          inherited: false,
+        },
+      ],
+    },
+  ],
+  computed: { color: "rgb(15, 23, 42)", opacity: "1" },
+  variables: { "--brand-color": "#7c3aed" },
+  unreadableStylesheets: 0,
+};
+
+const findButton = (container: HTMLElement, label: string): HTMLButtonElement | undefined =>
+  Array.from(container.querySelectorAll("button")).find((button) =>
+    button.textContent?.includes(label),
+  );
+
+const setInputValue = (input: HTMLInputElement, value: string) => {
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+
+  act(() => {
+    setter?.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+};
+
+describe("CascadeExplorer interactions", () => {
+  let container: HTMLDivElement;
+  let reactRoot: Root;
+  let onCommit: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    container = document.createElement("div");
+    document.body.append(container);
+    reactRoot = createRoot(container);
+    onCommit = vi.fn().mockResolvedValue(undefined);
+
+    act(() => {
+      reactRoot.render(
+        createElement(CascadeExplorer, {
+          changes: [],
+          result: matchedResult,
+          responsiveTarget: "all",
+          selectedSelector: ".card",
+          scopeLabel: "This element / base / All",
+          targetState: "base",
+          onCommit,
+          onPickProperty: vi.fn(),
+        }),
+      );
+    });
+  });
+
+  afterEach(() => {
+    act(() => reactRoot.unmount());
+    container.remove();
+  });
+
+  it("opens an empty searchable declaration composer and applies the entered style", async () => {
+    expect(container.querySelector('input[aria-label="CSS property to add"]')).toBeNull();
+
+    const newStyleButton = findButton(container, "New style");
+    expect(newStyleButton).toBeDefined();
+    act(() => newStyleButton?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+
+    const propertyInput = container.querySelector<HTMLInputElement>(
+      'input[aria-label="CSS property to add"]',
+    );
+    const valueInput = container.querySelector<HTMLInputElement>(
+      'input[aria-label="New CSS value"]',
+    );
+    expect(propertyInput?.value).toBe("");
+    expect(propertyInput?.placeholder).toBe("Search property...");
+    expect(valueInput).not.toBeNull();
+
+    if (propertyInput !== null && valueInput !== null) {
+      setInputValue(propertyInput, "grid-template-columns");
+      setInputValue(valueInput, "1fr 2fr");
+    }
+
+    const form = container.querySelector("form");
+    expect(form).not.toBeNull();
+    await act(async () => {
+      form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      await Promise.resolve();
+    });
+
+    expect(onCommit).toHaveBeenCalledWith("grid-template-columns", "1fr 2fr");
+    expect(container.querySelector('input[aria-label="CSS property to add"]')).toBeNull();
+  });
+
+  it("can focus the cascade on winning declarations", () => {
+    expect(container.textContent).toContain("opacity");
+    const overriddenButton = findButton(container, "Overridden shown");
+    expect(overriddenButton).toBeDefined();
+
+    act(() => overriddenButton?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+
+    expect(container.textContent).not.toContain("opacity");
+    expect(container.textContent).toContain("Winners only");
+  });
+
+  it("collapses noisy rules while preserving a useful declaration summary", () => {
+    const collapseButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-expanded="true"]',
+    );
+    expect(collapseButton).not.toBeNull();
+
+    act(() => collapseButton?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+
+    expect(container.textContent).toContain("2 declarations / 1 winning");
   });
 });

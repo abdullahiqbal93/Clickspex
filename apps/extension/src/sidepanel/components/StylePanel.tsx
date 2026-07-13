@@ -1344,125 +1344,156 @@ export const StylePanel = () => {
 
   return (
     <div className="space-y-3">
-      <div className="ub-card p-3.5">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h2 className="text-sm font-semibold tracking-tight">Styles</h2>
-            <p className="mt-0.5 text-2xs text-muted">
-              {changes.length} {changes.length === 1 ? "change" : "changes"}
-            </p>
+      <div className="ub-card overflow-hidden">
+        <div className="flex items-start justify-between gap-3 border-b border-line px-3.5 py-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-semibold tracking-tight">Styles</h2>
+              <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[9px] font-semibold text-accent-hover">
+                {changes.length} {changes.length === 1 ? "change" : "changes"}
+              </span>
+            </div>
+            <code
+              className="mt-1 block max-w-64 truncate font-mono text-[10px] text-muted"
+              title={selectedElement.selector}
+            >
+              {selectedElement.selector}
+            </code>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex shrink-0 items-center gap-0.5">
             <button
-              className="ub-icon-btn"
+              className="ub-icon-btn h-8 w-8 rounded-xl"
               disabled={historyUndoDepth === 0}
               onClick={() => void undoChange()}
-              title="Undo (all change types)"
+              title="Undo last change"
               type="button"
             >
               <Undo2 aria-hidden="true" size={14} />
             </button>
             <button
-              className="ub-icon-btn"
+              className="ub-icon-btn h-8 w-8 rounded-xl"
               disabled={historyRedoDepth === 0}
               onClick={() => void redoChange()}
-              title="Redo (all change types)"
+              title="Redo last change"
               type="button"
             >
               <Redo2 aria-hidden="true" size={14} />
             </button>
             <button
-              className="ub-btn ml-1 px-2.5"
+              className="ub-btn ml-1 h-8 rounded-xl px-2.5 py-0 text-[10px]"
               onClick={() => void copyAllCss()}
-              title="Copy all modified styles"
+              title="Copy all modified CSS"
               type="button"
             >
-              <Clipboard aria-hidden="true" size={13} />
-              Copy
+              <Clipboard aria-hidden="true" size={12} />
+              Copy CSS
             </button>
             <button
-              className="ub-btn px-2.5"
+              aria-label="Reset all style changes"
+              className="ub-icon-btn h-8 w-8 rounded-xl text-rose-500 hover:bg-rose-50 hover:text-rose-600"
               onClick={() => void resetChanges()}
-              title="Remove every style edit from this whole session"
+              title="Reset every style change in this session"
               type="button"
             >
               <RotateCcw aria-hidden="true" size={13} />
-              Reset all
             </button>
           </div>
         </div>
-        {classSelector !== null ? (
-          <div className="mt-3 flex items-center gap-1 rounded-xl bg-accent-softer p-1">
-            <button
-              className={`h-7 flex-1 truncate rounded-xl px-2 text-2xs font-medium transition ${
-                !isClassScope
-                  ? "bg-panel text-accent shadow-sm"
-                  : "text-muted hover:bg-panel/60 hover:text-ink"
-              }`}
-              onClick={() => setSelectorScope("unique")}
-              title="Changes apply to this element only"
-              type="button"
-            >
-              This element
-            </button>
-            <button
-              className={`h-7 flex-1 truncate rounded-xl px-2 text-2xs font-medium transition ${
-                isClassScope
-                  ? "bg-panel text-accent shadow-sm"
-                  : "text-muted hover:bg-panel/60 hover:text-ink"
-              }`}
-              onClick={() => setSelectorScope("class")}
-              title={`Changes apply to every ${classSelector}`}
-              type="button"
-            >
-              All {classSelector}
-            </button>
-          </div>
-        ) : null}
-        <div className="mt-3 flex overflow-x-auto rounded-xl bg-accent-softer p-1 scrollbar-hide">
-          {STYLE_STATE_OPTIONS.map((option) => (
-            <button
-              className={`h-7 shrink-0 rounded-xl px-2.5 text-2xs font-medium transition ${
-                styleTargetState === option.state
-                  ? "bg-panel text-accent shadow-sm"
-                  : "text-muted hover:bg-panel/60 hover:text-ink"
-              }`}
-              key={option.state}
-              onClick={() => setStyleTargetState(option.state)}
-              type="button"
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-        <div className="mt-2 flex overflow-x-auto rounded-xl bg-accent-softer p-1 scrollbar-hide">
-          {STYLE_RESPONSIVE_TARGET_DEFINITIONS.map((definition) => (
-            <button
-              className={`flex h-9 min-w-[78px] shrink-0 flex-col items-center justify-center rounded-xl px-2 text-2xs font-medium transition ${
-                styleResponsiveTarget === definition.target
-                  ? "bg-panel text-accent shadow-sm"
-                  : "text-muted hover:bg-panel/60 hover:text-ink"
-              }`}
-              key={definition.target}
-              onClick={() => setStyleResponsiveTarget(definition.target)}
-              title={getResponsiveTargetTitle(definition.target)}
-              type="button"
-            >
-              <span>{definition.shortLabel}</span>
-              <span className="text-[9px] font-normal tabular-nums text-slate-400">
-                {BREAKPOINT_RANGE_LABELS[definition.target]}
+
+        <div className="space-y-2.5 bg-panel-soft/60 p-3">
+          {classSelector !== null ? (
+            <div className="grid grid-cols-[62px_minmax(0,1fr)] items-center gap-2">
+              <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-400">
+                Apply to
               </span>
-            </button>
-          ))}
-        </div>
-        {activeResponsiveDefinition.mediaQuery === null ? null : (
-          <div className="mt-2 flex min-w-0 items-center justify-between gap-2 rounded-xl bg-accent-softer px-2.5 py-2 text-2xs text-accent-hover ring-1 ring-inset ring-accent-soft">
-            <span className="shrink-0 font-medium">{activeResponsiveDefinition.label}</span>
-            <code className="min-w-0 truncate rounded-xl bg-panel/80 px-1.5 py-0.5 font-mono text-[10px] text-accent-hover">
-              @media {activeResponsiveDefinition.mediaQuery}
-            </code>
+              <div className="grid grid-cols-2 rounded-xl bg-slate-100 p-1">
+                <button
+                  className={`h-7 truncate rounded-lg px-2 text-[10px] font-medium transition ${
+                    !isClassScope
+                      ? "bg-white text-accent shadow-sm"
+                      : "text-muted hover:bg-white/60 hover:text-ink"
+                  }`}
+                  onClick={() => setSelectorScope("unique")}
+                  title="Apply changes only to this selected element"
+                  type="button"
+                >
+                  This element
+                </button>
+                <button
+                  className={`h-7 truncate rounded-lg px-2 text-[10px] font-medium transition ${
+                    isClassScope
+                      ? "bg-white text-accent shadow-sm"
+                      : "text-muted hover:bg-white/60 hover:text-ink"
+                  }`}
+                  onClick={() => setSelectorScope("class")}
+                  title={`Apply changes to every ${classSelector}`}
+                  type="button"
+                >
+                  All {classSelector}
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          <div className="grid grid-cols-[62px_minmax(0,1fr)] items-start gap-2">
+            <span className="pt-2 text-[9px] font-semibold uppercase tracking-wide text-slate-400">
+              State
+            </span>
+            <div className="flex flex-wrap gap-1 rounded-xl bg-slate-100 p-1">
+              {STYLE_STATE_OPTIONS.map((option) => (
+                <button
+                  aria-pressed={styleTargetState === option.state}
+                  className={`h-7 rounded-lg px-2 text-[10px] font-medium transition ${
+                    styleTargetState === option.state
+                      ? "bg-white text-accent shadow-sm"
+                      : "text-muted hover:bg-white/70 hover:text-ink"
+                  }`}
+                  key={option.state}
+                  onClick={() => setStyleTargetState(option.state)}
+                  type="button"
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
           </div>
-        )}
+
+          <div className="grid grid-cols-[62px_minmax(0,1fr)] items-start gap-2">
+            <span className="pt-2 text-[9px] font-semibold uppercase tracking-wide text-slate-400">
+              Viewport
+            </span>
+            <div className="grid grid-cols-4 gap-1 rounded-xl bg-slate-100 p-1">
+              {STYLE_RESPONSIVE_TARGET_DEFINITIONS.map((definition) => (
+                <button
+                  aria-pressed={styleResponsiveTarget === definition.target}
+                  className={`flex min-h-9 min-w-0 flex-col items-center justify-center rounded-lg px-1 text-[9px] font-medium transition ${
+                    styleResponsiveTarget === definition.target
+                      ? "bg-white text-accent shadow-sm"
+                      : "text-muted hover:bg-white/70 hover:text-ink"
+                  }`}
+                  key={definition.target}
+                  onClick={() => setStyleResponsiveTarget(definition.target)}
+                  title={getResponsiveTargetTitle(definition.target)}
+                  type="button"
+                >
+                  <span className="truncate">{definition.shortLabel}</span>
+                  <span className="truncate font-mono text-[8px] font-normal text-slate-400">
+                    {BREAKPOINT_RANGE_LABELS[definition.target]}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {activeResponsiveDefinition.mediaQuery === null ? null : (
+            <div className="ml-[70px] flex min-w-0 items-center gap-2 rounded-lg bg-sky-50 px-2 py-1.5 text-[9px] text-sky-700 ring-1 ring-inset ring-sky-100">
+              <span className="shrink-0 font-semibold">Active query</span>
+              <code className="min-w-0 truncate font-mono">
+                @media {activeResponsiveDefinition.mediaQuery}
+              </code>
+            </div>
+          )}
+        </div>
       </div>
 
       <CascadeExplorer
@@ -1471,7 +1502,7 @@ export const StylePanel = () => {
         onPickProperty={selectQuickProperty}
         result={matchedStyles}
         responsiveTarget={styleResponsiveTarget}
-        scopeLabel={`${styleTargetState} / ${activeResponsiveDefinition.shortLabel}`}
+        scopeLabel={`${isClassScope && classSelector !== null ? `All ${classSelector}` : "This element"} / ${styleTargetState} / ${activeResponsiveDefinition.shortLabel}`}
         selectedSelector={selectedElement.selector}
         targetState={styleTargetState}
       />

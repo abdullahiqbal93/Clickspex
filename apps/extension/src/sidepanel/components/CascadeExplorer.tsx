@@ -14,8 +14,12 @@ import {
 import {
   Braces,
   Check,
+  ChevronDown,
+  ChevronRight,
   CircleDot,
   Clipboard,
+  Eye,
+  EyeOff,
   Plus,
   RefreshCw,
   Search,
@@ -47,7 +51,7 @@ const VIEW_OPTIONS: Array<{
   label: string;
   icon: typeof Braces;
 }> = [
-  { id: "rules", label: "Rules", icon: Braces },
+  { id: "rules", label: "Styles", icon: Braces },
   { id: "computed", label: "Computed", icon: CircleDot },
   { id: "variables", label: "Tokens", icon: Variable },
 ];
@@ -217,7 +221,7 @@ const RuleDeclaration = ({
 
   return (
     <div
-      className={`group grid grid-cols-[14px_minmax(92px,0.72fr)_minmax(0,1fr)] items-center gap-1.5 px-3 py-1.5 transition-colors hover:bg-accent-softer/50 ${
+      className={`group grid grid-cols-[16px_minmax(104px,0.78fr)_minmax(0,1fr)] items-center gap-2 px-3 py-1.5 transition-colors hover:bg-accent-softer/50 ${
         muted ? "opacity-55" : ""
       }`}
     >
@@ -245,7 +249,7 @@ const RuleDeclaration = ({
         }
       />
       <button
-        className={`truncate text-left font-mono text-[10px] font-semibold ${
+        className={`truncate text-left font-mono text-[11px] font-semibold ${
           muted ? "text-slate-500 line-through" : "text-violet-700"
         }`}
         disabled={visualProperty === null}
@@ -274,7 +278,7 @@ const RuleDeclaration = ({
         {editableProperty !== null ? (
           <CommitInput
             aria-label={`Override ${declaration.property} from ${rule.selector}`}
-            className={`min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 py-0.5 font-mono text-[10px] outline-none transition focus:border-accent focus:bg-white focus:ring-2 focus:ring-accent-ring/40 ${
+            className={`min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 py-0.5 font-mono text-[11px] outline-none transition focus:border-accent focus:bg-white focus:ring-2 focus:ring-accent-ring/40 ${
               muted ? "line-through" : "text-slate-700"
             }`}
             onCommit={(value) => void onCommit(editableProperty, value)}
@@ -341,7 +345,7 @@ const RuleAddDeclaration = ({
   if (!adding) {
     return (
       <button
-        className="group flex w-full items-center gap-1.5 border-t border-dashed border-line px-3 py-2 text-left text-[9px] font-medium text-slate-400 transition-colors hover:bg-violet-50/60 hover:text-violet-700"
+        className="group flex w-full items-center gap-1.5 border-t border-dashed border-line px-3 py-2 text-left text-[10px] font-medium text-slate-400 transition-colors hover:bg-violet-50/60 hover:text-violet-700"
         onClick={() => setAdding(true)}
         title={`Add a live override while inspecting ${rule.selector}`}
         type="button"
@@ -434,65 +438,106 @@ const RuleCard = ({
   declarations: MatchedStyleDeclaration[];
   onCommit: CascadeExplorerProps["onCommit"];
   onPickProperty: CascadeExplorerProps["onPickProperty"];
-}) => (
-  <article
-    className={`border-b border-line/80 last:border-b-0 ${rule.active ? "" : "bg-slate-50/60"}`}
-  >
-    <div className="flex items-start justify-between gap-2 px-3 py-2">
-      <div className="min-w-0">
-        <div className="flex min-w-0 items-center gap-1.5">
-          {rule.origin === "inspector" ? (
-            <span
-              className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-violet-100 text-violet-600"
-              title="Live override created in UI Buddy"
-            >
-              <Sparkles aria-hidden="true" size={9} />
-            </span>
-          ) : null}
-          <code
-            className={`min-w-0 break-all font-mono text-[10px] font-bold leading-4 ${
-              rule.active ? "text-slate-800" : "text-slate-400"
-            }`}
-          >
-            {rule.selector}
-          </code>
-        </div>
-        {rule.conditional === null ? null : (
-          <div className="mt-1 inline-flex max-w-full items-center rounded-md bg-sky-50 px-1.5 py-0.5 font-mono text-[9px] text-sky-700">
-            <span className="truncate">{rule.conditional}</span>
-          </div>
-        )}
-      </div>
-      <div className="flex shrink-0 items-center gap-1.5 pt-0.5">
-        <span
-          className="rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[8px] font-semibold text-slate-500"
-          title="Selector specificity (IDs, classes, elements)"
-        >
-          {specificityLabel(rule.specificity)}
-        </span>
-        <span
-          className="max-w-24 truncate text-right font-mono text-[9px] text-slate-400"
-          title={rule.source.url ?? rule.source.label}
-        >
-          {rule.source.label}
-        </span>
-      </div>
-    </div>
-    <div className="pb-1">
-      {declarations.map((declaration, index) => (
-        <RuleDeclaration
-          declaration={declaration}
-          key={`${declaration.property}-${index}`}
-          onCommit={onCommit}
-          onPickProperty={onPickProperty}
-          rule={rule}
-        />
-      ))}
-      <RuleAddDeclaration onCommit={onCommit} rule={rule} />
-    </div>
-  </article>
-);
+}) => {
+  const [expanded, setExpanded] = useState(true);
+  const winningCount = declarations.filter(
+    (declaration) => declaration.active && !declaration.overridden,
+  ).length;
 
+  return (
+    <article
+      className={`mx-2 mb-2 overflow-hidden rounded-xl border border-line shadow-[0_1px_2px_rgba(15,23,42,0.03)] ${
+        rule.active ? "bg-white" : "bg-slate-50/70"
+      }`}
+    >
+      <div className="flex items-start gap-2 border-b border-line/70 px-2.5 py-2.5">
+        <button
+          aria-expanded={expanded}
+          className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+          onClick={() => setExpanded((current) => !current)}
+          title={expanded ? "Collapse rule" : "Expand rule"}
+          type="button"
+        >
+          {expanded ? (
+            <ChevronDown aria-hidden="true" size={13} />
+          ) : (
+            <ChevronRight aria-hidden="true" size={13} />
+          )}
+        </button>
+        <button
+          className="min-w-0 flex-1 text-left"
+          onClick={() => setExpanded((current) => !current)}
+          type="button"
+        >
+          <span className="flex min-w-0 items-center gap-1.5">
+            {rule.origin === "inspector" ? (
+              <span
+                className="flex h-4 w-4 shrink-0 items-center justify-center rounded-md bg-violet-100 text-violet-600"
+                title="Live override created in UI Buddy"
+              >
+                <Sparkles aria-hidden="true" size={9} />
+              </span>
+            ) : (
+              <span
+                className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                  rule.active ? "bg-emerald-500" : "bg-slate-300"
+                }`}
+              />
+            )}
+            <code
+              className={`min-w-0 break-all font-mono text-[11px] font-semibold leading-4 ${
+                rule.active ? "text-slate-800" : "text-slate-400"
+              }`}
+            >
+              {rule.selector}
+            </code>
+          </span>
+          {rule.conditional === null ? null : (
+            <span className="mt-1 block truncate font-mono text-[9px] text-sky-700">
+              {rule.conditional}
+            </span>
+          )}
+        </button>
+        <div className="flex max-w-[42%] shrink-0 items-center gap-1.5 pt-0.5">
+          <span
+            className="truncate text-right font-mono text-[9px] text-slate-400"
+            title={rule.source.url ?? rule.source.label}
+          >
+            {rule.source.label}
+          </span>
+          <span
+            className="rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[8px] font-semibold text-slate-500"
+            title="Selector specificity (IDs, classes, elements)"
+          >
+            {specificityLabel(rule.specificity)}
+          </span>
+        </div>
+      </div>
+      {expanded ? (
+        <div className="bg-white/70 pb-0.5">
+          {declarations.map((declaration, index) => (
+            <RuleDeclaration
+              declaration={declaration}
+              key={`${declaration.property}-${index}`}
+              onCommit={onCommit}
+              onPickProperty={onPickProperty}
+              rule={rule}
+            />
+          ))}
+          <RuleAddDeclaration onCommit={onCommit} rule={rule} />
+        </div>
+      ) : (
+        <button
+          className="flex w-full items-center px-3 py-1.5 text-[9px] text-slate-400 hover:bg-slate-50"
+          onClick={() => setExpanded(true)}
+          type="button"
+        >
+          {declarations.length} declarations / {winningCount} winning
+        </button>
+      )}
+    </article>
+  );
+};
 const ValueTable = ({
   entries,
   emptyLabel,
@@ -517,13 +562,13 @@ const ValueTable = ({
   }
 
   return (
-    <div className="divide-y divide-line/70">
+    <div className="divide-y divide-line/70 bg-white">
       {entries.map(([property, value]) => {
         const preview = colorPreview(property, value);
 
         return (
           <button
-            className="group grid w-full grid-cols-[minmax(105px,0.78fr)_minmax(0,1fr)_22px] items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-accent-softer/60"
+            className="group grid w-full grid-cols-[minmax(116px,0.82fr)_minmax(0,1fr)_22px] items-center gap-2 px-3 py-2.5 text-left transition-colors hover:bg-accent-softer/60"
             key={property}
             onClick={() => void copy(property, value)}
             title="Copy declaration"
@@ -571,6 +616,8 @@ export const CascadeExplorer = ({
 }: CascadeExplorerProps) => {
   const [view, setView] = useState<ExplorerView>("rules");
   const [query, setQuery] = useState("");
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [showOverridden, setShowOverridden] = useState(true);
   const [newProperty, setNewProperty] = useState("");
   const [newValue, setNewValue] = useState("");
   const [refreshing, setRefreshing] = useState(false);
@@ -658,15 +705,17 @@ export const CascadeExplorer = ({
         rule.selector.toLowerCase().includes(normalizedQuery) ||
         rule.source.label.toLowerCase().includes(normalizedQuery) ||
         rule.conditional?.toLowerCase().includes(normalizedQuery) === true;
-      const declarations = ruleMatches
-        ? rule.declarations
-        : rule.declarations.filter((declaration) =>
-            declarationMatches(declaration, normalizedQuery),
-          );
+      const declarations = (
+        ruleMatches
+          ? rule.declarations
+          : rule.declarations.filter((declaration) =>
+              declarationMatches(declaration, normalizedQuery),
+            )
+      ).filter((declaration) => showOverridden || !declaration.overridden);
 
       return declarations.length === 0 ? [] : [{ rule, declarations }];
     });
-  }, [displayRules, normalizedQuery]);
+  }, [displayRules, normalizedQuery, showOverridden]);
 
   const valueEntries = useMemo(() => {
     const record = view === "variables" ? (result?.variables ?? {}) : (result?.computed ?? {});
@@ -706,6 +755,9 @@ export const CascadeExplorer = ({
 
     await onCommit(normalizedNewProperty, newValue);
     setNewValue("");
+    setNewProperty("");
+    setComposerOpen(false);
+
     scheduleRefresh();
   };
 
@@ -713,43 +765,45 @@ export const CascadeExplorer = ({
 
   return (
     <section className="ub-card overflow-hidden">
-      <div className="border-b border-line bg-gradient-to-b from-white to-panel-soft/70 px-3 pt-3">
+      <div className="border-b border-line bg-gradient-to-b from-white to-panel-soft/70 px-3 pb-2.5 pt-3">
         <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
+          <div className="flex min-w-0 items-center gap-2.5">
             <div className="flex items-center gap-2">
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-violet-600">
-                <Braces aria-hidden="true" size={14} />
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-violet-600">
+                <Braces aria-hidden="true" size={15} />
               </span>
               <div className="min-w-0">
-                <h3 className="text-sm font-semibold tracking-tight text-ink">Cascade studio</h3>
+                <h3 className="text-sm font-semibold tracking-tight text-ink">Matched styles</h3>
                 <p
-                  className="truncate font-mono text-[9px] text-slate-400"
+                  className="truncate font-mono text-[10px] text-slate-500"
                   title={selectedSelector}
                 >
-                  {scopeLabel}
+                  {selectedSelector}
                 </p>
               </div>
             </div>
           </div>
           <button
-            className="ub-icon-btn h-7 w-7"
+            className="ub-icon-btn h-8 w-8 rounded-xl"
             onClick={() => void refresh()}
-            title="Re-read matched styles from the page"
+            title="Refresh styles from the page"
             type="button"
           >
-            <RefreshCw aria-hidden="true" className={refreshing ? "animate-spin" : ""} size={12} />
+            <RefreshCw aria-hidden="true" className={refreshing ? "animate-spin" : ""} size={13} />
           </button>
         </div>
 
-        <div className="mt-3 flex items-center justify-between gap-2">
+        <div className="mt-3 flex items-center justify-between gap-2 border-t border-line/70 pt-1">
           <div className="flex items-center gap-0.5">
             {VIEW_OPTIONS.map((option) => {
               const Icon = option.icon;
 
               return (
                 <button
-                  className={`relative flex h-8 items-center gap-1.5 px-2.5 text-[10px] font-semibold transition-colors ${
-                    view === option.id ? "text-violet-700" : "text-muted hover:text-ink"
+                  className={`relative flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[10px] font-semibold transition-colors ${
+                    view === option.id
+                      ? "bg-white text-violet-700 shadow-sm"
+                      : "text-muted hover:bg-white/60 hover:text-ink"
                   }`}
                   key={option.id}
                   onClick={() => setView(option.id)}
@@ -770,80 +824,167 @@ export const CascadeExplorer = ({
         </div>
       </div>
 
-      <div className="border-b border-line bg-white p-2">
-        <label className="relative block" htmlFor="cascade-search">
-          <Search
-            aria-hidden="true"
-            className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"
-            size={12}
-          />
-          <input
-            className="ub-input h-8 rounded-xl bg-panel-soft py-1.5 pl-7 pr-2 text-[10px]"
-            id="cascade-search"
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder={
-              view === "rules"
-                ? "Filter selectors, sources, properties, values..."
-                : "Filter properties and values..."
-            }
-            type="search"
-            value={query}
-          />
-        </label>
+      <div className="border-b border-line bg-white px-2.5 py-2">
+        <div className="flex items-center gap-2">
+          <label className="relative min-w-0 flex-1" htmlFor="cascade-search">
+            <Search
+              aria-hidden="true"
+              className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"
+              size={12}
+            />
+            <input
+              className="ub-input h-8 rounded-xl bg-panel-soft py-1.5 pl-7 pr-7 text-[10px]"
+              id="cascade-search"
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={
+                view === "rules"
+                  ? "Find selector, property, value, or source"
+                  : "Find property or value"
+              }
+              type="search"
+              value={query}
+            />
+            {query.length > 0 ? (
+              <button
+                aria-label="Clear style filter"
+                className="absolute right-1.5 top-1/2 inline-flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-md text-slate-400 hover:bg-slate-200 hover:text-slate-700"
+                onClick={() => setQuery("")}
+                type="button"
+              >
+                <X aria-hidden="true" size={11} />
+              </button>
+            ) : null}
+          </label>
+          {view === "rules" ? (
+            <button
+              className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-xl px-2.5 text-[10px] font-semibold transition ${
+                composerOpen
+                  ? "bg-violet-100 text-violet-700"
+                  : "bg-violet-600 text-white shadow-sm hover:bg-violet-700"
+              }`}
+              onClick={() => setComposerOpen((current) => !current)}
+              type="button"
+            >
+              {composerOpen ? (
+                <X aria-hidden="true" size={12} />
+              ) : (
+                <Plus aria-hidden="true" size={12} />
+              )}
+              {composerOpen ? "Close" : "New style"}
+            </button>
+          ) : null}
+        </div>
+        {view === "rules" ? (
+          <div className="mt-2 flex items-center justify-between gap-2 px-0.5">
+            <span className="min-w-0 truncate text-[9px] text-slate-400">
+              {filteredRules.length} matching rules &middot; {scopeLabel}
+            </span>
+            <button
+              aria-pressed={!showOverridden}
+              className={`inline-flex shrink-0 items-center gap-1 rounded-lg px-1.5 py-1 text-[9px] font-medium transition ${
+                showOverridden
+                  ? "text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                  : "bg-violet-50 text-violet-700"
+              }`}
+              onClick={() => setShowOverridden((current) => !current)}
+              title={
+                showOverridden ? "Hide overridden declarations" : "Show overridden declarations"
+              }
+              type="button"
+            >
+              {showOverridden ? (
+                <Eye aria-hidden="true" size={10} />
+              ) : (
+                <EyeOff aria-hidden="true" size={10} />
+              )}
+              {showOverridden ? "Overridden shown" : "Winners only"}
+            </button>
+          </div>
+        ) : null}
       </div>
+
+      <datalist id="css-property-suggestions">
+        {propertySuggestions.map((property) => (
+          <option key={property} value={property} />
+        ))}
+      </datalist>
 
       {view === "rules" ? (
         <>
-          <div className="grid grid-cols-[minmax(105px,0.75fr)_minmax(0,1fr)_30px] items-center gap-1.5 border-b border-line bg-violet-50/60 p-2">
-            <input
-              aria-label="CSS property to add"
-              aria-autocomplete="list"
-              aria-invalid={newProperty.length > 0 && !newPropertyValid}
-              className="min-w-0 rounded-lg border border-violet-100 bg-white px-2 py-1.5 font-mono text-[9px] text-violet-700 outline-none focus:border-accent"
-              list="css-property-suggestions"
-              onChange={(event) => setNewProperty(event.target.value)}
-              placeholder="Search property..."
-              spellCheck={false}
-              value={newProperty}
-            />
-            <datalist id="css-property-suggestions">
-              {propertySuggestions.map((property) => (
-                <option key={property} value={property} />
-              ))}
-            </datalist>
-            <input
-              aria-label="New CSS value"
-              aria-invalid={newValue.length > 0 && !newValueValid}
-              className="min-w-0 rounded-lg border border-violet-100 bg-white px-2 py-1.5 font-mono text-[9px] outline-none placeholder:text-slate-300 focus:border-accent"
-              onChange={(event) => setNewValue(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  void addDeclaration();
-                }
+          {composerOpen ? (
+            <form
+              className="border-b border-violet-100 bg-violet-50/60 p-3"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void addDeclaration();
               }}
-              placeholder="value"
-              spellCheck={false}
-              value={newValue}
-            />
-            <button
-              aria-label="Add declaration"
-              className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-violet-600 text-white shadow-sm transition hover:bg-violet-700 disabled:opacity-40"
-              disabled={!newValueValid}
-              onClick={() => void addDeclaration()}
-              title="Add live override"
-              type="button"
             >
-              <Plus aria-hidden="true" size={13} />
-            </button>
-          </div>
-          {normalizedNewProperty.length > 0 && !newPropertyValid ? (
-            <p className="border-b border-rose-100 bg-rose-50 px-3 py-1.5 text-[9px] text-rose-600">
-              Enter a valid CSS property name, for example grid-template-columns or --brand-color.
-            </p>
-          ) : newValue.trim().length > 0 && !newValueValid ? (
-            <p className="border-b border-amber-100 bg-amber-50 px-3 py-1.5 text-[9px] text-amber-700">
-              This value is not valid for {normalizedNewProperty}.
-            </p>
+              <div className="mb-2.5 flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[11px] font-semibold text-slate-800">Add a live declaration</p>
+                  <p className="mt-0.5 text-[9px] text-slate-500">Applied to {scopeLabel}</p>
+                </div>
+                <button
+                  aria-label="Close new style"
+                  className="inline-flex h-6 w-6 items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:text-slate-700"
+                  onClick={() => setComposerOpen(false)}
+                  type="button"
+                >
+                  <X aria-hidden="true" size={12} />
+                </button>
+              </div>
+              <div className="grid grid-cols-[minmax(120px,0.8fr)_minmax(0,1fr)_auto] items-end gap-2">
+                <label className="min-w-0">
+                  <span className="mb-1 block text-[9px] font-medium text-slate-500">Property</span>
+                  <input
+                    aria-label="CSS property to add"
+                    aria-autocomplete="list"
+                    aria-invalid={newProperty.length > 0 && !newPropertyValid}
+                    autoFocus
+                    className="h-8 w-full min-w-0 rounded-lg border border-violet-100 bg-white px-2 font-mono text-[10px] text-violet-700 outline-none focus:border-accent focus:ring-2 focus:ring-violet-100"
+                    list="css-property-suggestions"
+                    onChange={(event) => setNewProperty(event.target.value)}
+                    placeholder="Search property..."
+                    spellCheck={false}
+                    value={newProperty}
+                  />
+                </label>
+                <label className="min-w-0">
+                  <span className="mb-1 block text-[9px] font-medium text-slate-500">Value</span>
+                  <input
+                    aria-label="New CSS value"
+                    aria-invalid={newValue.length > 0 && !newValueValid}
+                    className="h-8 w-full min-w-0 rounded-lg border border-violet-100 bg-white px-2 font-mono text-[10px] text-slate-700 outline-none focus:border-accent focus:ring-2 focus:ring-violet-100"
+                    onChange={(event) => setNewValue(event.target.value)}
+                    placeholder="Enter a CSS value"
+                    spellCheck={false}
+                    value={newValue}
+                  />
+                </label>
+                <button
+                  className="inline-flex h-8 items-center justify-center gap-1 rounded-lg bg-violet-600 px-2.5 text-[10px] font-semibold text-white shadow-sm transition hover:bg-violet-700 disabled:opacity-40"
+                  disabled={!newValueValid}
+                  type="submit"
+                >
+                  <Plus aria-hidden="true" size={12} />
+                  Add
+                </button>
+              </div>
+              {normalizedNewProperty.length > 0 && !newPropertyValid ? (
+                <p className="mt-2 text-[9px] text-rose-600">
+                  Enter a valid CSS property name, for example grid-template-columns or
+                  --brand-color.
+                </p>
+              ) : newValue.trim().length > 0 && !newValueValid ? (
+                <p className="mt-2 text-[9px] text-amber-700">
+                  This value is not valid for {normalizedNewProperty}.
+                </p>
+              ) : (
+                <p className="mt-2 text-[9px] text-slate-400">
+                  Start typing a property to search suggestions. Press Enter to apply.
+                </p>
+              )}
+            </form>
           ) : null}
 
           {result === null && displayRules.length === 0 ? (
@@ -860,7 +1001,7 @@ export const CascadeExplorer = ({
               </p>
             </div>
           ) : (
-            <div>
+            <div className="bg-slate-50/50 py-2">
               {filteredRules.map(({ rule, declarations }) => {
                 const inheritedSelector = rule.inheritedFrom?.selector ?? null;
                 const showInheritedHeader =
@@ -870,7 +1011,7 @@ export const CascadeExplorer = ({
                 return (
                   <div key={rule.id}>
                     {showInheritedHeader ? (
-                      <div className="border-b border-line bg-slate-50 px-3 py-1.5 text-[9px] text-slate-500">
+                      <div className="mx-3 mb-2 rounded-lg bg-slate-100 px-2.5 py-1.5 text-[9px] text-slate-500">
                         Inherited from{" "}
                         <code className="font-semibold text-slate-700">
                           {rule.inheritedFrom?.tagName}
@@ -908,7 +1049,7 @@ export const CascadeExplorer = ({
             <span className="flex items-center gap-1">
               <span className="h-2 w-2 rounded-full bg-slate-300" /> overridden
             </span>
-            <span>Click a value to create a safe live override</span>
+            <span>Edit any value to create a safe live override</span>
           </div>
         </>
       ) : (
