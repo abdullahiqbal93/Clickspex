@@ -270,6 +270,11 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
       return;
     }
 
+    if (applyResult?.backupId === null || applyResult?.backupId === undefined) {
+      setError("Rollback requires the exact backup ID returned by apply.");
+      return;
+    }
+
     setBusy(true);
     setError(null);
 
@@ -279,7 +284,7 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
         {
           method: "POST",
           headers: { "content-type": "application/json", ...authHeaders() },
-          body: JSON.stringify({ backupId: applyResult?.backupId ?? undefined }),
+          body: JSON.stringify({ backupId: applyResult.backupId }),
         },
         8000,
         parseBridgeRollbackResponse,

@@ -1,5 +1,5 @@
 import { timingSafeEqual, createHash, randomBytes, randomInt, randomUUID } from "node:crypto";
-import { copyFile, mkdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdir, open, readFile, realpath, rename, stat, unlink } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 
@@ -22,7 +22,6 @@ import type {
   BridgeRollbackResponse,
   BridgeStructuredError,
   ProjectContext,
-  UIChangeIntent,
   UIChangeSession,
 } from "@ui-buddy/shared";
 
@@ -34,6 +33,7 @@ const REQUEST_TIMEOUT_MS = 15_000;
 const HEADERS_TIMEOUT_MS = 5_000;
 const PREVIEW_TTL_MS = 10 * 60 * 1000;
 const MAX_PREVIEW_ARTIFACTS = 25;
+const TRANSACTION_TEMP_PREFIX = `.ui-buddy-tmp-${process.pid}-`;
 
 class BridgeHttpError extends Error {
   constructor(
@@ -182,6 +182,7 @@ type StoredPreviewArtifact = Omit<BridgePreviewResponse, "ok" | "files"> & {
 
 const previewResponseFromArtifact = (artifact: StoredPreviewArtifact): BridgePreviewResponse => ({
   ok: true,
+  operationId: artifact.operationId,
   previewId: artifact.previewId,
   sessionHash: artifact.sessionHash,
   projectId: artifact.projectId,
@@ -203,6 +204,7 @@ const previewResponseFromArtifact = (artifact: StoredPreviewArtifact): BridgePre
 const createPreviewArtifact = async (
   session: UIChangeSession,
   config: Pick<BridgeRuntimeConfig, "canonicalRoot" | "projectId" | "bridgeInstanceId">,
+  operationId: string,
 ): Promise<StoredPreviewArtifact> => {
   const projectContext: ProjectContext = await scanProjectContext(config.canonicalRoot, {
     includeSource: true,
@@ -278,6 +280,7 @@ const createPreviewArtifact = async (
   const expiresAt = new Date(createdAt.getTime() + PREVIEW_TTL_MS);
 
   return {
+    operationId,
     previewId: randomUUID(),
     sessionHash: hashSession(session),
     projectId: config.projectId,
@@ -303,11 +306,15 @@ const previewSession = async (
   const canonicalRoot = await validateProjectRoot(rootPath);
 
   return previewResponseFromArtifact(
-    await createPreviewArtifact(session, {
-      canonicalRoot,
-      projectId: stableProjectId(canonicalRoot),
-      bridgeInstanceId: "direct-preview",
-    }),
+    await createPreviewArtifact(
+      session,
+      {
+        canonicalRoot,
+        projectId: stableProjectId(canonicalRoot),
+        bridgeInstanceId: "direct-preview",
+      },
+      `preview-${randomUUID()}`,
+    ),
   );
 };
 
@@ -318,106 +325,34 @@ const applySession = async (
   rootPath: string,
   selectors?: string[],
 ): Promise<ApplyResult> => {
-  const projectContext: ProjectContext = await scanProjectContext(rootPath, {
-    includeSource: true,
-  });
-  const selectorFilter = selectors === undefined ? null : new Set(selectors);
-
-  const originalByPath = new Map<string, string>();
-  for (const file of projectContext.sourceFiles ?? []) {
-    originalByPath.set(file.path, file.content);
-  }
-
-  const applied: Array<{ selector: string; file: string }> = [];
-  const skipped: Array<{ selector: string; reason: string }> = [];
-  const touchedPaths = new Set<string>();
-
-  const intents: UIChangeIntent[] = session.elements.filter(
-    (intent) => selectorFilter === null || selectorFilter.has(intent.target.selector),
+  const canonicalRoot = await validateProjectRoot(rootPath);
+  const projectId = stableProjectId(canonicalRoot);
+  const bridgeInstanceId = "direct-apply";
+  const operationId = `apply-${randomUUID()}`;
+  const filteredSession =
+    selectors === undefined
+      ? session
+      : {
+          ...session,
+          elements: session.elements.filter((intent) => selectors.includes(intent.target.selector)),
+        };
+  const artifact = await createPreviewArtifact(
+    filteredSession,
+    { canonicalRoot, projectId, bridgeInstanceId },
+    operationId,
   );
 
-  for (const intent of intents) {
-    // Recompute against the running context so multiple edits to the same file
-    // stack cumulatively instead of overwriting one another.
-    const edit = computeCssFileEdit(intent, projectContext);
-
-    if (edit === null) {
-      skipped.push({
-        selector: intent.target.selector,
-        reason: "No indexed stylesheet matched this element.",
-      });
-      continue;
-    }
-
-    if (edit.previousContent === edit.nextContent) {
-      skipped.push({ selector: intent.target.selector, reason: "No change to write." });
-      continue;
-    }
-
-    const sourceFile = projectContext.sourceFiles?.find((file) => file.path === edit.path);
-    if (sourceFile !== undefined) {
-      sourceFile.content = edit.nextContent;
-    }
-
-    touchedPaths.add(edit.path);
-    applied.push({ selector: intent.target.selector, file: edit.path });
-  }
-
-  if (touchedPaths.size === 0) {
-    return { ok: true, backupId: null, applied, skipped };
-  }
-
-  const backupId = new Date().toISOString().replace(/[:.]/g, "-");
-  const backupRoot = join(rootPath, UI_BUDDY_DIR, "backups", backupId);
-  const backedUp: string[] = [];
-
-  // Keep apply backups out of version control by default.
-  await mkdir(join(rootPath, UI_BUDDY_DIR), { recursive: true });
-  await writeFile(
-    join(rootPath, UI_BUDDY_DIR, ".gitignore"),
-    "backups/\nlast-backup.json\n",
-    "utf8",
+  return applyPreviewArtifact(
+    {
+      canonicalRoot,
+      projectId,
+      bridgeInstanceId,
+      previewArtifacts: new Map([[artifact.previewId, artifact]]),
+    },
+    artifact.previewId,
+    operationId,
   );
-
-  for (const relPath of touchedPaths) {
-    const absPath = resolve(rootPath, relPath);
-
-    if (!isInsideRoot(rootPath, absPath)) {
-      skipped.push({ selector: relPath, reason: "Resolved outside the project root." });
-      continue;
-    }
-
-    await validateSafeExistingPath(rootPath, absPath);
-
-    const finalContent =
-      projectContext.sourceFiles?.find((file) => file.path === relPath)?.content ?? null;
-
-    if (finalContent === null) {
-      continue;
-    }
-
-    const original = originalByPath.get(relPath) ?? (await readFile(absPath, "utf8"));
-    const backupPath = join(backupRoot, relPath);
-    await mkdir(dirname(backupPath), { recursive: true });
-    await writeFile(backupPath, original, "utf8");
-    await writeFile(absPath, finalContent, "utf8");
-    backedUp.push(relPath);
-  }
-
-  await writeFile(
-    join(backupRoot, "manifest.json"),
-    `${JSON.stringify({ backupId, files: backedUp, createdAt: new Date().toISOString() }, null, 2)}\n`,
-    "utf8",
-  );
-  await writeFile(
-    join(rootPath, UI_BUDDY_DIR, "last-backup.json"),
-    `${JSON.stringify({ backupId }, null, 2)}\n`,
-    "utf8",
-  );
-
-  return { ok: true, backupId, applied, skipped };
 };
-
 const pruneExpiredPreviewArtifacts = (
   config: Pick<BridgeRuntimeConfig, "previewArtifacts">,
 ): void => {
@@ -498,12 +433,160 @@ const verifiedPreviewSourceContents = async (
   return currentByPath;
 };
 
+type BackupManifestFile = {
+  path: string;
+  beforeHash: string;
+  appliedHash: string;
+  backupPath: string;
+};
+
+type BackupManifest = {
+  backupId: string;
+  previewId: string;
+  projectId: string;
+  operationId: string;
+  createdAt: string;
+  files: BackupManifestFile[];
+};
+
+type PreparedTransactionFile = PreviewArtifactFile & {
+  absPath: string;
+  backupPath: string;
+  backupRelativePath: string;
+  mode: number | undefined;
+  originalContent: string;
+};
+
+const skippedForPreviewElement = (
+  element: BridgePreviewResponse["elements"][number],
+): BridgeApplyResponse["skipped"][number] => ({
+  selector: element.selector,
+  reason: element.note ?? "No change to write.",
+  code: element.note === undefined ? "NO_CHANGE" : "NO_STYLESHEET_MATCH",
+});
+
+const writeFileDurably = async (
+  filePath: string,
+  content: string,
+  mode?: number,
+): Promise<void> => {
+  const handle = mode === undefined ? await open(filePath, "w") : await open(filePath, "w", mode);
+
+  try {
+    await handle.writeFile(content, "utf8");
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
+
+  if (mode !== undefined) {
+    await chmod(filePath, mode);
+  }
+};
+
+const atomicReplaceFile = async (
+  absPath: string,
+  content: string,
+  mode?: number,
+): Promise<void> => {
+  const tempPath = join(dirname(absPath), `${TRANSACTION_TEMP_PREFIX}${randomUUID()}.tmp`);
+
+  try {
+    await writeFileDurably(tempPath, content, mode);
+    await rename(tempPath, absPath);
+  } catch (error) {
+    await unlink(tempPath).catch(() => undefined);
+    throw error;
+  }
+};
+
+const manifestPathFor = (backupRoot: string): string => join(backupRoot, "manifest.json");
+
+const writeBackupManifest = async (backupRoot: string, manifest: BackupManifest): Promise<void> => {
+  await writeFileDurably(manifestPathFor(backupRoot), `${JSON.stringify(manifest, null, 2)}\n`);
+};
+
+const readBackupManifest = async (backupRoot: string): Promise<BackupManifest> => {
+  const raw = await readFile(manifestPathFor(backupRoot), "utf8");
+  const parsed = JSON.parse(raw) as Partial<BackupManifest>;
+
+  if (
+    typeof parsed.backupId !== "string" ||
+    typeof parsed.previewId !== "string" ||
+    typeof parsed.projectId !== "string" ||
+    typeof parsed.createdAt !== "string" ||
+    !Array.isArray(parsed.files)
+  ) {
+    throw new BridgeHttpError(400, "INVALID_BACKUP_ID", "Backup manifest is invalid.");
+  }
+
+  return {
+    backupId: parsed.backupId,
+    previewId: parsed.previewId,
+    projectId: parsed.projectId,
+    operationId: typeof parsed.operationId === "string" ? parsed.operationId : "unknown",
+    createdAt: parsed.createdAt,
+    files: parsed.files as BackupManifestFile[],
+  };
+};
+
+const prepareTransactionFiles = async (
+  config: Pick<BridgeRuntimeConfig, "canonicalRoot">,
+  artifact: StoredPreviewArtifact,
+  currentByPath: Map<string, string>,
+  backupRoot: string,
+  backupId: string,
+): Promise<PreparedTransactionFile[]> => {
+  const prepared: PreparedTransactionFile[] = [];
+
+  for (const file of artifact.files) {
+    const absPath = resolve(config.canonicalRoot, file.path);
+    const info = await stat(absPath);
+    const originalContent = currentByPath.get(file.path) ?? file.beforeContent;
+    const backupRelativePath = `${UI_BUDDY_DIR}/backups/${backupId}/${file.path.replace(/\\/g, "/")}`;
+    const backupPath = join(config.canonicalRoot, backupRelativePath);
+
+    await mkdir(dirname(backupPath), { recursive: true });
+    await writeFileDurably(backupPath, originalContent, info.mode);
+
+    const verifiedBackup = await readFile(backupPath, "utf8");
+    if (contentHash(verifiedBackup) !== file.beforeHash) {
+      throw new BridgeHttpError(
+        500,
+        "WRITE_TRANSACTION_FAILED",
+        "Backup verification failed before source files were changed.",
+      );
+    }
+
+    prepared.push({
+      ...file,
+      absPath,
+      backupPath,
+      backupRelativePath,
+      mode: info.mode,
+      originalContent,
+    });
+  }
+
+  return prepared;
+};
+
+const restoreReplacedFiles = async (files: PreparedTransactionFile[]): Promise<void> => {
+  for (let index = files.length - 1; index >= 0; index -= 1) {
+    const file = files[index];
+    if (file !== undefined) {
+      await atomicReplaceFile(file.absPath, file.originalContent, file.mode);
+    }
+  }
+};
+
 const applyPreviewArtifact = async (
   config: Pick<
     BridgeRuntimeConfig,
     "canonicalRoot" | "projectId" | "bridgeInstanceId" | "previewArtifacts"
   >,
   previewId: string,
+  operationId: string,
 ): Promise<ApplyResult> => {
   const artifact = config.previewArtifacts.get(previewId);
 
@@ -513,64 +596,117 @@ const applyPreviewArtifact = async (
       404,
       "PREVIEW_NOT_FOUND",
       "Preview artifact was not found. Rerun preview.",
+      { operationId },
     );
   }
 
   try {
     const currentByPath = await verifiedPreviewSourceContents(config, artifact);
-    const applied = artifact.elements
-      .filter(
-        (element): element is PreviewElement & { file: string } =>
-          element.applicable && element.file !== null,
-      )
-      .map((element) => ({ selector: element.selector, file: element.file }));
     const skipped = artifact.elements
       .filter((element) => !element.applicable)
-      .map((element) => ({
-        selector: element.selector,
-        reason: element.note ?? "No change to write.",
-      }));
+      .map(skippedForPreviewElement);
 
     if (artifact.files.length === 0) {
       config.previewArtifacts.delete(previewId);
-      return { ok: true, backupId: null, applied, skipped };
+      throw new BridgeHttpError(
+        409,
+        "NO_CHANGES_TO_APPLY",
+        "Preview contains no source file changes to apply.",
+        { operationId },
+      );
     }
 
     const backupId = new Date().toISOString().replace(/[:.]/g, "-");
     const backupRoot = join(config.canonicalRoot, UI_BUDDY_DIR, "backups", backupId);
-    const backedUp: string[] = [];
 
     await mkdir(join(config.canonicalRoot, UI_BUDDY_DIR), { recursive: true });
-    await writeFile(
+    await writeFileDurably(
       join(config.canonicalRoot, UI_BUDDY_DIR, ".gitignore"),
       "backups/\nlast-backup.json\n",
-      "utf8",
     );
+    await mkdir(backupRoot, { recursive: true });
 
-    for (const file of artifact.files) {
-      const absPath = resolve(config.canonicalRoot, file.path);
-      const original = currentByPath.get(file.path) ?? file.beforeContent;
-      const backupPath = join(backupRoot, file.path);
+    const preparedFiles = await prepareTransactionFiles(
+      config,
+      artifact,
+      currentByPath,
+      backupRoot,
+      backupId,
+    );
+    const manifest: BackupManifest = {
+      backupId,
+      previewId,
+      projectId: config.projectId,
+      operationId,
+      createdAt: new Date().toISOString(),
+      files: preparedFiles.map((file) => ({
+        path: file.path,
+        beforeHash: file.beforeHash,
+        appliedHash: file.afterHash,
+        backupPath: file.backupRelativePath,
+      })),
+    };
 
-      await mkdir(dirname(backupPath), { recursive: true });
-      await writeFile(backupPath, original, "utf8");
-      await writeFile(absPath, file.afterContent, "utf8");
-      backedUp.push(file.path);
+    await writeBackupManifest(backupRoot, manifest);
+
+    const replaced: PreparedTransactionFile[] = [];
+    const applied: Array<{ selector: string; file: string }> = [];
+
+    try {
+      for (const file of preparedFiles) {
+        await atomicReplaceFile(file.absPath, file.afterContent, file.mode);
+        const appliedContent = await readFile(file.absPath, "utf8");
+
+        if (contentHash(appliedContent) !== file.afterHash) {
+          throw new Error(`Atomic write verification failed for ${file.path}.`);
+        }
+
+        replaced.push(file);
+        applied.push(
+          ...artifact.elements
+            .filter((element) => element.applicable && element.file === file.path)
+            .map((element) => ({ selector: element.selector, file: file.path })),
+        );
+      }
+    } catch (error) {
+      try {
+        await restoreReplacedFiles(replaced);
+      } catch (recoveryError) {
+        throw new BridgeHttpError(
+          500,
+          "WRITE_TRANSACTION_FAILED",
+          "Source write failed and automatic recovery did not complete. Inspect the backup manifest before retrying.",
+          {
+            operationId,
+            recovery: recoveryError instanceof Error ? recoveryError.message : "failed",
+          },
+        );
+      }
+
+      throw new BridgeHttpError(
+        500,
+        "WRITE_TRANSACTION_FAILED",
+        "Source write failed. All files already replaced by this transaction were restored.",
+        { operationId, cause: error instanceof Error ? error.message : "unknown" },
+      );
     }
 
-    await writeFile(
-      join(backupRoot, "manifest.json"),
-      `${JSON.stringify({ backupId, previewId, files: backedUp, createdAt: new Date().toISOString() }, null, 2)}\n`,
-      "utf8",
-    );
-    await writeFile(
+    if (applied.length === 0) {
+      throw new BridgeHttpError(
+        500,
+        "WRITE_TRANSACTION_FAILED",
+        "No source files were written by the apply transaction.",
+        { operationId },
+      );
+    }
+
+    await writeFileDurably(
       join(config.canonicalRoot, UI_BUDDY_DIR, "last-backup.json"),
       `${JSON.stringify({ backupId }, null, 2)}\n`,
-      "utf8",
     );
 
     config.previewArtifacts.delete(previewId);
-    return { ok: true, backupId, applied, skipped };
+    return { ok: true, operationId, backupId, applied, skipped };
   } catch (error) {
     if (
       error instanceof BridgeHttpError &&
@@ -582,40 +718,108 @@ const applyPreviewArtifact = async (
     throw error;
   }
 };
-
 export type RollbackResult = BridgeRollbackResponse;
 
-const rollback = async (rootPath: string, backupId?: string): Promise<RollbackResult> => {
+const rollback = async (
+  rootPath: string,
+  backupId?: string,
+  operationId = `rollback-${randomUUID()}`,
+): Promise<RollbackResult> => {
+  const canonicalRoot = await validateProjectRoot(rootPath);
   let id = backupId;
 
   if (id === undefined) {
-    const raw = await readFile(join(rootPath, UI_BUDDY_DIR, "last-backup.json"), "utf8");
+    const raw = await readFile(join(canonicalRoot, UI_BUDDY_DIR, "last-backup.json"), "utf8");
     id = (JSON.parse(raw) as { backupId: string }).backupId;
   }
 
   validateBackupId(id);
 
-  const backupRoot = join(rootPath, UI_BUDDY_DIR, "backups", id);
-  const manifest = JSON.parse(await readFile(join(backupRoot, "manifest.json"), "utf8")) as {
-    files: string[];
-  };
+  const backupRoot = join(canonicalRoot, UI_BUDDY_DIR, "backups", id);
+  const manifest = await readBackupManifest(backupRoot);
 
-  const restored: string[] = [];
-  for (const relPath of manifest.files) {
-    const absTarget = resolve(rootPath, relPath);
-
-    if (!isInsideRoot(rootPath, absTarget)) {
-      continue;
-    }
-
-    await validateSafeExistingPath(rootPath, absTarget);
-    await copyFile(join(backupRoot, relPath), absTarget);
-    restored.push(relPath);
+  if (manifest.backupId !== id) {
+    throw new BridgeHttpError(400, "INVALID_BACKUP_ID", "Backup manifest ID mismatch.", {
+      operationId,
+    });
   }
 
-  return { ok: true, backupId: id, restored };
-};
+  if (manifest.projectId !== stableProjectId(canonicalRoot)) {
+    throw new BridgeHttpError(
+      409,
+      "ROLLBACK_CONFLICT",
+      "Backup belongs to a different project root.",
+      { operationId },
+    );
+  }
 
+  const prepared: Array<{
+    relPath: string;
+    absTarget: string;
+    backupAbsPath: string;
+    backupContent: string;
+    mode: number | undefined;
+  }> = [];
+
+  for (const file of manifest.files) {
+    const absTarget = resolve(canonicalRoot, file.path);
+
+    if (!isInsideRoot(canonicalRoot, absTarget)) {
+      throw new BridgeHttpError(400, "BAD_REQUEST", "Rollback file resolves outside root.", {
+        operationId,
+      });
+    }
+
+    await validateSafeExistingPath(canonicalRoot, absTarget);
+    const currentContent = await readFile(absTarget, "utf8");
+
+    if (contentHash(currentContent) !== file.appliedHash) {
+      throw new BridgeHttpError(
+        409,
+        "ROLLBACK_CONFLICT",
+        "Source changed after apply. Automatic rollback refused.",
+        { operationId, path: file.path },
+      );
+    }
+
+    const backupAbsPath = resolve(canonicalRoot, file.backupPath);
+    if (!isInsideRoot(canonicalRoot, backupAbsPath)) {
+      throw new BridgeHttpError(400, "BAD_REQUEST", "Backup path resolves outside root.", {
+        operationId,
+      });
+    }
+
+    const backupContent = await readFile(backupAbsPath, "utf8");
+    if (contentHash(backupContent) !== file.beforeHash) {
+      throw new BridgeHttpError(
+        400,
+        "INVALID_BACKUP_ID",
+        "Backup content failed hash verification.",
+        {
+          operationId,
+          path: file.path,
+        },
+      );
+    }
+
+    const info = await stat(absTarget).catch(() => undefined);
+    prepared.push({
+      relPath: file.path,
+      absTarget,
+      backupAbsPath,
+      backupContent,
+      mode: info?.mode,
+    });
+  }
+
+  const restored: string[] = [];
+  for (const file of prepared) {
+    await atomicReplaceFile(file.absTarget, file.backupContent, file.mode);
+    restored.push(file.relPath);
+  }
+
+  return { ok: true, operationId, backupId: id, restored };
+};
 type BridgeRuntimeConfig = {
   canonicalRoot: string;
   projectId: string;
@@ -629,6 +833,40 @@ type BridgeRuntimeConfig = {
   allowUnauthenticatedLocalAccess: boolean;
   bodyLimitBytes: number;
   previewArtifacts: Map<string, StoredPreviewArtifact>;
+  activeOperation: { id: string; name: BridgeOperationName } | null;
+};
+
+type BridgeOperationName = "preview" | "apply" | "rollback";
+
+const withProjectOperation = async <T>(
+  config: BridgeRuntimeConfig,
+  name: BridgeOperationName,
+  run: (operationId: string) => Promise<T>,
+): Promise<T> => {
+  if (config.activeOperation !== null) {
+    throw new BridgeHttpError(409, "WRITE_LOCKED", "Another bridge transaction is active.", {
+      operationId: config.activeOperation.id,
+      operation: config.activeOperation.name,
+    });
+  }
+
+  const operationId = `${name}-${randomUUID()}`;
+  config.activeOperation = { id: operationId, name };
+  console.info(`[ui-buddy] bridge ${name} transaction started`, { operationId });
+
+  try {
+    const result = await run(operationId);
+    console.info(`[ui-buddy] bridge ${name} transaction completed`, { operationId });
+    return result;
+  } catch (error) {
+    console.error(`[ui-buddy] bridge ${name} transaction failed`, {
+      operationId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  } finally {
+    config.activeOperation = null;
+  }
 };
 
 const expectedOrigin = (config: BridgeRuntimeConfig): string | null =>
@@ -830,6 +1068,7 @@ export const startBridge = async (options: {
     allowUnauthenticatedLocalAccess: options.allowUnauthenticatedLocalAccess === true,
     bodyLimitBytes: options.bodyLimitBytes ?? DEFAULT_BODY_LIMIT_BYTES,
     previewArtifacts: new Map(),
+    activeOperation: null,
   };
 
   const server = createServer((req, res) => {
@@ -889,9 +1128,12 @@ export const startBridge = async (options: {
           assertRequestAllowed(req, config);
           assertAuthenticated(req, config);
           const body = parseBody(bridgePreviewRequestSchema, await readJsonBody(req, config));
-          const artifact = await createPreviewArtifact(body.session, config);
-          storePreviewArtifact(config, artifact);
-          sendJson(res, 200, previewResponseFromArtifact(artifact), origin, config);
+          const response = await withProjectOperation(config, "preview", async (operationId) => {
+            const artifact = await createPreviewArtifact(body.session, config, operationId);
+            storePreviewArtifact(config, artifact);
+            return previewResponseFromArtifact(artifact);
+          });
+          sendJson(res, 200, response, origin, config);
           return;
         }
 
@@ -909,7 +1151,10 @@ export const startBridge = async (options: {
           }
 
           const body = parseBody(bridgeApplyRequestSchema, await readJsonBody(req, config));
-          sendJson(res, 200, await applyPreviewArtifact(config, body.previewId), origin, config);
+          const response = await withProjectOperation(config, "apply", (operationId) =>
+            applyPreviewArtifact(config, body.previewId, operationId),
+          );
+          sendJson(res, 200, response, origin, config);
           return;
         }
 
@@ -927,7 +1172,10 @@ export const startBridge = async (options: {
           }
 
           const body = parseBody(bridgeRollbackRequestSchema, await readJsonBody(req, config));
-          sendJson(res, 200, await rollback(canonicalRoot, body.backupId), origin, config);
+          const response = await withProjectOperation(config, "rollback", (operationId) =>
+            rollback(canonicalRoot, body.backupId, operationId),
+          );
+          sendJson(res, 200, response, origin, config);
           return;
         }
 

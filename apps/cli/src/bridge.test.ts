@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { applySession, previewSession, rollback, startBridge } from "./bridge.js";
 
-import type { BridgePreviewResponse, UIChangeSession } from "@ui-buddy/shared";
+import type { BridgeApplyResponse, BridgePreviewResponse, UIChangeSession } from "@ui-buddy/shared";
 
 const roots: string[] = [];
 const EXTENSION_ID = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -66,6 +66,17 @@ const applyPreviewViaBridge = async (base: string, token: string, previewId: str
     body: JSON.stringify({ previewId }),
   });
 
+const rollbackViaBridge = async (base: string, token: string, backupId: string) =>
+  fetch(`${base}/rollback`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${token}`,
+      origin: EXTENSION_ORIGIN,
+    },
+    body: JSON.stringify({ backupId }),
+  });
+
 const session = (): UIChangeSession => ({
   id: "session-1",
   timestamp: "2026-07-01T00:00:00.000Z",
@@ -118,6 +129,7 @@ describe("bridge preview/apply/rollback", () => {
 
     const result = await previewSession(session(), root);
 
+    expect(result.operationId).toEqual(expect.stringMatching(/^preview-/));
     expect(result.previewId).toEqual(expect.any(String));
     expect(result.sessionHash).toEqual(expect.any(String));
     expect(result.projectId).toEqual(expect.any(String));
@@ -228,13 +240,53 @@ describe("bridge preview/apply/rollback", () => {
       const base = `http://127.0.0.1:${writeEnabledBridge.port}`;
       const token = await pairBridge(base, writeEnabledBridge.pairingCode);
       const preview = await previewViaBridge(base, token);
+      expect(preview.operationId).toEqual(expect.stringMatching(/^preview-/));
       const applied = await applyPreviewViaBridge(base, token, preview.previewId);
 
       expect(applied.status).toBe(200);
-      await expect(applied.json()).resolves.toMatchObject({ ok: true });
+      const appliedBody = (await applied.json()) as BridgeApplyResponse;
+      expect(appliedBody).toMatchObject({
+        ok: true,
+        operationId: expect.stringMatching(/^apply-/),
+      });
+      expect(appliedBody.backupId).toEqual(expect.any(String));
 
       const afterApply = await readFile(join(root, "src", "styles.css"), "utf8");
       expect(afterApply).toContain("color: #ff0000");
+
+      const manifest = JSON.parse(
+        await readFile(
+          join(root, ".ui-buddy", "backups", appliedBody.backupId!, "manifest.json"),
+          "utf8",
+        ),
+      ) as {
+        projectId: string;
+        operationId: string;
+        previewId: string;
+        files: Array<{ path: string; beforeHash: string; appliedHash: string; backupPath: string }>;
+      };
+      expect(manifest).toMatchObject({
+        projectId: writeEnabledBridge.projectId,
+        operationId: appliedBody.operationId,
+        previewId: preview.previewId,
+      });
+      expect(manifest.files[0]).toMatchObject({ path: "src/styles.css" });
+      expect(manifest.files[0]?.beforeHash).not.toBe(manifest.files[0]?.appliedHash);
+      expect(manifest.files[0]?.backupPath).toContain(
+        `.ui-buddy/backups/${appliedBody.backupId}/src/styles.css`,
+      );
+
+      const rolledBack = await rollbackViaBridge(base, token, appliedBody.backupId!);
+      expect(rolledBack.status).toBe(200);
+      await expect(rolledBack.json()).resolves.toMatchObject({
+        ok: true,
+        operationId: expect.stringMatching(/^rollback-/),
+        backupId: appliedBody.backupId,
+        restored: ["src/styles.css"],
+      });
+
+      const afterRollback = await readFile(join(root, "src", "styles.css"), "utf8");
+      expect(afterRollback).toContain("color: #000000");
     } finally {
       writeEnabledBridge.close();
     }
@@ -322,17 +374,52 @@ describe("bridge preview/apply/rollback", () => {
     }
   });
 
+  it("refuses rollback when source changed after apply", async () => {
+    const root = await makeProject();
+    const bridge = await startBridge({
+      rootPath: root,
+      port: 0,
+      codeSyncWriteEnabled: true,
+      allowedExtensionId: EXTENSION_ID,
+    });
+
+    try {
+      const base = `http://127.0.0.1:${bridge.port}`;
+      const token = await pairBridge(base, bridge.pairingCode);
+      const preview = await previewViaBridge(base, token);
+      const applied = await applyPreviewViaBridge(base, token, preview.previewId);
+      expect(applied.status).toBe(200);
+      const appliedBody = (await applied.json()) as BridgeApplyResponse;
+      expect(appliedBody.backupId).not.toBeNull();
+
+      await writeFile(join(root, "src", "styles.css"), "#save {\n  color: #00ff00;\n}\n", "utf8");
+      const rollbackResponse = await rollbackViaBridge(base, token, appliedBody.backupId!);
+
+      expect(rollbackResponse.status).toBe(409);
+      await expect(rollbackResponse.json()).resolves.toMatchObject({
+        ok: false,
+        code: "ROLLBACK_CONFLICT",
+      });
+      const afterRollback = await readFile(join(root, "src", "styles.css"), "utf8");
+      expect(afterRollback).toContain("color: #00ff00");
+    } finally {
+      bridge.close();
+    }
+  });
+
   it("applies the change to source and can roll it back", async () => {
     const root = await makeProject();
 
     const applied = await applySession(session(), root);
     expect(applied.applied).toHaveLength(1);
+    expect(applied.operationId).toEqual(expect.stringMatching(/^apply-/));
     expect(applied.backupId).not.toBeNull();
 
     const afterApply = await readFile(join(root, "src", "styles.css"), "utf8");
     expect(afterApply).toContain("color: #ff0000");
 
-    await rollback(root);
+    const rolledBack = await rollback(root, applied.backupId ?? undefined);
+    expect(rolledBack.operationId).toEqual(expect.stringMatching(/^rollback-/));
 
     const afterRollback = await readFile(join(root, "src", "styles.css"), "utf8");
     expect(afterRollback).toContain("color: #000000");

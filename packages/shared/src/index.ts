@@ -1145,6 +1145,10 @@ export const BRIDGE_ERROR_CODES = [
   "PREVIEW_NOT_FOUND",
   "PREVIEW_EXPIRED",
   "PREVIEW_STALE",
+  "WRITE_LOCKED",
+  "WRITE_TRANSACTION_FAILED",
+  "ROLLBACK_CONFLICT",
+  "NO_CHANGES_TO_APPLY",
   "INTERNAL_ERROR",
 ] as const;
 
@@ -1257,6 +1261,7 @@ export type BridgePreviewArtifact = z.infer<typeof bridgePreviewArtifactSchema>;
 
 export const bridgePreviewResponseSchema = bridgePreviewArtifactSchema.extend({
   ok: z.literal(true),
+  operationId: z.string().min(1),
   sessionId: z.string(),
   root: z.string(),
   elements: z.array(bridgePreviewElementSchema),
@@ -1273,21 +1278,23 @@ export type BridgeApplyRequest = z.infer<typeof bridgeApplyRequestSchema>;
 
 export const bridgeApplyResponseSchema = z.object({
   ok: z.literal(true),
+  operationId: z.string().min(1),
   backupId: z.string().nullable(),
   applied: z.array(z.object({ selector: z.string(), file: z.string() })),
-  skipped: z.array(z.object({ selector: z.string(), reason: z.string() })),
+  skipped: z.array(z.object({ selector: z.string(), reason: z.string(), code: z.string().min(1) })),
 });
 
 export type BridgeApplyResponse = z.infer<typeof bridgeApplyResponseSchema>;
 
 export const bridgeRollbackRequestSchema = z.object({
-  backupId: z.string().optional(),
+  backupId: z.string().min(1),
 });
 
 export type BridgeRollbackRequest = z.infer<typeof bridgeRollbackRequestSchema>;
 
 export const bridgeRollbackResponseSchema = z.object({
   ok: z.literal(true),
+  operationId: z.string().min(1),
   backupId: z.string(),
   restored: z.array(z.string()),
 });
