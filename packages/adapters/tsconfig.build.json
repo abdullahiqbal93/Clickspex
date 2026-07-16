@@ -1,7 +1,7 @@
 {
-  "extends": "./tsconfig.json",
+  "extends": "../config/tsconfig.production.json",
   "compilerOptions": {
-    "noEmit": false,
+    "incremental": true,
     "outDir": "dist",
     "rootDir": "src",
     "tsBuildInfoFile": "dist/tsconfig.tsbuildinfo"

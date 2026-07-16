@@ -23,6 +23,7 @@
     "@ui-buddy/shared": "workspace:*"
   },
   "devDependencies": {
-    "@ui-buddy/config": "workspace:*"
+    "@ui-buddy/config": "workspace:*",
+    "vitest": "^3.0.0"
   }
 }

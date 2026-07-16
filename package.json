@@ -10,11 +10,14 @@
     "lint": "pnpm -r lint",
     "test": "pnpm -r test",
     "format": "pnpm -r format && prettier --write .",
-    "connect": "pnpm --filter ui-buddy build && node apps/cli/dist/index.js connect",
+    "format:check": "prettier --check .",
+    "connect": "pnpm --filter ui-buddy bundle && node apps/cli/dist/index.js connect",
+    "smoke:cli:pack": "pnpm --filter ui-buddy run smoke:pack",
+    "validate:extension": "node scripts/validate-extension-manifest.mjs",
     "release:cli": "pnpm build && pnpm --filter ui-buddy publish --no-git-checks"
   },
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=20.0.0"
   },
   "devDependencies": {
     "@types/chrome": "^0.1.0",

@@ -135,7 +135,7 @@ program
       `${JSON.stringify({ version: 1, readOnlyCodeSync: true }, null, 2)}\n`,
       "utf8",
     );
-    process.stdout.write(`${chalk.green("initialized")} ${configDir}\n`);
+    process.stdout.write(`${chalk.green("*")} ${configDir}\n`);
   });
 
 program
@@ -235,38 +235,63 @@ program
 
 program
   .command("connect")
-  .description("start a localhost bridge so the ui-buddy extension can preview and apply changes")
+  .description("start a localhost bridge so the ui-buddy extension can preview changes")
   .option("--path <path>", "project path", process.cwd())
   .option("--port <port>", "port to listen on", "7317")
   .option("--open <url>", "open this URL (your running app) in the browser after starting")
-  .action(async (options: { path: string; port: string; open?: string }) => {
-    const rootPath = resolve(options.path);
-    const parsedPort = Number.parseInt(options.port, 10);
-    const port = Number.isNaN(parsedPort) ? 7317 : parsedPort;
-    const bridge = await startBridge({ rootPath, port });
-    const url = `http://127.0.0.1:${bridge.port}`;
+  .option(
+    "--enable-code-sync-writes",
+    "enable experimental source apply and rollback endpoints; disabled by default",
+  )
+  .action(
+    async (options: {
+      path: string;
+      port: string;
+      open?: string;
+      enableCodeSyncWrites?: boolean;
+    }) => {
+      const rootPath = resolve(options.path);
+      const parsedPort = Number.parseInt(options.port, 10);
+      const port = Number.isNaN(parsedPort) ? 7317 : parsedPort;
+      const codeSyncWriteEnabled = options.enableCodeSyncWrites === true;
+      const bridge = await startBridge({ rootPath, port, codeSyncWriteEnabled });
+      const url = `http://127.0.0.1:${bridge.port}`;
 
-    process.stdout.write("\n");
-    process.stdout.write(`${chalk.green("●")} ${chalk.bold("ui-buddy bridge")}  ${url}\n`);
-    process.stdout.write(`  ${chalk.bold("project")}  ${rootPath}\n`);
-    process.stdout.write(`  ${chalk.bold("port")}     ${bridge.port}\n\n`);
-    process.stdout.write("  Next steps:\n");
-    process.stdout.write("   1. Open your running app in Chrome\n");
-    process.stdout.write("   2. Open the ui-buddy side panel and edit elements\n");
-    process.stdout.write(
-      `   3. Export -> Code sync (port ${bridge.port}) -> Preview diff -> Apply to code\n\n`,
-    );
-    process.stdout.write(chalk.dim("  Ctrl+C to stop.\n"));
+      process.stdout.write("\n");
+      process.stdout.write(`${chalk.green("*")} ${chalk.bold("ui-buddy bridge")}  ${url}\n`);
+      process.stdout.write(`  ${chalk.bold("project")}  ${rootPath}\n`);
+      process.stdout.write(`  ${chalk.bold("port")}     ${bridge.port}\n`);
+      process.stdout.write(
+        `  ${chalk.bold("writes")}   ${
+          codeSyncWriteEnabled
+            ? chalk.yellow("experimental apply/rollback enabled")
+            : chalk.dim("disabled; preview/export only")
+        }\n\n`,
+      );
+      process.stdout.write("  Next steps:\n");
+      process.stdout.write("   1. Open your running app in Chrome\n");
+      process.stdout.write("   2. Open the ui-buddy side panel and edit elements\n");
+      process.stdout.write(`   3. Export -> Code sync (port ${bridge.port}) -> Preview diff\n`);
+      if (!codeSyncWriteEnabled) {
+        process.stdout.write(
+          chalk.dim(
+            "      Source apply is off by default. Restart with --enable-code-sync-writes to test it.\n",
+          ),
+        );
+      }
+      process.stdout.write("\n");
+      process.stdout.write(chalk.dim("  Ctrl+C to stop.\n"));
 
-    if (options.open !== undefined) {
-      openBrowser(options.open);
-    }
+      if (options.open !== undefined) {
+        openBrowser(options.open);
+      }
 
-    process.on("SIGINT", () => {
-      bridge.close();
-      process.exit(0);
-    });
-  });
+      process.on("SIGINT", () => {
+        bridge.close();
+        process.exit(0);
+      });
+    },
+  );
 
 program
   .command("export-example")

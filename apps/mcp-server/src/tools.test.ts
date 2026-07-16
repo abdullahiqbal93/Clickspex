@@ -13,7 +13,7 @@ import {
   handleScanProject,
 } from "./tools.js";
 
-import type { UIChangeIntent, UIChangeSession } from "@ui-buddy/shared";
+import type { ChangeIntentInput, GenerateSessionExportInput } from "./tools.js";
 
 type ScanData = { rootPath: string; files: string[] };
 type IndexData = { rootPath: string; files: Array<{ path: string; classNames: string[] }> };
@@ -38,7 +38,7 @@ afterEach(async () => {
   await Promise.all(tempRoots.splice(0).map((rootPath) => rm(rootPath, { recursive: true })));
 });
 
-const changeIntent: UIChangeIntent = {
+const changeIntent: ChangeIntentInput["changeIntent"] = {
   id: "mcp-intent",
   timestamp: "2026-07-01T00:00:00.000Z",
   pageUrl: "https://example.test",
@@ -182,7 +182,7 @@ describe("MCP tool handlers", () => {
   });
 
   it("generates exports for every element in a change session", () => {
-    const session: UIChangeSession = {
+    const session: GenerateSessionExportInput["session"] = {
       id: "mcp-session",
       timestamp: "2026-07-01T00:00:00.000Z",
       pageUrl: "https://example.test",

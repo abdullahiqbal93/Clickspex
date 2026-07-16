@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [main, staging]
+  pull_request:
+    branches: [main, staging]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: ${{ matrix.os }} / Node ${{ matrix.node-version }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        node-version: [20, 22]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Prettier check
+        run: pnpm format:check
+
+      - name: ESLint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Monorepo build
+        run: pnpm build
+
+      - name: Packed CLI smoke
+        run: pnpm smoke:cli:pack
+
+      - name: Build extension
+        run: pnpm --filter @ui-buddy/extension build
+
+      - name: Validate extension manifest
+        run: pnpm validate:extension
+
+      - name: Dependency audit
+        run: pnpm audit --audit-level high
+
+      - name: Verify clean working tree
+        shell: bash
+        run: git diff --exit-code && test -z "$(git status --porcelain)"

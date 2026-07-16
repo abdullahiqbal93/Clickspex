@@ -98,8 +98,63 @@ describe("bridge preview/apply/rollback", () => {
         headers: { origin: "chrome-extension://abcdef" },
       });
       expect(fromExtension.status).toBe(200);
+      await expect(fromExtension.json()).resolves.toMatchObject({ codeSyncWriteEnabled: false });
     } finally {
       bridge.close();
+    }
+  });
+
+  it("keeps HTTP source writes disabled unless explicitly enabled", async () => {
+    const root = await makeProject();
+    const bridge = await startBridge({ rootPath: root, port: 0 });
+
+    try {
+      const base = `http://127.0.0.1:${bridge.port}`;
+      const blocked = await fetch(`${base}/apply`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          origin: "chrome-extension://abcdef",
+        },
+        body: JSON.stringify({ session: session() }),
+      });
+
+      expect(blocked.status).toBe(403);
+      await expect(blocked.json()).resolves.toMatchObject({
+        ok: false,
+        code: "CODE_SYNC_WRITES_DISABLED",
+      });
+
+      const afterBlockedApply = await readFile(join(root, "src", "styles.css"), "utf8");
+      expect(afterBlockedApply).toContain("color: #000000");
+    } finally {
+      bridge.close();
+    }
+
+    const writeEnabledBridge = await startBridge({
+      rootPath: root,
+      port: 0,
+      codeSyncWriteEnabled: true,
+    });
+
+    try {
+      const base = `http://127.0.0.1:${writeEnabledBridge.port}`;
+      const applied = await fetch(`${base}/apply`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          origin: "chrome-extension://abcdef",
+        },
+        body: JSON.stringify({ session: session() }),
+      });
+
+      expect(applied.status).toBe(200);
+      await expect(applied.json()).resolves.toMatchObject({ ok: true });
+
+      const afterApply = await readFile(join(root, "src", "styles.css"), "utf8");
+      expect(afterApply).toContain("color: #ff0000");
+    } finally {
+      writeEnabledBridge.close();
     }
   });
 

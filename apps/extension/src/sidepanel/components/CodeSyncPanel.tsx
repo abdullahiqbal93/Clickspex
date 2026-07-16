@@ -6,7 +6,12 @@ import type { UIChangeSession } from "@ui-buddy/shared";
 const DEFAULT_PORT = "7317";
 const PORT_STORAGE_KEY = "ubBridgePort";
 
-type HealthResponse = { ok: boolean; name: string; root: string };
+type HealthResponse = {
+  ok: boolean;
+  name: string;
+  root: string;
+  codeSyncWriteEnabled?: boolean;
+};
 
 type PreviewElement = {
   selector: string;
@@ -37,6 +42,10 @@ const fetchJson = async <T,>(url: string, options: RequestInit, timeoutMs: numbe
 
   try {
     const response = await fetch(url, { ...options, signal: controller.signal });
+    if (!response.ok) {
+      throw new Error(`Bridge request failed with HTTP ${response.status}`);
+    }
+
     return (await response.json()) as T;
   } finally {
     window.clearTimeout(timer);
@@ -51,6 +60,7 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
   const [port, setPort] = useState(DEFAULT_PORT);
   const [connection, setConnection] = useState<ConnectionState>("idle");
   const [projectName, setProjectName] = useState<string | null>(null);
+  const [codeSyncWriteEnabled, setCodeSyncWriteEnabled] = useState(false);
   const [preview, setPreview] = useState<PreviewResponse | null>(null);
   const [applyResult, setApplyResult] = useState<ApplyResponse | null>(null);
   const [confirming, setConfirming] = useState(false);
@@ -72,14 +82,17 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
 
       if (health.ok) {
         setProjectName(health.name);
+        setCodeSyncWriteEnabled(health.codeSyncWriteEnabled === true);
         setConnection("connected");
         return;
       }
 
+      setCodeSyncWriteEnabled(false);
       setConnection("disconnected");
     } catch {
       setConnection("disconnected");
       setProjectName(null);
+      setCodeSyncWriteEnabled(false);
     }
   }, []);
 
@@ -123,6 +136,13 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
   };
 
   const runApply = async () => {
+    if (!codeSyncWriteEnabled) {
+      setError(
+        "Source writes are disabled. Restart `ui-buddy connect` with --enable-code-sync-writes to apply changes.",
+      );
+      return;
+    }
+
     setBusy(true);
     setError(null);
     setConfirming(false);
@@ -146,11 +166,24 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
   };
 
   const runRollback = async () => {
+    if (!codeSyncWriteEnabled) {
+      setError("Undo apply is disabled because source writes are off for this bridge session.");
+      return;
+    }
+
     setBusy(true);
     setError(null);
 
     try {
-      await fetchJson(`${baseUrl}/rollback`, { method: "POST", headers: {} }, 8000);
+      await fetchJson(
+        `${baseUrl}/rollback`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ backupId: applyResult?.backupId ?? undefined }),
+        },
+        8000,
+      );
       setApplyResult(null);
       setError(null);
     } catch {
@@ -161,6 +194,7 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
   };
 
   const applicablePreviews = preview?.elements.filter((element) => element.applicable) ?? [];
+  const canWriteToCode = connection === "connected" && codeSyncWriteEnabled;
 
   return (
     <section className="ub-card p-4">
@@ -195,7 +229,7 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
             Connected to <span className="font-semibold">{projectName}</span>
           </span>
         ) : connection === "checking" ? (
-          <span className="text-muted">Checking…</span>
+          <span className="text-muted">Checking...</span>
         ) : (
           <span className="text-muted">
             Not connected. Run <code className="ub-chip">npx ui-buddy connect</code> in your
@@ -210,6 +244,23 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
           value={port}
         />
       </div>
+
+      {connection === "connected" ? (
+        <div
+          className={`mt-3 flex items-start gap-2 rounded-xl border p-2.5 text-2xs ${
+            codeSyncWriteEnabled
+              ? "border-amber-200 bg-amber-50 text-amber-800"
+              : "border-slate-200 bg-slate-50 text-muted"
+          }`}
+        >
+          <AlertTriangle aria-hidden="true" className="mt-0.5 shrink-0" size={13} />
+          <span>
+            {codeSyncWriteEnabled
+              ? "Experimental source writes are enabled for this bridge session. Preview carefully before applying."
+              : "Source writes are disabled by default. Preview diff and exports remain available."}
+          </span>
+        </div>
+      ) : null}
 
       {connection === "connected" ? (
         <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -227,7 +278,7 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
             <>
               <button
                 className="ub-btn-danger"
-                disabled={busy}
+                disabled={!canWriteToCode || busy}
                 onClick={() => void runApply()}
                 type="button"
               >
@@ -240,12 +291,14 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
           ) : (
             <button
               className="ub-btn-primary"
-              disabled={busy || applicablePreviews.length === 0}
+              disabled={!canWriteToCode || busy || applicablePreviews.length === 0}
               onClick={() => setConfirming(true)}
               title={
-                applicablePreviews.length === 0
-                  ? "Preview first to see applicable changes"
-                  : "Write these changes to your source files"
+                !canWriteToCode
+                  ? "Source writes are disabled for this bridge session"
+                  : applicablePreviews.length === 0
+                    ? "Preview first to see applicable changes"
+                    : "Write these changes to your source files"
               }
               type="button"
             >
@@ -298,10 +351,12 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
           </div>
           {applyResult.applied.map((item) => (
             <p className="truncate font-mono text-[10px] text-muted" key={item.selector}>
-              {item.file} ← {item.selector}
+              {item.file}
+              {" <- "}
+              {item.selector}
             </p>
           ))}
-          {applyResult.backupId !== null ? (
+          {applyResult.backupId !== null && codeSyncWriteEnabled ? (
             <button
               className="ub-btn"
               disabled={busy}

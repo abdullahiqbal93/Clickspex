@@ -19,6 +19,7 @@
     "format": "prettier --write . --ignore-path ../../.prettierignore"
   },
   "devDependencies": {
-    "@ui-buddy/config": "workspace:*"
+    "@ui-buddy/config": "workspace:*",
+    "vitest": "^3.0.0"
   }
 }

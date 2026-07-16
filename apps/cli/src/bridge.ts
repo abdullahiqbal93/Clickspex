@@ -9,15 +9,18 @@ import type { ProjectContext, UIChangeIntent, UIChangeSession } from "@ui-buddy/
 
 const UI_BUDDY_DIR = ".ui-buddy";
 
-// ── Safety ──────────────────────────────────────────────────
+const WRITE_DISABLED_ERROR = {
+  ok: false,
+  code: "CODE_SYNC_WRITES_DISABLED",
+  error:
+    "Source writes are disabled. Restart ui-buddy connect with --enable-code-sync-writes to apply or roll back source changes.",
+} as const;
 
 /** True when `target` resolves to a path inside `root` (blocks path traversal). */
 const isInsideRoot = (root: string, target: string): boolean => {
   const rel = relative(root, target);
   return rel.length > 0 && !rel.startsWith("..") && !isAbsolute(rel);
 };
-
-// ── Preview ─────────────────────────────────────────────────
 
 export type PreviewElement = {
   selector: string;
@@ -77,8 +80,6 @@ const previewSession = async (
     })),
   };
 };
-
-// ── Apply (guarded, with backups) ───────────────────────────
 
 export type ApplyResult = {
   ok: true;
@@ -190,8 +191,6 @@ const applySession = async (
   return { ok: true, backupId, applied, skipped };
 };
 
-// ── Rollback ────────────────────────────────────────────────
-
 export type RollbackResult = {
   ok: true;
   backupId: string;
@@ -226,10 +225,8 @@ const rollback = async (rootPath: string, backupId?: string): Promise<RollbackRe
   return { ok: true, backupId: id, restored };
 };
 
-// ── HTTP server ─────────────────────────────────────────────
-
 /**
- * Only the extension (chrome-extension://…) may talk to the bridge. This blocks
+ * Only the extension (chrome-extension://) may talk to the bridge. This blocks
  * drive-by websites: without it, any page the user has open could POST to the
  * bridge and read source (via /preview) or overwrite files (via /apply), since
  * the browser sends the page's real Origin and cannot spoof it. Requests with no
@@ -282,8 +279,9 @@ type BridgeHandle = {
 export const startBridge = async (options: {
   rootPath: string;
   port: number;
+  codeSyncWriteEnabled?: boolean;
 }): Promise<BridgeHandle> => {
-  const { rootPath, port } = options;
+  const { rootPath, port, codeSyncWriteEnabled = false } = options;
 
   const server = createServer((req, res) => {
     void (async () => {
@@ -314,6 +312,7 @@ export const startBridge = async (options: {
               name: await projectName(rootPath),
               root: rootPath,
               version: "0.1.0",
+              codeSyncWriteEnabled,
             },
             origin,
           );
@@ -327,12 +326,22 @@ export const startBridge = async (options: {
         }
 
         if (req.method === "POST" && url.startsWith("/apply")) {
+          if (!codeSyncWriteEnabled) {
+            sendJson(res, 403, WRITE_DISABLED_ERROR, origin);
+            return;
+          }
+
           const body = await readJsonBody<{ session: UIChangeSession; selectors?: string[] }>(req);
           sendJson(res, 200, await applySession(body.session, rootPath, body.selectors), origin);
           return;
         }
 
         if (req.method === "POST" && url.startsWith("/rollback")) {
+          if (!codeSyncWriteEnabled) {
+            sendJson(res, 403, WRITE_DISABLED_ERROR, origin);
+            return;
+          }
+
           const body = await readJsonBody<{ backupId?: string }>(req);
           sendJson(res, 200, await rollback(rootPath, body.backupId), origin);
           return;

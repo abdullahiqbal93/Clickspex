@@ -34,6 +34,7 @@
     "build": "tsc -p tsconfig.build.json",
     "bundle": "pnpm --filter @ui-buddy/shared --filter @ui-buddy/core --filter @ui-buddy/adapters run build && tsup",
     "prepack": "pnpm run bundle",
+    "smoke:pack": "node scripts/smoke-packed-cli.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint .",
     "test": "vitest run --passWithNoTests",
@@ -48,6 +49,7 @@
     "@ui-buddy/config": "workspace:*",
     "@ui-buddy/core": "workspace:*",
     "@ui-buddy/shared": "workspace:*",
-    "tsup": "^8.0.0"
+    "tsup": "^8.0.0",
+    "vitest": "^3.0.0"
   }
 }
