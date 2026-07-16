@@ -17,7 +17,7 @@
     "release:cli": "pnpm build && pnpm --filter ui-buddy publish --no-git-checks"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.13.0"
   },
   "devDependencies": {
     "@types/chrome": "^0.1.0",
