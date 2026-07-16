@@ -63,6 +63,9 @@ jobs:
       - name: Validate extension manifest
         run: pnpm validate:extension
 
+      - name: Release consistency
+        run: pnpm release:check
+
       - name: Dependency audit
         run: pnpm audit --audit-level high
 

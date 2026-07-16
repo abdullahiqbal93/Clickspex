@@ -1,0 +1,34 @@
+﻿version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+    open-pull-requests-limit: 10
+    groups:
+      vite-tooling:
+        patterns:
+          - vite
+          - vitest
+          - vite-node
+          - "@vitejs/*"
+          - "@vitest/*"
+          - esbuild
+      eslint-tooling:
+        patterns:
+          - eslint
+          - "@typescript-eslint/*"
+          - eslint-*
+      react:
+        patterns:
+          - react
+          - react-dom
+          - "@types/react*"
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"

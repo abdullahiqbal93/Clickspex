@@ -119,33 +119,23 @@ The MCP server exposes read-only tools only. See `docs/mcp-tools.md` for tool si
 
 ## Publishing
 
-Two artifacts ship to users: the **CLI** (npm) and the **extension** (Chrome Web Store).
-
-**CLI -> npm.** The `clickspex` package bundles its internal `@clickspex/*` packages into a single
-self-contained binary (via tsup), so `npx clickspex` needs nothing else on npm. To cut a release:
+Clickspex releases are generated from the repository root. Release-affecting changes should include a Changeset so the CLI, extension, MCP server, shared protocol, core package, and adapters move together as one product version.
 
 ```bash
-pnpm install          # first time, to fetch tsup
-pnpm typecheck        # type-safe across all packages
-pnpm test             # unit tests incl. the bridge apply/rollback
-pnpm release:cli      # builds, bundles (prepack), and publishes `clickspex`
+pnpm changeset          # describe a release-affecting change
+pnpm version:packages   # apply pending Changesets before cutting a release
+pnpm release:artifacts  # build, check versions, pack artifacts, generate SBOM/checksums
 ```
 
-`pnpm --filter clickspex bundle` produces the standalone `apps/cli/dist/index.js` if you want to
-inspect the artifact before publishing. If the unscoped name `clickspex` is taken on npm, publish
-under a scope (e.g. `@your-org/clickspex`); the command then becomes `npx @your-org/clickspex connect`.
+The release artifact command produces ignored files in `artifacts/`:
 
-**Extension -> Chrome Web Store.** Build and zip the unpacked build, then upload it in the Web Store
-developer dashboard:
+- `clickspex-cli-<version>.tgz` ? self-contained npm CLI package.
+- `clickspex-extension-<version>.zip` ? deterministic Chrome extension ZIP built from `apps/extension/dist`.
+- `clickspex-sbom.cdx.json` ? CycloneDX SBOM for the workspace dependency graph.
+- `CHECKSUMS.sha256` ? SHA-256 checksums for release artifacts.
+- `clickspex-provenance.json` ? local provenance metadata including product versions, git commit, Node, package manager, and artifact hashes.
 
-```bash
-pnpm --filter @clickspex/extension build
-# Windows:  Compress-Archive -Path apps/extension/dist/* -DestinationPath clickspex-extension.zip
-# macOS/Linux:  (cd apps/extension/dist && zip -r ../../../clickspex-extension.zip .)
-```
-
-The manifest, permissions, and icons are already in place; the store listing (name, description,
-screenshots) is added in the dashboard.
+Before publishing, run the production release gate in [docs/release.md](docs/release.md). Source writes remain disabled by default and must not be marketed as production-safe until the full gate passes.
 
 ## Documentation
 
@@ -157,6 +147,7 @@ screenshots) is added in the dashboard.
 - `docs/mcp-tools.md`
 - `docs/ai-code-sync-roadmap.md`
 - `docs/git-workflow.md`
+- `docs/release.md`
 
 ## Security And Safety
 

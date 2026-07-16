@@ -127,3 +127,7 @@ report it privately to the maintainer first so it can be fixed before disclosure
 
 By contributing, you agree that your contributions are licensed under the
 project's [MIT License](./LICENSE).
+
+## Release-affecting changes
+
+Use `pnpm changeset` for any user-visible or package-versioned change. Before requesting release approval, run `pnpm release:check`; before publishing artifacts, run `pnpm release:artifacts`. Do not commit generated files from `artifacts/`.

@@ -69,3 +69,14 @@ The server uses stdio and exposes read-only tools documented in `docs/mcp-tools.
 ## Generated Files
 
 Build outputs live in package `dist` folders and are ignored by Git. Do not commit generated extension bundles or compiled TypeScript output unless release packaging is added later.
+
+## Release hardening
+
+Phase 10 release automation lives at the repository root:
+
+```bash
+pnpm release:check      # version/protocol/workflow consistency
+pnpm release:artifacts  # build, package CLI and extension, generate SBOM/checksums
+```
+
+Generated release files are written to `artifacts/` and ignored by Git. See `docs/release.md` for the production release gate and source-of-truth behavior table.

@@ -135,14 +135,15 @@ const setInputValue = (input: HTMLInputElement, value: string) => {
 describe("CascadeExplorer interactions", () => {
   let container: HTMLDivElement;
   let reactRoot: Root;
-  let onCommit: ReturnType<typeof vi.fn>;
+  type CommitHandler = (property: string, value: string) => Promise<void>;
+  let onCommit: ReturnType<typeof vi.fn<CommitHandler>>;
 
   beforeEach(() => {
     container = document.createElement("div");
     document.body.append(container);
     reactRoot = createRoot(container);
     mockedSendMessageToActiveTab.mockClear();
-    onCommit = vi.fn().mockResolvedValue(undefined);
+    onCommit = vi.fn<CommitHandler>().mockResolvedValue(undefined);
 
     act(() => {
       reactRoot.render(

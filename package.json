@@ -5,21 +5,30 @@
   "type": "module",
   "packageManager": "pnpm@11.7.0",
   "scripts": {
-    "build": "pnpm -r build",
-    "typecheck": "pnpm -r typecheck",
-    "lint": "pnpm -r lint",
-    "test": "pnpm -r test",
-    "format": "pnpm -r format && prettier --write .",
+    "build": "pnpm -r --workspace-concurrency=1 build",
+    "typecheck": "pnpm -r --workspace-concurrency=1 typecheck",
+    "lint": "pnpm -r --workspace-concurrency=1 lint",
+    "test": "pnpm -r --workspace-concurrency=1 test",
+    "format": "pnpm -r --workspace-concurrency=1 format && prettier --write .",
     "format:check": "prettier --check .",
     "connect": "pnpm --filter clickspex bundle && node apps/cli/dist/index.js connect",
     "smoke:cli:pack": "pnpm --filter clickspex run smoke:pack",
     "validate:extension": "node scripts/validate-extension-manifest.mjs",
-    "release:cli": "pnpm build && pnpm --filter clickspex publish --no-git-checks"
+    "release:cli": "pnpm release:artifacts && pnpm --filter clickspex publish --no-git-checks",
+    "changeset": "changeset",
+    "version:packages": "changeset version",
+    "release:check": "node scripts/check-release-consistency.mjs",
+    "release:pack:cli": "node scripts/pack-cli.mjs",
+    "release:pack:extension": "node scripts/pack-extension.mjs",
+    "release:sbom": "node scripts/generate-sbom.mjs",
+    "release:checksums": "node scripts/write-release-metadata.mjs",
+    "release:artifacts": "pnpm build && pnpm release:check && pnpm release:pack:cli && pnpm release:pack:extension && pnpm release:sbom && pnpm release:checksums"
   },
   "engines": {
     "node": ">=22.13.0"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.31.1",
     "@types/chrome": "^0.1.0",
     "@types/node": "^24.0.0",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
@@ -33,6 +42,6 @@
     "jsdom": "^26.0.0",
     "prettier": "^3.6.2",
     "typescript": "^5.0.0",
-    "vitest": "^3.0.0"
+    "vitest": "^4.1.10"
   }
 }
