@@ -120,11 +120,13 @@ const previewPatchSuggestions = async (
   ];
 };
 
-program.name("ui-buddy").description("ui-buddy local project utility").version("0.1.0");
+const PRODUCT_VERSION = "0.1.0";
+
+program.name("ui-buddy").description("ui-buddy local project utility").version(PRODUCT_VERSION);
 
 program
   .command("init")
-  .description("initialize a .ui-buddy config in the project")
+  .description("initialize a .ui-buddy capability policy in the project")
   .option("--path <path>", "project path", process.cwd())
   .action(async (options: { path: string }) => {
     const rootPath = resolve(options.path);
@@ -132,7 +134,7 @@ program
     await mkdir(configDir, { recursive: true });
     await writeFile(
       resolve(configDir, "config.json"),
-      `${JSON.stringify({ version: 1, readOnlyCodeSync: true }, null, 2)}\n`,
+      `${JSON.stringify({ version: 1, capabilities: { codeSyncWrites: "disabled-by-default" } }, null, 2)}\n`,
       "utf8",
     );
     process.stdout.write(`${chalk.green("*")} ${configDir}\n`);
@@ -256,6 +258,14 @@ program
     "--enable-code-sync-writes",
     "enable experimental source apply and rollback endpoints; disabled by default",
   )
+  .option("--verbose", "emit debug bridge logs")
+  .option("--json-logs", "emit bridge logs as newline-delimited JSON")
+  .option("--scan-max-files <count>", "maximum source files to index before refusing source writes")
+  .option(
+    "--scan-max-depth <count>",
+    "maximum directory depth to index before refusing source writes",
+  )
+  .option("--scan-max-file-bytes <count>", "maximum individual source file size to index")
   .action(
     async (options: {
       path: string;
@@ -265,11 +275,35 @@ program
       allowAnyExtensionOrigin?: boolean;
       allowUnauthenticatedLocalAccess?: boolean;
       enableCodeSyncWrites?: boolean;
+      verbose?: boolean;
+      jsonLogs?: boolean;
+      scanMaxFiles?: string;
+      scanMaxDepth?: string;
+      scanMaxFileBytes?: string;
     }) => {
       const rootPath = resolve(options.path);
       const parsedPort = Number.parseInt(options.port, 10);
       const port = Number.isNaN(parsedPort) ? 7317 : parsedPort;
       const codeSyncWriteEnabled = options.enableCodeSyncWrites === true;
+      const parsePositiveIntegerOption = (value: string | undefined): number | undefined => {
+        if (value === undefined) {
+          return undefined;
+        }
+
+        if (!/^\d+$/.test(value)) {
+          throw new Error("Scan limits must be positive integers.");
+        }
+
+        const parsed = Number(value);
+        if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+          throw new Error("Scan limits must be positive integers.");
+        }
+
+        return parsed;
+      };
+      const scanMaxFiles = parsePositiveIntegerOption(options.scanMaxFiles);
+      const scanMaxDepth = parsePositiveIntegerOption(options.scanMaxDepth);
+      const scanMaxFileBytes = parsePositiveIntegerOption(options.scanMaxFileBytes);
       const bridge = await startBridge({
         rootPath,
         port,
@@ -277,6 +311,11 @@ program
         allowedExtensionId: options.extensionId,
         allowAnyExtensionOrigin: options.allowAnyExtensionOrigin === true,
         allowUnauthenticatedLocalAccess: options.allowUnauthenticatedLocalAccess === true,
+        verbose: options.verbose === true,
+        jsonLogs: options.jsonLogs === true,
+        ...(scanMaxFiles === undefined ? {} : { scanMaxFiles }),
+        ...(scanMaxDepth === undefined ? {} : { scanMaxDepth }),
+        ...(scanMaxFileBytes === undefined ? {} : { scanMaxFileBytes }),
       });
       const url = `http://127.0.0.1:${bridge.port}`;
 

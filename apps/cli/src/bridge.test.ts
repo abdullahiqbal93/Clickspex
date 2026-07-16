@@ -323,6 +323,40 @@ describe("bridge preview/apply/rollback", () => {
     }
   });
 
+  it("refuses source previews when the project index is truncated", async () => {
+    const root = await makeProject();
+    await mkdir(join(root, "zzz"));
+    await writeFile(join(root, "zzz", "other.css"), ".other { color: blue; }\n", "utf8");
+    const bridge = await startBridge({
+      rootPath: root,
+      port: 0,
+      allowedExtensionId: EXTENSION_ID,
+      scanMaxFiles: 1,
+    });
+
+    try {
+      const base = `http://127.0.0.1:${bridge.port}`;
+      const token = await pairBridge(base, bridge.pairingCode);
+      const response = await fetch(`${base}/preview`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${token}`,
+          origin: EXTENSION_ORIGIN,
+        },
+        body: JSON.stringify({ session: session() }),
+      });
+
+      expect(response.status).toBe(409);
+      await expect(response.json()).resolves.toMatchObject({
+        ok: false,
+        code: "SOURCE_INDEX_TRUNCATED",
+        details: expect.objectContaining({ indexedFiles: "1" }),
+      });
+    } finally {
+      bridge.close();
+    }
+  });
   it("rejects stale preview artifacts when source changes after preview", async () => {
     const root = await makeProject();
     const bridge = await startBridge({

@@ -413,12 +413,28 @@ export type ProjectSourceFile = ProjectFileSummary & {
   content: string;
 };
 
+export type ProjectIndexSkippedPath = {
+  path: string;
+  reason:
+    | "directory_ignored"
+    | "file_ignored"
+    | "secret_like"
+    | "unsupported_extension"
+    | "too_large"
+    | "max_depth"
+    | "max_files"
+    | "read_error";
+};
+
 export type ProjectIndexStats = {
   indexedFiles: number;
   skippedFiles: number;
   truncated: boolean;
   maxDepth: number;
+  maxFiles: number;
   maxFileBytes: number;
+  skippedPaths: ProjectIndexSkippedPath[];
+  truncatedPaths: string[];
 };
 
 export type ProjectContext = {
@@ -1149,6 +1165,7 @@ export const BRIDGE_ERROR_CODES = [
   "WRITE_TRANSACTION_FAILED",
   "ROLLBACK_CONFLICT",
   "NO_CHANGES_TO_APPLY",
+  "SOURCE_INDEX_TRUNCATED",
   "INTERNAL_ERROR",
 ] as const;
 

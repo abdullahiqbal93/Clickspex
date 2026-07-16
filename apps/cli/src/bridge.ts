@@ -35,6 +35,51 @@ const PREVIEW_TTL_MS = 10 * 60 * 1000;
 const MAX_PREVIEW_ARTIFACTS = 25;
 const TRANSACTION_TEMP_PREFIX = `.ui-buddy-tmp-${process.pid}-`;
 
+type BridgeLogLevel = "debug" | "info" | "warn" | "error";
+
+type BridgeLogFields = Record<string, string | number | boolean | null | undefined>;
+
+type BridgeLogger = {
+  log: (level: BridgeLogLevel, event: string, fields?: BridgeLogFields) => void;
+};
+
+const SENSITIVE_LOG_FIELD_PATTERN = /token|authorization|content|diff|source|pairingCode/i;
+
+const redactLogFields = (fields: BridgeLogFields = {}): BridgeLogFields =>
+  Object.fromEntries(
+    Object.entries(fields).map(([key, value]) => [
+      key,
+      SENSITIVE_LOG_FIELD_PATTERN.test(key) ? "[redacted]" : value,
+    ]),
+  );
+
+const createBridgeLogger = (options: { verbose?: boolean; json?: boolean } = {}): BridgeLogger => ({
+  log: (level, event, fields = {}) => {
+    if (level === "debug" && options.verbose !== true) {
+      return;
+    }
+
+    const redactedFields = redactLogFields(fields);
+
+    if (options.json === true) {
+      const line = JSON.stringify({
+        timestamp: new Date().toISOString(),
+        level,
+        event,
+        ...redactedFields,
+      });
+      (level === "error" ? process.stderr : process.stdout).write(`${line}\n`);
+      return;
+    }
+
+    const suffix =
+      Object.keys(redactedFields).length === 0 ? "" : ` ${JSON.stringify(redactedFields)}`;
+    (level === "error" ? process.stderr : process.stdout).write(
+      `[ui-buddy] ${level} ${event}${suffix}\n`,
+    );
+  },
+});
+
 class BridgeHttpError extends Error {
   constructor(
     readonly status: number,
@@ -203,12 +248,39 @@ const previewResponseFromArtifact = (artifact: StoredPreviewArtifact): BridgePre
 
 const createPreviewArtifact = async (
   session: UIChangeSession,
-  config: Pick<BridgeRuntimeConfig, "canonicalRoot" | "projectId" | "bridgeInstanceId">,
+  config: {
+    canonicalRoot: string;
+    projectId: string;
+    bridgeInstanceId: string;
+    scanMaxDepth?: number;
+    scanMaxFiles?: number;
+    scanMaxFileBytes?: number;
+  },
   operationId: string,
 ): Promise<StoredPreviewArtifact> => {
-  const projectContext: ProjectContext = await scanProjectContext(config.canonicalRoot, {
+  const scanOptions = {
     includeSource: true,
-  });
+    ...(config.scanMaxDepth === undefined ? {} : { maxDepth: config.scanMaxDepth }),
+    ...(config.scanMaxFiles === undefined ? {} : { maxFiles: config.scanMaxFiles }),
+    ...(config.scanMaxFileBytes === undefined ? {} : { maxFileBytes: config.scanMaxFileBytes }),
+  };
+  const projectContext: ProjectContext = await scanProjectContext(
+    config.canonicalRoot,
+    scanOptions,
+  );
+
+  if (projectContext.indexStats?.truncated === true) {
+    throw new BridgeHttpError(
+      409,
+      "SOURCE_INDEX_TRUNCATED",
+      "Project source index was truncated. Automatic source preview/apply is refused until scan limits or ignore rules are adjusted.",
+      {
+        operationId,
+        indexedFiles: String(projectContext.indexStats.indexedFiles),
+        truncatedPaths: projectContext.indexStats.truncatedPaths.join(","),
+      },
+    );
+  }
   const originalByPath = new Map<string, string>();
   for (const file of projectContext.sourceFiles ?? []) {
     originalByPath.set(file.path, file.content);
@@ -832,8 +904,12 @@ type BridgeRuntimeConfig = {
   allowAnyExtensionOrigin: boolean;
   allowUnauthenticatedLocalAccess: boolean;
   bodyLimitBytes: number;
+  scanMaxDepth?: number;
+  scanMaxFiles?: number;
+  scanMaxFileBytes?: number;
   previewArtifacts: Map<string, StoredPreviewArtifact>;
   activeOperation: { id: string; name: BridgeOperationName } | null;
+  logger: BridgeLogger;
 };
 
 type BridgeOperationName = "preview" | "apply" | "rollback";
@@ -844,6 +920,11 @@ const withProjectOperation = async <T>(
   run: (operationId: string) => Promise<T>,
 ): Promise<T> => {
   if (config.activeOperation !== null) {
+    config.logger.log("warn", "bridge_operation_conflict", {
+      operationId: config.activeOperation.id,
+      operation: config.activeOperation.name,
+      requestedOperation: name,
+    });
     throw new BridgeHttpError(409, "WRITE_LOCKED", "Another bridge transaction is active.", {
       operationId: config.activeOperation.id,
       operation: config.activeOperation.name,
@@ -852,17 +933,22 @@ const withProjectOperation = async <T>(
 
   const operationId = `${name}-${randomUUID()}`;
   config.activeOperation = { id: operationId, name };
-  console.info(`[ui-buddy] bridge ${name} transaction started`, { operationId });
+  config.logger.log("info", "bridge_operation_started", { operationId, operation: name });
 
   try {
     const result = await run(operationId);
-    console.info(`[ui-buddy] bridge ${name} transaction completed`, { operationId });
+    config.logger.log("info", "bridge_operation_completed", { operationId, operation: name });
     return result;
   } catch (error) {
-    console.error(`[ui-buddy] bridge ${name} transaction failed`, {
-      operationId,
-      error: error instanceof Error ? error.message : String(error),
-    });
+    config.logger.log(
+      error instanceof BridgeHttpError && error.status < 500 ? "warn" : "error",
+      "bridge_operation_failed",
+      {
+        operationId,
+        operation: name,
+        error: error instanceof Error ? error.message : String(error),
+      },
+    );
     throw error;
   } finally {
     config.activeOperation = null;
@@ -1050,11 +1136,20 @@ export const startBridge = async (options: {
   allowAnyExtensionOrigin?: boolean;
   allowUnauthenticatedLocalAccess?: boolean;
   bodyLimitBytes?: number;
+  scanMaxDepth?: number;
+  scanMaxFiles?: number;
+  scanMaxFileBytes?: number;
+  verbose?: boolean;
+  jsonLogs?: boolean;
 }): Promise<BridgeHandle> => {
   validatePort(options.port);
 
   const canonicalRoot = await validateProjectRoot(options.rootPath);
   const allowedExtensionId = validateExtensionId(options.allowedExtensionId);
+  const logger = createBridgeLogger({
+    ...(options.verbose === undefined ? {} : { verbose: options.verbose }),
+    ...(options.jsonLogs === undefined ? {} : { json: options.jsonLogs }),
+  });
   const config: BridgeRuntimeConfig = {
     canonicalRoot,
     projectId: stableProjectId(canonicalRoot),
@@ -1067,8 +1162,14 @@ export const startBridge = async (options: {
     allowAnyExtensionOrigin: options.allowAnyExtensionOrigin === true,
     allowUnauthenticatedLocalAccess: options.allowUnauthenticatedLocalAccess === true,
     bodyLimitBytes: options.bodyLimitBytes ?? DEFAULT_BODY_LIMIT_BYTES,
+    ...(options.scanMaxDepth === undefined ? {} : { scanMaxDepth: options.scanMaxDepth }),
+    ...(options.scanMaxFiles === undefined ? {} : { scanMaxFiles: options.scanMaxFiles }),
+    ...(options.scanMaxFileBytes === undefined
+      ? {}
+      : { scanMaxFileBytes: options.scanMaxFileBytes }),
     previewArtifacts: new Map(),
     activeOperation: null,
+    logger,
   };
 
   const server = createServer((req, res) => {
@@ -1107,8 +1208,15 @@ export const startBridge = async (options: {
           const body = parseBody(bridgePairRequestSchema, await readJsonBody(req, config));
 
           if (!safeEqual(body.pairingCode, config.pairingCode)) {
+            config.logger.log("warn", "bridge_pairing_failed", {
+              origin: typeof origin === "string" ? origin : null,
+            });
             throw new BridgeHttpError(401, "UNAUTHORIZED", "Pairing code is incorrect.");
           }
+
+          config.logger.log("info", "bridge_pairing_succeeded", {
+            origin: typeof origin === "string" ? origin : null,
+          });
 
           const response: BridgePairResponse = {
             ok: true,
@@ -1186,6 +1294,13 @@ export const startBridge = async (options: {
             ? bridgeError(error.status, error.code, error.message, error.details)
             : bridgeError(500, "INTERNAL_ERROR", "Bridge request failed.");
         const status = error instanceof BridgeHttpError ? error.status : 500;
+        config.logger.log(status >= 500 ? "error" : "warn", "bridge_request_failed", {
+          method: req.method ?? null,
+          path: req.url ?? null,
+          status,
+          code: normalized.code,
+          error: normalized.error,
+        });
         sendJson(res, status, normalized, origin, config);
       }
     })();
@@ -1217,6 +1332,14 @@ export const startBridge = async (options: {
 
   const address = server.address();
   const actualPort = typeof address === "object" && address !== null ? address.port : options.port;
+  config.logger.log("info", "bridge_started", {
+    port: actualPort,
+    projectId: config.projectId,
+    projectName: config.projectName,
+    canonicalRoot: config.canonicalRoot,
+    bridgeInstanceId: config.bridgeInstanceId,
+    writesEnabled: config.codeSyncWriteEnabled,
+  });
 
   return {
     port: actualPort,
@@ -1226,7 +1349,13 @@ export const startBridge = async (options: {
     canonicalRoot: config.canonicalRoot,
     bridgeInstanceId: config.bridgeInstanceId,
     allowedExtensionId: config.allowedExtensionId,
-    close: () => server.close(),
+    close: () => {
+      server.close();
+      config.logger.log("info", "bridge_stopped", {
+        port: actualPort,
+        projectId: config.projectId,
+      });
+    },
   };
 };
 

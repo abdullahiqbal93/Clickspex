@@ -1,7 +1,13 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import { extname, join, relative } from "node:path";
 
-import type { ProjectContext, ProjectFileKind, ProjectFileSummary } from "@ui-buddy/shared";
+import type {
+  ProjectContext,
+  ProjectFileKind,
+  ProjectFileSummary,
+  ProjectIndexSkippedPath,
+} from "@ui-buddy/shared";
+import type { Dirent } from "node:fs";
 
 export type DetectedItem = {
   name: string;
@@ -31,11 +37,22 @@ type ProjectScanOptions = {
   maxDepth?: number;
   maxFiles?: number;
   maxFileBytes?: number;
+  respectGitIgnore?: boolean;
+};
+
+type IgnoreRule = {
+  pattern: string;
+  directoryOnly: boolean;
+  anchored: boolean;
+  matchesBasename: boolean;
+  regex: RegExp;
 };
 
 const DEFAULT_MAX_DEPTH = 7;
 const DEFAULT_MAX_FILES = 300;
 const DEFAULT_MAX_FILE_BYTES = 250_000;
+const MAX_REPORTED_SKIPPED_PATHS = 100;
+const MAX_REPORTED_TRUNCATED_PATHS = 25;
 
 const configPatterns = [
   /^next\.config\./,
@@ -51,7 +68,8 @@ const configPatterns = [
   /^yarn\.lock$/,
 ];
 
-const expectedDirectories = new Set(["src", "app", "pages", "components", "styles"]);
+const priorityDirectories = ["src", "app", "pages", "components", "styles"];
+const expectedDirectories = new Set(priorityDirectories);
 const skippedDirectories = new Set([
   ".git",
   ".next",
@@ -88,6 +106,77 @@ const uniqueSorted = (values: Iterable<string>): string[] =>
 
 const isSecretLikeFile = (name: string): boolean =>
   secretFilePatterns.some((pattern) => pattern.test(name));
+
+const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const gitIgnorePatternToRegex = (pattern: string): RegExp => {
+  const escaped = pattern
+    .split("*")
+    .map((part) => escapeRegExp(part))
+    .join("[^/]*");
+  return new RegExp(`^${escaped}$`);
+};
+
+const parseGitIgnore = async (rootPath: string): Promise<IgnoreRule[]> => {
+  try {
+    const raw = await readFile(join(rootPath, ".gitignore"), "utf8");
+
+    return raw
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0 && !line.startsWith("#") && !line.startsWith("!"))
+      .map((line) => {
+        const anchored = line.startsWith("/");
+        const withoutAnchor = anchored ? line.slice(1) : line;
+        const directoryOnly = withoutAnchor.endsWith("/");
+        const pattern = directoryOnly ? withoutAnchor.slice(0, -1) : withoutAnchor;
+        return {
+          pattern,
+          directoryOnly,
+          anchored,
+          matchesBasename: !pattern.includes("/"),
+          regex: gitIgnorePatternToRegex(pattern),
+        };
+      });
+  } catch {
+    return [];
+  }
+};
+
+const isIgnoredByRule = (
+  projectPath: string,
+  entryName: string,
+  isDirectory: boolean,
+  rule: IgnoreRule,
+): boolean => {
+  if (rule.directoryOnly && !isDirectory) {
+    return false;
+  }
+
+  if (rule.matchesBasename) {
+    return (
+      rule.regex.test(entryName) || projectPath.split("/").some((part) => rule.regex.test(part))
+    );
+  }
+
+  if (rule.anchored) {
+    return rule.regex.test(projectPath) || projectPath.startsWith(`${rule.pattern}/`);
+  }
+
+  return (
+    rule.regex.test(projectPath) ||
+    projectPath.endsWith(`/${rule.pattern}`) ||
+    projectPath.includes(`/${rule.pattern}/`)
+  );
+};
+
+const isIgnored = (
+  projectPath: string,
+  entryName: string,
+  isDirectory: boolean,
+  ignoreRules: IgnoreRule[],
+): boolean =>
+  ignoreRules.some((rule) => isIgnoredByRule(projectPath, entryName, isDirectory, rule));
 
 const readPackageJson = async (rootPath: string): Promise<PackageJson | undefined> => {
   try {
@@ -220,40 +309,116 @@ const summarizeFile = async (
   };
 };
 
+const entryPriority = (entry: { name: string; isDirectory: () => boolean }): number => {
+  if (!entry.isDirectory()) {
+    return 100;
+  }
+
+  const priority = priorityDirectories.indexOf(entry.name);
+  return priority === -1 ? 50 : priority;
+};
+
+const sortEntries = <T extends { name: string; isDirectory: () => boolean }>(entries: T[]): T[] =>
+  [...entries].sort((a, b) => entryPriority(a) - entryPriority(b) || a.name.localeCompare(b.name));
+
+const recordSkipped = (
+  skippedPaths: ProjectIndexSkippedPath[],
+  path: string,
+  reason: ProjectIndexSkippedPath["reason"],
+): void => {
+  if (skippedPaths.length < MAX_REPORTED_SKIPPED_PATHS) {
+    skippedPaths.push({ path, reason });
+  }
+};
+
+const recordTruncated = (truncatedPaths: string[], path: string): void => {
+  if (truncatedPaths.length < MAX_REPORTED_TRUNCATED_PATHS) {
+    truncatedPaths.push(path);
+  }
+};
+
 const scanSourceFiles = async (
   rootPath: string,
   options: Required<
-    Pick<ProjectScanOptions, "includeSource" | "maxDepth" | "maxFiles" | "maxFileBytes">
+    Pick<
+      ProjectScanOptions,
+      "includeSource" | "maxDepth" | "maxFiles" | "maxFileBytes" | "respectGitIgnore"
+    >
   >,
 ): Promise<Pick<ProjectContext, "files" | "sourceFiles" | "indexStats">> => {
   const files: ProjectFileSummary[] = [];
   const sourceFiles: NonNullable<ProjectContext["sourceFiles"]> = [];
+  const skippedPaths: ProjectIndexSkippedPath[] = [];
+  const truncatedPaths: string[] = [];
+  const ignoreRules = options.respectGitIgnore ? await parseGitIgnore(rootPath) : [];
   let skippedFiles = 0;
   let truncated = false;
 
   const visit = async (directoryPath: string, depth: number): Promise<void> => {
-    if (truncated || depth > options.maxDepth) {
+    const directoryProjectPath = toProjectPath(relative(rootPath, directoryPath)) || ".";
+
+    if (truncated) {
       return;
     }
 
-    const entries = await readdir(directoryPath, { withFileTypes: true });
+    if (depth > options.maxDepth) {
+      truncated = true;
+      skippedFiles += 1;
+      recordSkipped(skippedPaths, directoryProjectPath, "max_depth");
+      recordTruncated(truncatedPaths, directoryProjectPath);
+      return;
+    }
 
-    for (const entry of entries) {
+    let entries: Dirent[];
+
+    try {
+      entries = await readdir(directoryPath, { withFileTypes: true });
+    } catch {
+      skippedFiles += 1;
+      recordSkipped(skippedPaths, directoryProjectPath, "read_error");
+      return;
+    }
+
+    for (const entry of sortEntries(entries)) {
       if (truncated) {
         return;
       }
 
       const entryPath = join(directoryPath, entry.name);
+      const projectPath = toProjectPath(relative(rootPath, entryPath));
 
       if (entry.isDirectory()) {
-        if (!skippedDirectories.has(entry.name)) {
-          await visit(entryPath, depth + 1);
+        if (skippedDirectories.has(entry.name)) {
+          skippedFiles += 1;
+          recordSkipped(skippedPaths, projectPath, "directory_ignored");
+          continue;
         }
+
+        if (isIgnored(projectPath, entry.name, true, ignoreRules)) {
+          skippedFiles += 1;
+          recordSkipped(skippedPaths, projectPath, "file_ignored");
+          continue;
+        }
+
+        await visit(entryPath, depth + 1);
         continue;
       }
 
-      if (!entry.isFile() || isSecretLikeFile(entry.name)) {
+      if (!entry.isFile()) {
         skippedFiles += 1;
+        recordSkipped(skippedPaths, projectPath, "file_ignored");
+        continue;
+      }
+
+      if (isSecretLikeFile(entry.name)) {
+        skippedFiles += 1;
+        recordSkipped(skippedPaths, projectPath, "secret_like");
+        continue;
+      }
+
+      if (isIgnored(projectPath, entry.name, false, ignoreRules)) {
+        skippedFiles += 1;
+        recordSkipped(skippedPaths, projectPath, "file_ignored");
         continue;
       }
 
@@ -261,14 +426,30 @@ const scanSourceFiles = async (
 
       if (!sourceExtensions.has(extension)) {
         skippedFiles += 1;
+        recordSkipped(skippedPaths, projectPath, "unsupported_extension");
         continue;
       }
 
-      const stats = await stat(entryPath);
+      const stats = await stat(entryPath).catch(() => null);
+
+      if (stats === null) {
+        skippedFiles += 1;
+        recordSkipped(skippedPaths, projectPath, "read_error");
+        continue;
+      }
 
       if (stats.size > options.maxFileBytes) {
         skippedFiles += 1;
+        recordSkipped(skippedPaths, projectPath, "too_large");
         continue;
+      }
+
+      if (files.length >= options.maxFiles) {
+        truncated = true;
+        skippedFiles += 1;
+        recordSkipped(skippedPaths, projectPath, "max_files");
+        recordTruncated(truncatedPaths, projectPath);
+        return;
       }
 
       const summary = await summarizeFile(rootPath, entryPath, stats.size, options.includeSource);
@@ -277,10 +458,6 @@ const scanSourceFiles = async (
 
       if (options.includeSource && summary.content !== undefined) {
         sourceFiles.push({ ...fileSummary, content: summary.content });
-      }
-
-      if (files.length >= options.maxFiles) {
-        truncated = true;
       }
     }
   };
@@ -297,7 +474,10 @@ const scanSourceFiles = async (
       skippedFiles,
       truncated,
       maxDepth: options.maxDepth,
+      maxFiles: options.maxFiles,
       maxFileBytes: options.maxFileBytes,
+      skippedPaths,
+      truncatedPaths,
     },
   };
 };
@@ -306,7 +486,7 @@ export const scanProjectContext = async (
   rootPath: string,
   options: ProjectScanOptions = {},
 ): Promise<ProjectContext> => {
-  const entries = await readdir(rootPath, { withFileTypes: true });
+  const entries = sortEntries(await readdir(rootPath, { withFileTypes: true }));
   const configFiles = entries
     .filter((entry) => entry.isFile() && configPatterns.some((pattern) => pattern.test(entry.name)))
     .map((entry) => entry.name)
@@ -314,7 +494,7 @@ export const scanProjectContext = async (
   const directories = entries
     .filter((entry) => entry.isDirectory() && expectedDirectories.has(entry.name))
     .map((entry) => entry.name)
-    .sort();
+    .sort((a, b) => priorityDirectories.indexOf(a) - priorityDirectories.indexOf(b));
   const packageJson = await readPackageJson(rootPath);
 
   const context: ProjectContext = {
@@ -335,6 +515,7 @@ export const scanProjectContext = async (
         maxDepth: options.maxDepth ?? DEFAULT_MAX_DEPTH,
         maxFiles: options.maxFiles ?? DEFAULT_MAX_FILES,
         maxFileBytes: options.maxFileBytes ?? DEFAULT_MAX_FILE_BYTES,
+        respectGitIgnore: options.respectGitIgnore ?? true,
       }),
     );
   }

@@ -126,4 +126,72 @@ describe("project detection", () => {
     });
     expect(context.packageJson).toBeUndefined();
   });
+
+  it("walks source directories deterministically before generic folders", async () => {
+    const rootPath = await createTempProject();
+    await mkdir(join(rootPath, "zzz"));
+    await mkdir(join(rootPath, "src"));
+    await writeFile(join(rootPath, "zzz", "ignored-first.css"), ".late { color: red; }\n", "utf8");
+    await writeFile(join(rootPath, "src", "first.css"), ".early { color: blue; }\n", "utf8");
+
+    const context = await scanProjectContext(rootPath, { maxFiles: 1 });
+
+    expect(context.files?.map((file) => file.path)).toEqual(["src/first.css"]);
+    expect(context.indexStats).toMatchObject({
+      indexedFiles: 1,
+      truncated: true,
+      maxFiles: 1,
+      truncatedPaths: ["zzz/ignored-first.css"],
+    });
+  });
+
+  it("respects root gitignore rules and reports skipped paths", async () => {
+    const rootPath = await createTempProject();
+    await mkdir(join(rootPath, "src"));
+    await mkdir(join(rootPath, "generated"));
+    await writeFile(join(rootPath, ".gitignore"), "generated/\n*.secret.ts\n", "utf8");
+    await writeFile(
+      join(rootPath, "src", "Button.tsx"),
+      "export const Button = () => null;\n",
+      "utf8",
+    );
+    await writeFile(
+      join(rootPath, "src", "hidden.secret.ts"),
+      "export const token = 'x';\n",
+      "utf8",
+    );
+    await writeFile(
+      join(rootPath, "generated", "style.css"),
+      ".generated { color: red; }\n",
+      "utf8",
+    );
+
+    const context = await scanProjectContext(rootPath);
+
+    expect(context.files?.map((file) => file.path)).toEqual(["src/Button.tsx"]);
+    expect(context.indexStats?.skippedPaths).toEqual(
+      expect.arrayContaining([
+        { path: "generated", reason: "file_ignored" },
+        { path: "src/hidden.secret.ts", reason: "secret_like" },
+      ]),
+    );
+  });
+
+  it("reports max-depth truncation details", async () => {
+    const rootPath = await createTempProject();
+    await mkdir(join(rootPath, "src", "deep"), { recursive: true });
+    await writeFile(join(rootPath, "src", "deep", "style.css"), ".deep { color: red; }\n", "utf8");
+
+    const context = await scanProjectContext(rootPath, { maxDepth: 1 });
+
+    expect(context.indexStats).toMatchObject({
+      indexedFiles: 0,
+      truncated: true,
+      truncatedPaths: ["src/deep"],
+    });
+    expect(context.indexStats?.skippedPaths).toContainEqual({
+      path: "src/deep",
+      reason: "max_depth",
+    });
+  });
 });
