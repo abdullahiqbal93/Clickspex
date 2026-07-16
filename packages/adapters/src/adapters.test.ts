@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { cssAdapter } from "./cssAdapter";
+import { computeCssFileEdit, cssAdapter } from "./cssAdapter";
 import { scaffoldAdapters } from "./scaffoldAdapters";
 import { generateTailwindClassesFromChangeIntent, tailwindAdapter } from "./tailwindAdapter";
 
@@ -494,5 +494,144 @@ describe("CSS adapter Phase 4 source-write guardrails", () => {
       '+  background-image: url("data:image/svg+xml;charset=utf-8;demo");',
     );
     expect(suggestion?.diffPreview).toContain("+  --brand: #05f;");
+  });
+});
+describe("CSS adapter Phase 9 mutation regression suite", () => {
+  const stylesheetContext = (
+    content: string,
+    options: { path?: string; selectors?: string[] } = {},
+  ): ProjectContext => {
+    const baseFile = projectContext.files?.[0];
+    const baseSource = projectContext.sourceFiles?.[0];
+
+    if (baseFile === undefined || baseSource === undefined) {
+      throw new Error("Expected stylesheet fixture metadata.");
+    }
+
+    const path = options.path ?? "src/styles.css";
+    const selectors = options.selectors ?? ["#save"];
+
+    return {
+      ...projectContext,
+      files: [{ ...baseFile, path, selectors, size: content.length }],
+      sourceFiles: [{ ...baseSource, path, selectors, size: content.length, content }],
+    };
+  };
+
+  it("does not generate a source edit when no stylesheet owns the selector", () => {
+    const intent = createIntent([
+      {
+        selector: "#save",
+        property: "color",
+        beforeValue: "#000000",
+        afterValue: "#ffffff",
+        timestamp: "2026-07-01T00:00:00.000Z",
+      },
+    ]);
+    const context = stylesheetContext(".other {\n  color: #000000;\n}\n", {
+      selectors: [".other"],
+    });
+
+    expect(computeCssFileEdit(intent, context)).toBeNull();
+  });
+
+  it("rejects malformed CSS instead of attempting a recovery write", () => {
+    const intent = createIntent([
+      {
+        selector: "#save",
+        property: "color",
+        beforeValue: "#000000",
+        afterValue: "#ffffff",
+        timestamp: "2026-07-01T00:00:00.000Z",
+      },
+    ]);
+    const context = stylesheetContext("/* unclosed comment\n#save {\n  color: #000000;\n}\n");
+
+    expect(computeCssFileEdit(intent, context)).toBeNull();
+  });
+
+  it("preserves grouped selectors, comments, and strings containing braces", () => {
+    const intent = createIntent([
+      {
+        selector: "#save",
+        property: "color",
+        beforeValue: "#000000",
+        afterValue: "#ffffff",
+        timestamp: "2026-07-01T00:00:00.000Z",
+      },
+    ]);
+    const context = stylesheetContext(
+      [
+        "/* keep this owner note */",
+        "#save, .btn-primary {",
+        '  content: "literal { brace }";',
+        "  color: #000000;",
+        "}",
+        "",
+      ].join("\n"),
+      { selectors: ["#save", ".btn-primary"] },
+    );
+
+    const edit = computeCssFileEdit(intent, context);
+
+    expect(edit?.nextContent).toContain("/* keep this owner note */");
+    expect(edit?.nextContent).toContain("#save, .btn-primary");
+    expect(edit?.nextContent).toContain('content: "literal { brace }";');
+    expect(edit?.nextContent).toContain("color: #ffffff;");
+  });
+
+  it("is idempotent when applying the same responsive intent to its own output", () => {
+    const intent = createIntent([
+      {
+        selector: "#save",
+        property: "width",
+        beforeValue: "320px",
+        afterValue: "100%",
+        timestamp: "2026-07-01T00:00:00.000Z",
+        responsiveTarget: "mobile",
+      },
+    ]);
+    const context = stylesheetContext(
+      [
+        "#save {",
+        "  color: #000000;",
+        "}",
+        "",
+        "@media (max-width: 767px) {",
+        "  #save {",
+        "    width: 320px;",
+        "  }",
+        "}",
+        "",
+      ].join("\n"),
+    );
+
+    const firstEdit = computeCssFileEdit(intent, context);
+    expect(firstEdit).not.toBeNull();
+
+    const secondEdit = computeCssFileEdit(intent, stylesheetContext(firstEdit!.nextContent));
+
+    expect(secondEdit).toBeNull();
+  });
+
+  it("keeps unrelated rules byte-stable across a source patch", () => {
+    const intent = createIntent([
+      {
+        selector: "#save",
+        property: "background-color",
+        beforeValue: "transparent",
+        afterValue: "#123456",
+        timestamp: "2026-07-01T00:00:00.000Z",
+      },
+    ]);
+    const unrelatedRule = '.card::before { content: "semi; colon"; }';
+    const context = stylesheetContext(
+      ["#save {", "  color: #000000;", "}", unrelatedRule, ""].join("\n"),
+    );
+
+    const edit = computeCssFileEdit(intent, context);
+
+    expect(edit?.nextContent).toContain(unrelatedRule);
+    expect(edit?.nextContent).toContain("background-color: #123456;");
   });
 });

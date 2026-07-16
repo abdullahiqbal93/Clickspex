@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { isExtensionMessage } from "./index";
+import {
+  buildImportantCssDeclarations,
+  isExtensionMessage,
+  parseCssDeclarations,
+  serializeCssDeclarations,
+} from "./index";
 
 const node = {
   selector: "#save",
@@ -142,5 +147,67 @@ describe("DOM extension messages", () => {
         },
       }),
     ).toBe(false);
+  });
+});
+describe("CSS declaration parser Phase 9 properties", () => {
+  it("parses quoted semicolons, data URLs, comments, and important flags", () => {
+    const declarations = parseCssDeclarations(
+      [
+        'content: "a;b";',
+        "background-image: url('data:image/svg+xml;charset=utf-8;demo');",
+        "/* color: red; */",
+        "--brand: color-mix(in srgb, #fff 50%, #000);",
+        "opacity: 0.8 !important;",
+      ].join("\n"),
+    );
+
+    expect(declarations).toEqual([
+      { property: "content", value: '"a;b"', enabled: true },
+      {
+        property: "background-image",
+        value: "url('data:image/svg+xml;charset=utf-8;demo')",
+        enabled: true,
+      },
+      { property: "color", value: "red", enabled: false },
+      { property: "--brand", value: "color-mix(in srgb, #fff 50%, #000)", enabled: true },
+      { property: "opacity", value: "0.8 !important", enabled: true },
+    ]);
+  });
+
+  it("round-trips serialized declarations without changing parser semantics", () => {
+    const samples = [
+      "color: red; padding: calc(1rem + 2px);",
+      '/* display: none; */\ncontent: "literal;semicolon";',
+      '--token: url("https://example.test/a;b.svg");',
+    ];
+
+    for (const sample of samples) {
+      const parsed = parseCssDeclarations(sample);
+      expect(parseCssDeclarations(serializeCssDeclarations(parsed))).toEqual(parsed);
+    }
+  });
+
+  it("never emits disabled or empty declarations into important CSS output", () => {
+    const css = buildImportantCssDeclarations(
+      ["/* color: red; */", "font-size: 16px;", "empty: ;", "--brand: #05f;"].join("\n"),
+    );
+
+    expect(css).toBe(["  font-size: 16px !important;", "  --brand: #05f !important;"].join("\n"));
+  });
+
+  it("handles deterministic parser fuzz cases without throwing", () => {
+    const values = [
+      "plain",
+      'url("https://example.test/a;b.png")',
+      "linear-gradient(90deg, red, blue)",
+      '"quoted { value; }"',
+      "calc((100% - 2rem) / 3)",
+    ];
+
+    for (const [index, value] of values.entries()) {
+      const css = `--fuzz-${index}: ${value}; color: rgb(${index}, ${index}, ${index});`;
+      expect(() => parseCssDeclarations(css)).not.toThrow();
+      expect(parseCssDeclarations(css)).toHaveLength(2);
+    }
   });
 });

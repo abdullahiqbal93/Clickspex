@@ -194,4 +194,36 @@ describe("project detection", () => {
       reason: "max_depth",
     });
   });
+  it("bounds large project scans near file limits and reports the truncation boundary", async () => {
+    const rootPath = await createTempProject();
+    await mkdir(join(rootPath, "src"));
+    await mkdir(join(rootPath, "components"));
+
+    for (let index = 0; index < 12; index += 1) {
+      await writeFile(
+        join(rootPath, "src", `style-${index.toString().padStart(2, "0")}.css`),
+        `.item-${index} { color: #000; }\n`,
+        "utf8",
+      );
+      await writeFile(
+        join(rootPath, "components", `Component-${index.toString().padStart(2, "0")}.tsx`),
+        `export const Component${index} = () => <div className="item-${index}" />;\n`,
+        "utf8",
+      );
+    }
+
+    const startedAt = performance.now();
+    const context = await scanProjectContext(rootPath, { maxFiles: 10 });
+    const elapsedMs = performance.now() - startedAt;
+
+    expect(context.files).toHaveLength(10);
+    expect(context.files?.[0]?.path).toBe("src/style-00.css");
+    expect(context.indexStats).toMatchObject({
+      indexedFiles: 10,
+      truncated: true,
+      maxFiles: 10,
+    });
+    expect(context.indexStats?.truncatedPaths[0]).toBe("src/style-10.css");
+    expect(elapsedMs).toBeLessThan(2_000);
+  });
 });

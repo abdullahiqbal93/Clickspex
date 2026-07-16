@@ -460,3 +460,159 @@ describe("bridge preview/apply/rollback", () => {
     expect(afterRollback).not.toContain("#ff0000");
   });
 });
+describe("bridge Phase 9 security regression suite", () => {
+  const postBridgeJson = (
+    base: string,
+    path: string,
+    body: unknown,
+    token: string | null = null,
+    origin = EXTENSION_ORIGIN,
+  ): Promise<Response> =>
+    fetch(`${base}${path}`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        ...(token === null ? {} : { authorization: `Bearer ${token}` }),
+        origin,
+      },
+      body: JSON.stringify(body),
+    });
+
+  it("rejects wrong pairing codes and wrong extension origins", async () => {
+    const root = await makeProject();
+    const bridge = await startBridge({ rootPath: root, port: 0, allowedExtensionId: EXTENSION_ID });
+
+    try {
+      const base = `http://127.0.0.1:${bridge.port}`;
+      const wrongCode = bridge.pairingCode === "000000" ? "999999" : "000000";
+      const rejectedPair = await postBridgeJson(base, "/pair", { pairingCode: wrongCode });
+      expect(rejectedPair.status).toBe(401);
+      await expect(rejectedPair.json()).resolves.toMatchObject({
+        ok: false,
+        code: "UNAUTHORIZED",
+      });
+
+      const token = await pairBridge(base, bridge.pairingCode);
+      const wrongOrigin = await postBridgeJson(
+        base,
+        "/preview",
+        { session: session() },
+        token,
+        "chrome-extension://bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      );
+
+      expect(wrongOrigin.status).toBe(403);
+      await expect(wrongOrigin.json()).resolves.toMatchObject({
+        ok: false,
+        code: "FORBIDDEN_ORIGIN",
+      });
+    } finally {
+      bridge.close();
+    }
+  });
+
+  it("rejects missing and invalid bearer tokens", async () => {
+    const root = await makeProject();
+    const bridge = await startBridge({ rootPath: root, port: 0, allowedExtensionId: EXTENSION_ID });
+
+    try {
+      const base = `http://127.0.0.1:${bridge.port}`;
+      const missingToken = await postBridgeJson(base, "/preview", { session: session() });
+      expect(missingToken.status).toBe(401);
+
+      const wrongToken = await postBridgeJson(base, "/preview", { session: session() }, "wrong");
+      expect(wrongToken.status).toBe(401);
+      await expect(wrongToken.json()).resolves.toMatchObject({
+        ok: false,
+        code: "UNAUTHORIZED",
+      });
+    } finally {
+      bridge.close();
+    }
+  });
+
+  it("rejects oversized bodies, invalid JSON, and schema-invalid JSON", async () => {
+    const root = await makeProject();
+    const bridge = await startBridge({
+      rootPath: root,
+      port: 0,
+      allowedExtensionId: EXTENSION_ID,
+      bodyLimitBytes: 20,
+    });
+
+    try {
+      const base = `http://127.0.0.1:${bridge.port}`;
+      const oversized = await postBridgeJson(base, "/pair", { pairingCode: bridge.pairingCode });
+      expect(oversized.status).toBe(413);
+      await expect(oversized.json()).resolves.toMatchObject({
+        ok: false,
+        code: "PAYLOAD_TOO_LARGE",
+      });
+    } finally {
+      bridge.close();
+    }
+
+    const validationBridge = await startBridge({
+      rootPath: root,
+      port: 0,
+      allowedExtensionId: EXTENSION_ID,
+    });
+
+    try {
+      const base = `http://127.0.0.1:${validationBridge.port}`;
+      const invalidJson = await fetch(`${base}/pair`, {
+        method: "POST",
+        headers: { "content-type": "application/json", origin: EXTENSION_ORIGIN },
+        body: "{",
+      });
+      expect(invalidJson.status).toBe(400);
+      await expect(invalidJson.json()).resolves.toMatchObject({ ok: false, code: "BAD_REQUEST" });
+
+      const invalidSchema = await postBridgeJson(base, "/pair", { pairingCode: "abc123" });
+      expect(invalidSchema.status).toBe(400);
+      await expect(invalidSchema.json()).resolves.toMatchObject({
+        ok: false,
+        code: "BAD_REQUEST",
+      });
+    } finally {
+      validationBridge.close();
+    }
+  });
+
+  it("rejects backup ID traversal through the rollback endpoint", async () => {
+    const root = await makeProject();
+    const bridge = await startBridge({
+      rootPath: root,
+      port: 0,
+      codeSyncWriteEnabled: true,
+      allowedExtensionId: EXTENSION_ID,
+    });
+
+    try {
+      const base = `http://127.0.0.1:${bridge.port}`;
+      const token = await pairBridge(base, bridge.pairingCode);
+      const response = await postBridgeJson(base, "/rollback", { backupId: "../escape" }, token);
+
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toMatchObject({
+        ok: false,
+        code: "INVALID_BACKUP_ID",
+      });
+    } finally {
+      bridge.close();
+    }
+  });
+
+  it("reports port conflicts with a stable bridge error", async () => {
+    const root = await makeProject();
+    const first = await startBridge({ rootPath: root, port: 0, allowedExtensionId: EXTENSION_ID });
+
+    try {
+      await expect(
+        startBridge({ rootPath: root, port: first.port, allowedExtensionId: EXTENSION_ID }),
+      ).rejects.toThrow("Bridge port is already in use.");
+    } finally {
+      first.close();
+    }
+  });
+});
