@@ -112,7 +112,7 @@ export const PalettePanel = () => {
 
   if (loading || !scan) {
     return (
-      <div className="ub-card p-4">
+      <div className="cs-card p-4">
         <div className="flex items-center gap-2.5">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent">
             <Palette aria-hidden="true" size={16} />
@@ -136,7 +136,7 @@ export const PalettePanel = () => {
 
   return (
     <div className="space-y-3">
-      <section className="ub-card p-4">
+      <section className="cs-card p-4">
         <div className="flex items-center gap-2.5">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent">
             <Palette aria-hidden="true" size={16} />
@@ -171,13 +171,13 @@ export const PalettePanel = () => {
       </section>
 
       {scan.tokens !== undefined && scan.tokens.length > 0 ? (
-        <section className="ub-card p-4">
+        <section className="cs-card p-4">
           <h3 className="flex items-center gap-2 text-sm font-semibold tracking-tight">
             <Braces className="text-accent" size={15} />
             Design tokens
           </h3>
           <p className="mt-1 text-2xs text-muted">
-            Edit CSS custom properties live. Applied to <code className="ub-chip">:root</code> —
+            Edit CSS custom properties live. Applied to <code className="cs-chip">:root</code> —
             undoable and survives reload.
           </p>
           <div className="mt-3 max-h-72 divide-y divide-line overflow-auto border-t border-line">
@@ -208,7 +208,7 @@ export const PalettePanel = () => {
                   </span>
                   <input
                     aria-label={`${token.name} value`}
-                    className="ub-input h-7 w-28 font-mono text-[10px]"
+                    className="cs-input h-7 w-28 font-mono text-[10px]"
                     onBlur={() => void applyTokenOverride(token.name, value)}
                     onChange={(event) => setTokenValue(token.name, event.target.value)}
                     value={value}
@@ -220,7 +220,7 @@ export const PalettePanel = () => {
         </section>
       ) : null}
 
-      <section className="ub-card p-4">
+      <section className="cs-card p-4">
         <div className="flex items-center justify-between gap-2">
           <h3 className="flex items-center gap-2 text-sm font-semibold tracking-tight">
             <History className="text-accent" size={15} />
@@ -228,7 +228,7 @@ export const PalettePanel = () => {
           </h3>
           {history.length > 0 ? (
             <button
-              className="ub-icon-btn h-7 w-7"
+              className="cs-icon-btn h-7 w-7"
               onClick={() => void clearHistory()}
               title="Clear history"
               type="button"
@@ -261,7 +261,7 @@ export const PalettePanel = () => {
         )}
       </section>
 
-      <section className="ub-card p-4">
+      <section className="cs-card p-4">
         <h3 className="text-sm font-semibold tracking-tight">Gradient generator</h3>
         <div
           className="mt-3 h-16 rounded-xl ring-1 ring-inset ring-ink/10"
@@ -270,7 +270,7 @@ export const PalettePanel = () => {
         <div className="mt-3 flex items-center gap-2">
           <select
             aria-label="Gradient type"
-            className="ub-input h-8 w-auto"
+            className="cs-input h-8 w-auto"
             onChange={(event) => setGradientKind(event.target.value as "linear" | "radial")}
             value={gradientKind}
           >
@@ -328,7 +328,7 @@ export const PalettePanel = () => {
           ))}
         </div>
         <div className="mt-3 flex items-center gap-2">
-          <button className="ub-btn" disabled={stops.length >= 5} onClick={addStop} type="button">
+          <button className="cs-btn" disabled={stops.length >= 5} onClick={addStop} type="button">
             <Plus aria-hidden="true" size={13} />
             Add stop
           </button>
@@ -336,7 +336,7 @@ export const PalettePanel = () => {
             className={
               copied
                 ? "inline-flex items-center justify-center gap-1.5 rounded-xl bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-200"
-                : "ub-btn-primary"
+                : "cs-btn-primary"
             }
             onClick={() => void copyGradient()}
             type="button"

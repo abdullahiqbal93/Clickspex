@@ -1,15 +1,15 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
-import { cssAdapter, scaffoldAdapters, tailwindAdapter } from "@ui-buddy/adapters";
-import { detectProject, scanProjectContext } from "@ui-buddy/core/project";
+import { cssAdapter, scaffoldAdapters, tailwindAdapter } from "@clickspex/adapters";
+import { detectProject, scanProjectContext } from "@clickspex/core/project";
 import {
   STYLE_RESPONSIVE_TARGETS,
   STYLE_TARGET_STATES,
   SUPPORTED_STYLE_PROPERTIES,
   type UIChangeIntent,
   type UIChangeSession,
-} from "@ui-buddy/shared";
+} from "@clickspex/shared";
 import { z } from "zod";
 
 const rectSchema = z.object({

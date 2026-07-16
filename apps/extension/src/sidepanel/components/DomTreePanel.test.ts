@@ -7,7 +7,7 @@ import { usePanelStore } from "../store";
 
 import { DomTreePanel, flattenVisibleDomNodes } from "./DomTreePanel";
 
-import type { DomTreeNode } from "@ui-buddy/shared";
+import type { DomTreeNode } from "@clickspex/shared";
 
 vi.mock("../../chrome/messaging", () => ({
   sendMessageToActiveTab: vi.fn().mockResolvedValue(undefined),

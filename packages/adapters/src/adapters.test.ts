@@ -4,7 +4,7 @@ import { computeCssFileEdit, cssAdapter } from "./cssAdapter";
 import { scaffoldAdapters } from "./scaffoldAdapters";
 import { generateTailwindClassesFromChangeIntent, tailwindAdapter } from "./tailwindAdapter";
 
-import type { ProjectContext, UIChangeIntent } from "@ui-buddy/shared";
+import type { ProjectContext, UIChangeIntent } from "@clickspex/shared";
 
 const createIntent = (changes: UIChangeIntent["changes"]): UIChangeIntent => ({
   id: "intent-test",

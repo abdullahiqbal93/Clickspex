@@ -1,5 +1,5 @@
 {
-  "name": "@ui-buddy/core",
+  "name": "@clickspex/core",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -27,10 +27,10 @@
     "format": "prettier --write . --ignore-path ../../.prettierignore"
   },
   "dependencies": {
-    "@ui-buddy/shared": "workspace:*"
+    "@clickspex/shared": "workspace:*"
   },
   "devDependencies": {
-    "@ui-buddy/config": "workspace:*",
+    "@clickspex/config": "workspace:*",
     "vitest": "^3.2.6"
   }
 }

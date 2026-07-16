@@ -1,4 +1,4 @@
-import { getStyleChangeResponsiveTarget, getStyleChangeState } from "@ui-buddy/core/styleDiff";
+import { getStyleChangeResponsiveTarget, getStyleChangeState } from "@clickspex/core/styleDiff";
 
 import { createUnifiedDiff } from "./diffPreview.js";
 
@@ -12,7 +12,7 @@ import type {
   StyleChange,
   StyleResponsiveTarget,
   UIChangeIntent,
-} from "@ui-buddy/shared";
+} from "@clickspex/shared";
 
 type MappingResult = {
   classes: string[];

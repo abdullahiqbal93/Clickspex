@@ -1,4 +1,4 @@
-import { contrastRatioFromCssColors } from "@ui-buddy/core";
+import { contrastRatioFromCssColors } from "@clickspex/core";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -12,7 +12,7 @@ import {
 import { sendMessageToActiveTab } from "../../chrome/messaging";
 import { usePanelStore } from "../store";
 
-import type { A11yIssue } from "@ui-buddy/shared";
+import type { A11yIssue } from "@clickspex/shared";
 
 const SEVERITY_STYLES: Record<A11yIssue["severity"], string> = {
   error: "border-rose-200 bg-rose-50 text-rose-900",
@@ -24,7 +24,7 @@ const severityRank: Record<A11yIssue["severity"], number> = { error: 0, warning:
 
 const issuesToMarkdown = (issues: A11yIssue[]): string =>
   [
-    "# ui-buddy accessibility report",
+    "# Clickspex accessibility report",
     "",
     `Generated: ${new Date().toISOString()}`,
     `Issues found: ${issues.length}`,
@@ -81,7 +81,7 @@ export const AccessibilityPanel = () => {
       : [...a11yIssues].sort((a, b) => severityRank[a.severity] - severityRank[b.severity]);
 
   const pageAuditSection = (
-    <section className="ub-card p-4">
+    <section className="cs-card p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold tracking-tight">Page audit</h3>
@@ -93,7 +93,7 @@ export const AccessibilityPanel = () => {
         <div className="flex shrink-0 gap-1.5">
           {sortedIssues !== null && sortedIssues.length > 0 ? (
             <button
-              className="ub-icon-btn"
+              className="cs-icon-btn"
               onClick={downloadReport}
               title="Download Markdown report"
               type="button"
@@ -102,7 +102,7 @@ export const AccessibilityPanel = () => {
             </button>
           ) : null}
           <button
-            className="ub-btn-primary"
+            className="cs-btn-primary"
             disabled={a11yScanLoading}
             onClick={() => void runPageScan()}
             type="button"
@@ -164,7 +164,7 @@ export const AccessibilityPanel = () => {
   if (selectedElement === null) {
     return (
       <div className="space-y-3">
-        <div className="ub-card p-4">
+        <div className="cs-card p-4">
           <div className="flex items-center gap-2.5">
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent">
               <ShieldCheck aria-hidden="true" size={16} />
@@ -191,7 +191,7 @@ export const AccessibilityPanel = () => {
 
   return (
     <div className="space-y-3">
-      <section className="ub-card p-4">
+      <section className="cs-card p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2.5">
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent">
@@ -206,7 +206,7 @@ export const AccessibilityPanel = () => {
           </div>
           <div className="flex shrink-0 gap-1">
             <button
-              className="ub-icon-btn"
+              className="cs-icon-btn"
               onClick={() => void pinAudit()}
               title="Pin audit card"
               type="button"
@@ -214,7 +214,7 @@ export const AccessibilityPanel = () => {
               <Pin aria-hidden="true" size={14} />
             </button>
             <button
-              className="ub-icon-btn"
+              className="cs-icon-btn"
               onClick={() => void clearPins()}
               title="Clear pinned cards"
               type="button"
@@ -225,8 +225,8 @@ export const AccessibilityPanel = () => {
         </div>
       </section>
 
-      <section className="ub-card p-4">
-        <h3 className="ub-heading">Contrast</h3>
+      <section className="cs-card p-4">
+        <h3 className="cs-heading">Contrast</h3>
         <div className="mt-2 flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2.5">
           <span className="text-xs font-medium text-muted">Ratio</span>
           <span className="font-mono text-lg font-semibold tabular-nums text-ink">
@@ -235,8 +235,8 @@ export const AccessibilityPanel = () => {
         </div>
       </section>
 
-      <section className="ub-card p-4">
-        <h3 className="ub-heading">Warnings</h3>
+      <section className="cs-card p-4">
+        <h3 className="cs-heading">Warnings</h3>
         <div className="mt-2 space-y-2">
           {notes.length > 0 ? (
             notes.map((note) => (

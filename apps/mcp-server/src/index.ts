@@ -34,7 +34,7 @@ const toContent = (result: unknown) => ({
   ],
 });
 
-const server = new McpServer({ name: "ui-buddy-mcp", version: "0.1.0" });
+const server = new McpServer({ name: "clickspex-mcp", version: "0.1.0" });
 
 server.tool(
   "scan_project",

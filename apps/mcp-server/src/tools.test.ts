@@ -29,7 +29,7 @@ type DetectionData = { detections: Array<{ name: string }> };
 const tempRoots: string[] = [];
 
 const createTempProject = async (): Promise<string> => {
-  const rootPath = await mkdtemp(join(tmpdir(), "ui-buddy-mcp-"));
+  const rootPath = await mkdtemp(join(tmpdir(), "clickspex-mcp-"));
   tempRoots.push(rootPath);
   return rootPath;
 };

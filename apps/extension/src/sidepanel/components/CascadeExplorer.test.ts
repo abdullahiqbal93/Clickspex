@@ -12,7 +12,7 @@ import {
   isCssDeclarationValueValid,
 } from "./CascadeExplorer";
 
-import type { MatchedStyleRule, MatchedStylesResult, StyleChange } from "@ui-buddy/shared";
+import type { MatchedStyleRule, MatchedStylesResult, StyleChange } from "@clickspex/shared";
 
 vi.mock("../../chrome/messaging", () => ({
   sendMessageToActiveTab: vi.fn().mockResolvedValue(undefined),

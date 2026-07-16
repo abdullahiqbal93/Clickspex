@@ -1,12 +1,12 @@
 {
-  "name": "ui-buddy",
+  "name": "clickspex",
   "version": "0.1.0",
   "private": false,
-  "description": "Inspect and edit UI in the browser, then apply the changes to your source code. Local bridge, source indexer, and patch-preview CLI for the ui-buddy extension.",
+  "description": "Inspect and edit UI in the browser, then apply the changes to your source code. Local bridge, source indexer, and patch-preview CLI for the Clickspex extension.",
   "license": "MIT",
   "type": "module",
   "bin": {
-    "ui-buddy": "./dist/index.js"
+    "clickspex": "./dist/index.js"
   },
   "files": [
     "dist"
@@ -25,14 +25,14 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/abdullahiqbal93/dev-buddy.git"
+    "url": "git+https://github.com/abdullahiqbal93/clickspex.git"
   },
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "bundle": "pnpm --filter @ui-buddy/shared --filter @ui-buddy/core --filter @ui-buddy/adapters run build && tsup",
+    "bundle": "pnpm --filter @clickspex/shared --filter @clickspex/core --filter @clickspex/adapters run build && tsup",
     "prepack": "pnpm run bundle",
     "smoke:pack": "node scripts/smoke-packed-cli.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",
@@ -47,10 +47,10 @@
     "postcss": "^8.4.0"
   },
   "devDependencies": {
-    "@ui-buddy/adapters": "workspace:*",
-    "@ui-buddy/config": "workspace:*",
-    "@ui-buddy/core": "workspace:*",
-    "@ui-buddy/shared": "workspace:*",
+    "@clickspex/adapters": "workspace:*",
+    "@clickspex/config": "workspace:*",
+    "@clickspex/core": "workspace:*",
+    "@clickspex/shared": "workspace:*",
     "tsup": "^8.0.0",
     "vitest": "^3.0.0"
   }

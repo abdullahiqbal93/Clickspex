@@ -9,7 +9,7 @@ import { detectProject, scanProjectContext } from "./projectDetection";
 const tempRoots: string[] = [];
 
 const createTempProject = async (): Promise<string> => {
-  const rootPath = await mkdtemp(join(tmpdir(), "ui-buddy-project-"));
+  const rootPath = await mkdtemp(join(tmpdir(), "clickspex-project-"));
   tempRoots.push(rootPath);
   return rootPath;
 };

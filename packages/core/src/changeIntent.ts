@@ -14,7 +14,7 @@ import type {
   StyleChange,
   UIChangeIntent,
   UIChangeSession,
-} from "@ui-buddy/shared";
+} from "@clickspex/shared";
 
 export type CreateUIChangeIntentInput = {
   pageUrl: string;
@@ -953,11 +953,11 @@ const motionImplementationNote = (changes: CollapsedStyleChange[]): string | nul
   }
 
   const usesUiBuddyKeyframes = motionChanges.some((change) =>
-    /\bui-buddy-[\w-]+\b/.test(change.afterValue),
+    /\bclickspex-[\w-]+\b/.test(change.afterValue),
   );
 
   return usesUiBuddyKeyframes
-    ? "Motion note: reuse existing keyframes when present. If adding a `ui-buddy-*` keyframe, define it near the owning stylesheet and include a `prefers-reduced-motion` override when animation affects content movement."
+    ? "Motion note: reuse existing keyframes when present. If adding a `clickspex-*` keyframe, define it near the owning stylesheet and include a `prefers-reduced-motion` override when animation affects content movement."
     : "Motion note: reuse the project's existing motion tokens, transition utilities, or keyframes when they match the intended effect.";
 };
 /** Explicit original -> final value for each changed property. */

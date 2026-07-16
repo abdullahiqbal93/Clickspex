@@ -50,7 +50,7 @@ const run = async (command, args, options) => {
   }
 };
 
-const tempRoot = await mkdtemp(join(tmpdir(), "ui-buddy-packed-cli-"));
+const tempRoot = await mkdtemp(join(tmpdir(), "clickspex-packed-cli-"));
 const packDir = join(tempRoot, "pack");
 const consumerDir = join(tempRoot, "consumer");
 
@@ -68,7 +68,7 @@ try {
   const tarball = join(packDir, packedFiles[0]);
   await run("npm", ["install", "--no-audit", "--no-fund", tarball], { cwd: consumerDir });
 
-  const cliPath = join(consumerDir, "node_modules", "ui-buddy", "dist", "index.js");
+  const cliPath = join(consumerDir, "node_modules", "clickspex", "dist", "index.js");
   const { stdout } = await run(process.execPath, [cliPath, "--version"], { cwd: consumerDir });
 
   if (!stdout.trim()) {

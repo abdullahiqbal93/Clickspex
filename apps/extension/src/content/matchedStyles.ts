@@ -1,11 +1,11 @@
-import { generateUniqueSelector } from "@ui-buddy/core";
+import { generateUniqueSelector } from "@clickspex/core";
 
 import type {
   MatchedStyleDeclaration,
   MatchedStyleDeclarationMutation,
   MatchedStyleRule,
   MatchedStylesResult,
-} from "@ui-buddy/shared";
+} from "@clickspex/shared";
 
 type Specificity = [number, number, number];
 
@@ -183,7 +183,7 @@ const sourceForSheet = (
   index: number,
 ): { label: string; url: string | null; origin: MatchedStyleRule["origin"] } => {
   const owner = sheet.ownerNode;
-  const inspector = owner instanceof HTMLElement && owner.id === "__ui-buddy-styles__";
+  const inspector = owner instanceof HTMLElement && owner.id === "__clickspex-styles__";
 
   if (sheet.href !== null) {
     let label = sheet.href;

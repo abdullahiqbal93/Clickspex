@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { createUIChangeIntent } from "./changeIntent";
 import { createStyleChange, diffStyles } from "./styleDiff";
 
-import type { ElementSnapshot } from "@ui-buddy/shared";
+import type { ElementSnapshot } from "@clickspex/shared";
 
 const snapshot: ElementSnapshot = {
   tagName: "button",

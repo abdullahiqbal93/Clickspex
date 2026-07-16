@@ -6,7 +6,7 @@ import {
   summarizeSessionAsMarkdown,
 } from "./changeIntent";
 
-import type { ElementSnapshot, StructuralEdit, StyleChange } from "@ui-buddy/shared";
+import type { ElementSnapshot, StructuralEdit, StyleChange } from "@clickspex/shared";
 
 const side = { top: "0px", right: "0px", bottom: "0px", left: "0px" };
 
@@ -328,9 +328,9 @@ describe("createUIChangeSession", () => {
               "span.heading-4.feature-title",
               "animation",
               "none",
-              "ui-buddy-fade-in 300ms ease-out both",
+              "clickspex-fade-in 300ms ease-out both",
             ),
-            change("span.heading-4.feature-title", "animation-name", "none", "ui-buddy-slide-up"),
+            change("span.heading-4.feature-title", "animation-name", "none", "clickspex-slide-up"),
             change("span.heading-4.feature-title", "animation-duration", "0.3s", "150ms"),
             change(
               "span.heading-4.feature-title",
@@ -353,9 +353,9 @@ describe("createUIChangeSession", () => {
     );
     expect(prompt).toContain("unverified class clues (confirm stability in source): `.heading-4`");
     expect(prompt).not.toContain("`animation`: `none`");
-    expect(prompt).not.toContain("animation: ui-buddy-fade-in");
-    expect(prompt).toContain("`animation-name`: `none` -> `ui-buddy-slide-up`");
-    expect(prompt).toContain("animation-name: ui-buddy-slide-up;");
+    expect(prompt).not.toContain("animation: clickspex-fade-in");
+    expect(prompt).toContain("`animation-name`: `none` -> `clickspex-slide-up`");
+    expect(prompt).toContain("animation-name: clickspex-slide-up;");
     expect(prompt).toContain("animation-duration: 150ms;");
     expect(prompt).toContain("animation-timing-function: ease-in;");
     expect(prompt).toContain("Motion note: reuse existing keyframes");

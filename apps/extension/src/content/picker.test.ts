@@ -1,4 +1,4 @@
-import { captureElementSnapshot } from "@ui-buddy/core";
+import { captureElementSnapshot } from "@clickspex/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { sendRuntimeMessage } from "../chrome/messaging";
@@ -6,7 +6,7 @@ import { sendRuntimeMessage } from "../chrome/messaging";
 import { OverlayController } from "./overlay";
 import { ElementPickerController } from "./picker";
 
-import type { StructuralEdit } from "@ui-buddy/shared";
+import type { StructuralEdit } from "@clickspex/shared";
 
 vi.mock("../chrome/messaging", () => ({
   sendRuntimeMessage: vi.fn().mockResolvedValue(undefined),

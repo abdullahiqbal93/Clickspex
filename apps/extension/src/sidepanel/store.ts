@@ -1,4 +1,4 @@
-import { canCoalesceStyleChange, createStyleChange, getAccessibilityNotes } from "@ui-buddy/core";
+import { canCoalesceStyleChange, createStyleChange, getAccessibilityNotes } from "@clickspex/core";
 import { create } from "zustand";
 
 import type {
@@ -15,7 +15,7 @@ import type {
   StyleChange,
   StyleResponsiveTarget,
   StyleTargetState,
-} from "@ui-buddy/shared";
+} from "@clickspex/shared";
 
 export type RawCssEntry = { selector: string; css: string };
 

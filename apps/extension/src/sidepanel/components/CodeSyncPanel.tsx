@@ -9,7 +9,7 @@ import {
   type BridgeHealthResponse,
   type BridgePreviewResponse,
   type UIChangeSession,
-} from "@ui-buddy/shared";
+} from "@clickspex/shared";
 import { AlertTriangle, Check, FileCode2, KeyRound, Plug, RefreshCcw, Undo2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
@@ -174,7 +174,7 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
 
   const runPreview = async () => {
     if (bridgeToken === null) {
-      setError("Enter the pairing code from the ui-buddy connect terminal before previewing.");
+      setError("Enter the pairing code from the clickspex connect terminal before previewing.");
       return;
     }
 
@@ -199,7 +199,7 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
       setError(
         caughtError instanceof Error
           ? caughtError.message
-          : "Preview failed - is `ui-buddy connect` running in your project?",
+          : "Preview failed - is `clickspex connect` running in your project?",
       );
       setConnection("disconnected");
     } finally {
@@ -210,7 +210,7 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
   const runApply = async () => {
     if (!codeSyncWriteEnabled) {
       setError(
-        "Source writes are disabled. Restart `ui-buddy connect` with --enable-code-sync-writes to apply changes.",
+        "Source writes are disabled. Restart `clickspex connect` with --enable-code-sync-writes to apply changes.",
       );
       return;
     }
@@ -307,14 +307,14 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
   const canWriteToCode = connection === "connected" && codeSyncWriteEnabled && isPaired;
 
   return (
-    <section className="ub-card p-4">
+    <section className="cs-card p-4">
       <div className="flex items-center justify-between gap-2">
         <h3 className="flex items-center gap-2 text-sm font-semibold tracking-tight">
           <Plug aria-hidden="true" className="text-accent" size={15} />
           Code sync
         </h3>
         <button
-          className="ub-icon-btn h-7 w-7"
+          className="cs-icon-btn h-7 w-7"
           disabled={connection === "checking"}
           onClick={() => void checkHealth(port)}
           title="Reconnect"
@@ -342,13 +342,13 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
           <span className="text-muted">Checking...</span>
         ) : (
           <span className="text-muted">
-            Not connected. Run <code className="ub-chip">npx ui-buddy connect</code> in your
+            Not connected. Run <code className="cs-chip">npx clickspex connect</code> in your
             project.
           </span>
         )}
         <input
           aria-label="Bridge port"
-          className="ub-input ml-auto h-7 w-16 text-center text-2xs"
+          className="cs-input ml-auto h-7 w-16 text-center text-2xs"
           onBlur={() => void checkHealth(port)}
           onChange={(event) => savePort(event.target.value.replace(/[^0-9]/g, ""))}
           value={port}
@@ -382,14 +382,14 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
 
       {connection === "connected" && !isPaired ? (
         <div className="mt-3 rounded-xl border border-indigo-100 bg-indigo-50 p-2.5">
-          <label className="block text-2xs font-semibold text-indigo-900" htmlFor="ub-pair-code">
+          <label className="block text-2xs font-semibold text-indigo-900" htmlFor="cs-pair-code">
             Pairing code from terminal
           </label>
           <div className="mt-2 flex gap-2">
             <input
               autoComplete="one-time-code"
-              className="ub-input h-8 flex-1 text-center font-mono text-xs tracking-[0.2em]"
-              id="ub-pair-code"
+              className="cs-input h-8 flex-1 text-center font-mono text-xs tracking-[0.2em]"
+              id="cs-pair-code"
               inputMode="numeric"
               maxLength={6}
               onChange={(event) => setPairingCode(event.target.value.replace(/\D/g, ""))}
@@ -397,7 +397,7 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
               value={pairingCode}
             />
             <button
-              className="ub-btn-primary"
+              className="cs-btn-primary"
               disabled={busy || pairingCode.length !== 6}
               onClick={() => void runPair()}
               type="button"
@@ -412,7 +412,7 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
       {connection === "connected" && isPaired ? (
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <button
-            className="ub-btn"
+            className="cs-btn"
             disabled={busy}
             onClick={() => void runPreview()}
             type="button"
@@ -424,20 +424,20 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
           {confirming ? (
             <>
               <button
-                className="ub-btn-danger"
+                className="cs-btn-danger"
                 disabled={!canWriteToCode || busy}
                 onClick={() => void runApply()}
                 type="button"
               >
                 Confirm apply
               </button>
-              <button className="ub-btn" onClick={() => setConfirming(false)} type="button">
+              <button className="cs-btn" onClick={() => setConfirming(false)} type="button">
                 Cancel
               </button>
             </>
           ) : (
             <button
-              className="ub-btn-primary"
+              className="cs-btn-primary"
               disabled={
                 !canWriteToCode || busy || applicablePreviews.length === 0 || hasExpiredPreview
               }
@@ -513,7 +513,7 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
           ))}
           {applyResult.backupId !== null && codeSyncWriteEnabled ? (
             <button
-              className="ub-btn"
+              className="cs-btn"
               disabled={busy}
               onClick={() => void runRollback()}
               type="button"

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { getCurrentStyleRecord, usePanelStore } from "./store";
 
-import type { ElementSnapshot } from "@ui-buddy/shared";
+import type { ElementSnapshot } from "@clickspex/shared";
 
 const createSnapshot = (
   selector: string,

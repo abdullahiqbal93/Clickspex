@@ -4,9 +4,9 @@ import {
   isRecord,
   type ExtensionMessage,
   type InspectionContext,
-} from "@ui-buddy/shared";
+} from "@clickspex/shared";
 
-export const SIDE_PANEL_PORT_NAME = "ui-buddy-side-panel";
+export const SIDE_PANEL_PORT_NAME = "clickspex-side-panel";
 export const SIDE_PANEL_CONTEXT_MESSAGE = "SIDE_PANEL_CONTEXT";
 
 export type SidePanelContextMessage = {
@@ -67,11 +67,11 @@ export const createInspectionContextFromTab = (
   tab: Partial<chrome.tabs.Tab>,
 ): InspectionContext => {
   if (tab.id === undefined) {
-    throw new Error("No active tab is available for ui-buddy messaging.");
+    throw new Error("No active tab is available for Clickspex messaging.");
   }
 
   if (tab.windowId === undefined) {
-    throw new Error("No active browser window is available for ui-buddy messaging.");
+    throw new Error("No active browser window is available for Clickspex messaging.");
   }
 
   const url = tab.url ?? tab.pendingUrl ?? "";
@@ -241,7 +241,7 @@ export const sendMessageToInspectedTab = async (
   setCurrentInspectionContext(targetContext);
 
   if (!canReceiveContentScriptMessages(targetContext.url)) {
-    throw new Error("ui-buddy can inspect only http and https pages.");
+    throw new Error("Clickspex can inspect only http and https pages.");
   }
 
   try {
@@ -266,7 +266,7 @@ export const sendMessageToInspectedTab = async (
       }
     }
 
-    throw new Error("ui-buddy can't reach this page. Refresh the tab to reconnect.");
+    throw new Error("Clickspex can't reach this page. Refresh the tab to reconnect.");
   }
 };
 

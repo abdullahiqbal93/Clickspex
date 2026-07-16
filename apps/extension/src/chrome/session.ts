@@ -1,4 +1,4 @@
-import { isStyleChange, type StyleChange } from "@ui-buddy/shared";
+import { isStyleChange, type StyleChange } from "@clickspex/shared";
 
 export type PageContext = {
   pageUrl: string;

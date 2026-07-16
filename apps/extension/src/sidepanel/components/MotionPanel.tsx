@@ -19,7 +19,7 @@ export const MotionPanel = () => {
 
   return (
     <div className="space-y-3">
-      <section className="ub-card p-4">
+      <section className="cs-card p-4">
         <div className="flex items-center gap-2.5">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent">
             <PlaySquare aria-hidden="true" size={16} />
@@ -33,7 +33,7 @@ export const MotionPanel = () => {
         </div>
 
         <div className="mt-4 border-t border-line pt-4">
-          <h3 className="ub-heading">Playback speed</h3>
+          <h3 className="cs-heading">Playback speed</h3>
 
           {error && (
             <div className="mt-2 rounded-xl bg-rose-50 px-3 py-2 text-2xs text-rose-700">
@@ -51,7 +51,7 @@ export const MotionPanel = () => {
               onChange={(e) => void handleSpeedChange(parseFloat(e.target.value))}
               className="w-full accent-accent"
             />
-            <span className="ub-chip w-12 justify-center tabular-nums">{speed.toFixed(1)}x</span>
+            <span className="cs-chip w-12 justify-center tabular-nums">{speed.toFixed(1)}x</span>
           </div>
 
           <div className="mt-3 grid grid-cols-4 gap-1.5">

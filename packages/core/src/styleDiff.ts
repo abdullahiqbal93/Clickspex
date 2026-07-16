@@ -5,7 +5,7 @@ import {
   type StyleResponsiveTarget,
   type StyleResponsiveTargetDefinition,
   type StyleTargetState,
-} from "@ui-buddy/shared";
+} from "@clickspex/shared";
 
 const INDENT = "  ";
 const BASE_STYLE_TARGET_STATE: StyleTargetState = "base";

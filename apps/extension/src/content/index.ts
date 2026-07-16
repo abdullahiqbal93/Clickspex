@@ -11,7 +11,7 @@ import { ElementPickerController } from "./picker";
 import { ManualRulerController } from "./ruler";
 import { StyleInjector } from "./styleInjector";
 
-import type { StructuralEdit } from "@ui-buddy/shared";
+import type { StructuralEdit } from "@clickspex/shared";
 
 declare global {
   interface Window {
@@ -387,7 +387,7 @@ if (window.__uiBuddyListenerAttached !== true) {
         const issues = runA11yAudit();
         void sendRuntimeMessage({ type: "A11Y_SCAN_RESULT", payload: { issues } });
       } catch (error) {
-        console.error("ui-buddy accessibility scan failed:", error);
+        console.error("Clickspex accessibility scan failed:", error);
         void sendRuntimeMessage({ type: "A11Y_SCAN_RESULT", payload: { issues: [] } });
       }
       return;

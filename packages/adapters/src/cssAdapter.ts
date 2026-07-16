@@ -5,8 +5,8 @@ import {
   getStyleChangeResponsiveTarget,
   getStyleChangeState,
   styleChangesToRuleRecords,
-} from "@ui-buddy/core/styleDiff";
-import { parseCssDeclarations } from "@ui-buddy/shared";
+} from "@clickspex/core/styleDiff";
+import { parseCssDeclarations } from "@clickspex/shared";
 import postcss, { type AtRule, type Container, type Root, type Rule } from "postcss";
 
 import { createUnifiedDiff } from "./diffPreview.js";
@@ -20,7 +20,7 @@ import type {
   ProjectSourceFile,
   StyleChange,
   UIChangeIntent,
-} from "@ui-buddy/shared";
+} from "@clickspex/shared";
 
 export const generateCssFromChangeIntent = (changeIntent: UIChangeIntent): string =>
   buildCssRulesFromChanges(changeIntent.target.selector, changeIntent.changes);

@@ -3,7 +3,7 @@ import {
   type ElementSnapshot,
   type ParentLayoutInfo,
   type RectSnapshot,
-} from "@ui-buddy/shared";
+} from "@clickspex/shared";
 
 import { parseBoxModel } from "./boxModel";
 import { parseCssColor } from "./contrast";

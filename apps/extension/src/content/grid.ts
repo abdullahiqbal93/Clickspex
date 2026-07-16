@@ -6,7 +6,7 @@ export class GridController {
 
   public constructor() {
     this.host = document.createElement("div");
-    this.host.id = "__ui-buddy-grid-host__";
+    this.host.id = "__clickspex-grid-host__";
     this.host.style.position = "fixed";
     this.host.style.inset = "0";
     this.host.style.zIndex = "2147483646"; // Just below ruler/picker

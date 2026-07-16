@@ -16,7 +16,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { sendMessageToActiveTab } from "../../chrome/messaging";
 import { usePanelStore } from "../store";
 
-import type { DomTreeNode } from "@ui-buddy/shared";
+import type { DomTreeNode } from "@clickspex/shared";
 
 type DomTreePanelProps = {
   selectedDomPath: string;
@@ -671,7 +671,7 @@ export const DomTreePanel = ({ selectedDomPath }: DomTreePanelProps) => {
   };
 
   return (
-    <section className="ub-card overflow-hidden">
+    <section className="cs-card overflow-hidden">
       <div className="border-b border-line bg-gradient-to-r from-panel via-panel to-accent-softer/60 p-3">
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2.5">
@@ -700,7 +700,7 @@ export const DomTreePanel = ({ selectedDomPath }: DomTreePanelProps) => {
           </div>
           <div className="flex shrink-0 items-center gap-0.5">
             <button
-              className="ub-icon-btn h-8 w-8 rounded-xl"
+              className="cs-icon-btn h-8 w-8 rounded-xl"
               disabled={selectedNode === undefined}
               onClick={() => void copySelectedSelector()}
               title="Copy unique selector"
@@ -713,7 +713,7 @@ export const DomTreePanel = ({ selectedDomPath }: DomTreePanelProps) => {
               )}
             </button>
             <button
-              className="ub-icon-btn h-8 w-8 rounded-xl"
+              className="cs-icon-btn h-8 w-8 rounded-xl"
               onClick={() => setExpanded(new Set())}
               title="Collapse all branches"
               type="button"
@@ -721,7 +721,7 @@ export const DomTreePanel = ({ selectedDomPath }: DomTreePanelProps) => {
               <ChevronsUp aria-hidden="true" size={14} />
             </button>
             <button
-              className="ub-icon-btn h-8 w-8 rounded-xl"
+              className="cs-icon-btn h-8 w-8 rounded-xl"
               disabled={selectedNode === undefined}
               onClick={() => void revealSelected()}
               title="Reveal selected element"
@@ -730,7 +730,7 @@ export const DomTreePanel = ({ selectedDomPath }: DomTreePanelProps) => {
               <LocateFixed aria-hidden="true" size={14} />
             </button>
             <button
-              className="ub-icon-btn h-8 w-8 rounded-xl"
+              className="cs-icon-btn h-8 w-8 rounded-xl"
               onClick={() => void refreshTree()}
               title="Refresh DOM tree"
               type="button"
@@ -748,7 +748,7 @@ export const DomTreePanel = ({ selectedDomPath }: DomTreePanelProps) => {
           />
           <input
             aria-label="Search DOM elements"
-            className="ub-input h-8 rounded-xl py-1 pl-8 pr-8 font-mono text-[11px]"
+            className="cs-input h-8 rounded-xl py-1 pl-8 pr-8 font-mono text-[11px]"
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === "Escape") {
@@ -831,7 +831,7 @@ export const DomTreePanel = ({ selectedDomPath }: DomTreePanelProps) => {
             </span>
             {loadTimedOut ? (
               <button
-                className="ub-btn mt-1 py-1.5"
+                className="cs-btn mt-1 py-1.5"
                 onClick={() => void refreshTree()}
                 type="button"
               >

@@ -1,5 +1,5 @@
 {
-  "name": "@ui-buddy/adapters",
+  "name": "@clickspex/adapters",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -19,12 +19,12 @@
     "format": "prettier --write . --ignore-path ../../.prettierignore"
   },
   "dependencies": {
-    "@ui-buddy/core": "workspace:*",
-    "@ui-buddy/shared": "workspace:*",
+    "@clickspex/core": "workspace:*",
+    "@clickspex/shared": "workspace:*",
     "postcss": "^8.4.0"
   },
   "devDependencies": {
-    "@ui-buddy/config": "workspace:*",
+    "@clickspex/config": "workspace:*",
     "vitest": "^3.0.0"
   }
 }

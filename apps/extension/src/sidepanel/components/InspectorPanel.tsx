@@ -45,7 +45,7 @@ import type {
   ElementSearchResult,
   ElementSnapshot,
   PageTechInfo,
-} from "@ui-buddy/shared";
+} from "@clickspex/shared";
 
 type InspectorPanelProps = {
   selectedElement: ElementSnapshot | null;
@@ -72,7 +72,7 @@ const PreviewRow = ({
 );
 
 const EmptyInspector = () => (
-  <div className="ub-card p-4">
+  <div className="cs-card p-4">
     <div className="flex items-center gap-2.5">
       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent">
         <MousePointer2 aria-hidden="true" size={16} />
@@ -217,7 +217,7 @@ export const InspectorPanel = ({ selectedElement }: InspectorPanelProps) => {
 
       const anchor = document.createElement("a");
       anchor.href = canvas.toDataURL("image/png");
-      anchor.download = `ui-buddy-${selectedElement.tagName}-${Date.now()}.png`;
+      anchor.download = `clickspex-${selectedElement.tagName}-${Date.now()}.png`;
       anchor.click();
     } catch (caughtError) {
       setError(
@@ -392,14 +392,14 @@ export const InspectorPanel = ({ selectedElement }: InspectorPanelProps) => {
   };
 
   const searchSection = (
-    <section className="ub-card p-4">
+    <section className="cs-card p-4">
       <div className="flex items-center gap-2 text-sm font-semibold tracking-tight">
         <Search aria-hidden="true" className="text-accent" size={15} />
         Search
       </div>
       <div className="mt-3 flex gap-2">
         <input
-          className="ub-input h-8 min-w-0 flex-1"
+          className="cs-input h-8 min-w-0 flex-1"
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === "Enter") {
@@ -409,7 +409,7 @@ export const InspectorPanel = ({ selectedElement }: InspectorPanelProps) => {
           placeholder="CSS selector, text, class, id, role"
           value={query}
         />
-        <button className="ub-btn shrink-0" onClick={() => void runSearch()} type="button">
+        <button className="cs-btn shrink-0" onClick={() => void runSearch()} type="button">
           <Search aria-hidden="true" size={13} />
           Find
         </button>
@@ -441,14 +441,14 @@ export const InspectorPanel = ({ selectedElement }: InspectorPanelProps) => {
   );
 
   const techSection = (
-    <section className="ub-card p-4">
+    <section className="cs-card p-4">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 text-sm font-semibold tracking-tight">
           <LayoutPanelLeft aria-hidden="true" className="text-accent" size={15} />
           Page tech
         </div>
         <button
-          className="ub-icon-btn h-7 w-7"
+          className="cs-icon-btn h-7 w-7"
           onClick={() => setTech(null)}
           title="Detect again"
           type="button"
@@ -490,15 +490,15 @@ export const InspectorPanel = ({ selectedElement }: InspectorPanelProps) => {
 
   return (
     <div className="space-y-3">
-      <div className="ub-card p-4">
+      <div className="cs-card p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="ub-heading">Element</p>
+            <p className="cs-heading">Element</p>
             <h2 className="mt-0.5 break-words font-mono text-lg font-semibold text-accent-hover">
               &lt;{selectedElement.tagName}&gt;
             </h2>
           </div>
-          <span className="ub-chip shrink-0 tabular-nums">
+          <span className="cs-chip shrink-0 tabular-nums">
             {formatPixels(rect.width)} × {formatPixels(rect.height)}
           </span>
         </div>
@@ -544,29 +544,29 @@ export const InspectorPanel = ({ selectedElement }: InspectorPanelProps) => {
           />
         </div>
       </div>
-      <section className="ub-card p-4">
+      <section className="cs-card p-4">
         <h3 className="text-sm font-semibold tracking-tight">Tools</h3>
         <div className="mt-2.5 grid grid-cols-2 gap-1.5">
-          <button className="ub-btn" onClick={() => void pinCard("styles")} type="button">
+          <button className="cs-btn" onClick={() => void pinCard("styles")} type="button">
             <Pin aria-hidden="true" size={13} />
             Pin styles
           </button>
-          <button className="ub-btn" onClick={() => void pinCard("audit")} type="button">
+          <button className="cs-btn" onClick={() => void pinCard("audit")} type="button">
             <ShieldCheck aria-hidden="true" size={13} />
             Pin audit
           </button>
-          <button className="ub-btn" onClick={() => void startTextEdit()} type="button">
+          <button className="cs-btn" onClick={() => void startTextEdit()} type="button">
             <Edit3 aria-hidden="true" size={13} />
             Edit text
           </button>
-          <button className="ub-btn" onClick={() => void clearPins()} type="button">
+          <button className="cs-btn" onClick={() => void clearPins()} type="button">
             <Trash2 aria-hidden="true" size={13} />
             Clear pins
           </button>
         </div>
       </section>
 
-      <section className="ub-card p-4">
+      <section className="cs-card p-4">
         <div className="flex items-center justify-between gap-2">
           <h3 className="text-sm font-semibold tracking-tight">Code</h3>
           {copyFeedback !== null ? (
@@ -577,7 +577,7 @@ export const InspectorPanel = ({ selectedElement }: InspectorPanelProps) => {
         </div>
         <div className="mt-2.5 grid grid-cols-2 gap-1.5">
           <button
-            className="ub-btn"
+            className="cs-btn"
             onClick={() => void requestElementCss(false)}
             title="Extract this element's effective CSS"
             type="button"
@@ -586,7 +586,7 @@ export const InspectorPanel = ({ selectedElement }: InspectorPanelProps) => {
             Get CSS
           </button>
           <button
-            className="ub-btn"
+            className="cs-btn"
             onClick={() => void requestElementCss(true)}
             title="Extract HTML + CSS for this element and its children"
             type="button"
@@ -595,7 +595,7 @@ export const InspectorPanel = ({ selectedElement }: InspectorPanelProps) => {
             Get component
           </button>
           <button
-            className="ub-btn"
+            className="cs-btn"
             disabled={capturing}
             onClick={() => void captureElementScreenshot()}
             title="Download a PNG of this element"
@@ -610,7 +610,7 @@ export const InspectorPanel = ({ selectedElement }: InspectorPanelProps) => {
           <div className="mt-3 space-y-2">
             <div className="flex items-center gap-2">
               <button
-                className="ub-btn px-2 py-1"
+                className="cs-btn px-2 py-1"
                 onClick={() => void copyText(elementCssResult.css, "CSS")}
                 type="button"
               >
@@ -620,7 +620,7 @@ export const InspectorPanel = ({ selectedElement }: InspectorPanelProps) => {
               {elementCssResult.html !== null ? (
                 <>
                   <button
-                    className="ub-btn px-2 py-1"
+                    className="cs-btn px-2 py-1"
                     onClick={() => void copyText(elementCssResult.html ?? "", "HTML")}
                     type="button"
                   >
@@ -628,7 +628,7 @@ export const InspectorPanel = ({ selectedElement }: InspectorPanelProps) => {
                     Copy HTML
                   </button>
                   <button
-                    className="ub-btn px-2 py-1"
+                    className="cs-btn px-2 py-1"
                     onClick={() =>
                       void copyText(
                         `${elementCssResult.html ?? ""}
@@ -660,14 +660,14 @@ ${elementCssResult.css}
         ) : null}
       </section>
 
-      <section className="ub-card p-4">
+      <section className="cs-card p-4">
         <h3 className="text-sm font-semibold tracking-tight">Move &amp; Position</h3>
         <div className="mt-2.5 grid grid-cols-2 gap-1.5">
           <button
             className={
               moveMode
                 ? "inline-flex items-center justify-center gap-1.5 rounded-xl bg-accent px-3 py-1.5 text-xs font-semibold text-white shadow-accent-glow transition-colors hover:bg-accent-hover"
-                : "ub-btn"
+                : "cs-btn"
             }
             onClick={() => void toggleMoveMode()}
             type="button"
@@ -675,23 +675,23 @@ ${elementCssResult.css}
             <Move aria-hidden="true" size={13} />
             {moveMode ? "Drag on" : "Drag"}
           </button>
-          <button className="ub-btn" onClick={() => void restorePosition()} type="button">
+          <button className="cs-btn" onClick={() => void restorePosition()} type="button">
             <RotateCcw aria-hidden="true" size={13} />
             Restore
           </button>
-          <button className="ub-btn" onClick={() => void moveElement("previous")} type="button">
+          <button className="cs-btn" onClick={() => void moveElement("previous")} type="button">
             <ArrowLeft aria-hidden="true" size={13} />
             Previous sibling
           </button>
-          <button className="ub-btn" onClick={() => void moveElement("next")} type="button">
+          <button className="cs-btn" onClick={() => void moveElement("next")} type="button">
             <ArrowRight aria-hidden="true" size={13} />
             Next sibling
           </button>
-          <button className="ub-btn" onClick={() => void moveElement("out-before")} type="button">
+          <button className="cs-btn" onClick={() => void moveElement("out-before")} type="button">
             <ArrowUpToLine aria-hidden="true" size={13} />
             Above parent
           </button>
-          <button className="ub-btn" onClick={() => void moveElement("out-after")} type="button">
+          <button className="cs-btn" onClick={() => void moveElement("out-after")} type="button">
             <ArrowDownToLine aria-hidden="true" size={13} />
             Under parent
           </button>
@@ -757,35 +757,35 @@ ${elementCssResult.css}
           </div>
         ) : null}
         <div className="mt-3 grid grid-cols-4 gap-1.5">
-          <button className="ub-btn" onClick={() => void nudgeElement(0, -8)} type="button">
+          <button className="cs-btn" onClick={() => void nudgeElement(0, -8)} type="button">
             <ArrowUp aria-hidden="true" size={13} />
             Up
           </button>
-          <button className="ub-btn" onClick={() => void nudgeElement(-8, 0)} type="button">
+          <button className="cs-btn" onClick={() => void nudgeElement(-8, 0)} type="button">
             <ArrowLeft aria-hidden="true" size={13} />
             Left
           </button>
-          <button className="ub-btn" onClick={() => void nudgeElement(8, 0)} type="button">
+          <button className="cs-btn" onClick={() => void nudgeElement(8, 0)} type="button">
             <ArrowRight aria-hidden="true" size={13} />
             Right
           </button>
-          <button className="ub-btn" onClick={() => void nudgeElement(0, 8)} type="button">
+          <button className="cs-btn" onClick={() => void nudgeElement(0, 8)} type="button">
             <ArrowDown aria-hidden="true" size={13} />
             Down
           </button>
         </div>
       </section>
-      <section className="ub-card p-4">
+      <section className="cs-card p-4">
         <h3 className="text-sm font-semibold tracking-tight">Image</h3>
         <div className="mt-2.5 flex gap-2">
           <input
-            className="ub-input h-8 min-w-0 flex-1"
+            className="cs-input h-8 min-w-0 flex-1"
             onChange={(event) => setImageUrl(event.target.value)}
             placeholder={selectedElement.attributes.src || "Image URL or data URL"}
             value={imageUrl}
           />
           <button
-            className="ub-btn shrink-0"
+            className="cs-btn shrink-0"
             disabled={imageUrl.trim().length === 0}
             onClick={() => void replaceImage(imageUrl)}
             type="button"
@@ -802,7 +802,7 @@ ${elementCssResult.css}
           type="file"
         />
         <button
-          className="ub-btn mt-2 w-full"
+          className="cs-btn mt-2 w-full"
           onClick={() => imageFileInputRef.current?.click()}
           type="button"
         >
@@ -815,7 +815,7 @@ ${elementCssResult.css}
 
       {searchSection}
 
-      <div className="ub-card p-4">
+      <div className="cs-card p-4">
         <h3 className="text-sm font-semibold tracking-tight">Identity</h3>
         <dl className="mt-2.5 grid grid-cols-[82px_minmax(0,1fr)] gap-x-3 gap-y-2 text-xs">
           <dt className="font-medium text-muted">ID</dt>

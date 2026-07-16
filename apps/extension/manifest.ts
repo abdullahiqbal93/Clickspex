@@ -2,7 +2,7 @@ import { defineManifest } from "@crxjs/vite-plugin";
 
 export default defineManifest({
   manifest_version: 3,
-  name: "ui-buddy",
+  name: "Clickspex",
   description: "Inspect, measure, and prototype UI changes directly in Chrome.",
   version: "0.1.0",
   icons: {
@@ -12,7 +12,7 @@ export default defineManifest({
     "128": "icons/icon-128.png",
   },
   action: {
-    default_title: "Open ui-buddy",
+    default_title: "Open Clickspex",
   },
   permissions: ["activeTab", "sidePanel", "storage", "scripting"],
   // Content inspection is limited to HTTP(S) pages. `activeTab` grants the

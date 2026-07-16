@@ -3,12 +3,12 @@ import {
   buildStyleTargetSelector,
   canCoalesceStyleChange,
   getStyleChangeResponsiveTarget,
-} from "@ui-buddy/core";
+} from "@clickspex/core";
 import {
   STYLE_RESPONSIVE_TARGET_DEFINITIONS,
   type StyleChange,
   type StyleResponsiveTarget,
-} from "@ui-buddy/shared";
+} from "@clickspex/shared";
 
 import { buildImportantCssDeclarations } from "../cssDeclarations";
 
@@ -45,22 +45,22 @@ const wrapImportantCssForResponsiveTarget = (
   return [`@media ${mediaQuery} {`, indentCss(css), "}"].join("\n");
 };
 
-const STYLE_ELEMENT_ID = "__ui-buddy-styles__";
+const STYLE_ELEMENT_ID = "__clickspex-styles__";
 
 const ANIMATION_PRESET_KEYFRAMES: Record<string, string> = {
-  "ui-buddy-fade-in": `@keyframes ui-buddy-fade-in {
+  "clickspex-fade-in": `@keyframes clickspex-fade-in {
   from { opacity: 0; }
   to { opacity: 1; }
 }`,
-  "ui-buddy-slide-up": `@keyframes ui-buddy-slide-up {
+  "clickspex-slide-up": `@keyframes clickspex-slide-up {
   from { opacity: 0; transform: translateY(12px); }
   to { opacity: 1; transform: translateY(0); }
 }`,
-  "ui-buddy-pop": `@keyframes ui-buddy-pop {
+  "clickspex-pop": `@keyframes clickspex-pop {
   0% { opacity: 0; transform: scale(0.96); }
   100% { opacity: 1; transform: scale(1); }
 }`,
-  "ui-buddy-pulse": `@keyframes ui-buddy-pulse {
+  "clickspex-pulse": `@keyframes clickspex-pulse {
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.04); }
 }`,

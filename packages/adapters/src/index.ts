@@ -14,4 +14,4 @@ export type {
   FrameworkAdapter,
   PatchSuggestion,
   ProjectContext,
-} from "@ui-buddy/shared";
+} from "@clickspex/shared";

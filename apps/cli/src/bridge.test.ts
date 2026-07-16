@@ -6,7 +6,11 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { applySession, previewSession, rollback, startBridge } from "./bridge.js";
 
-import type { BridgeApplyResponse, BridgePreviewResponse, UIChangeSession } from "@ui-buddy/shared";
+import type {
+  BridgeApplyResponse,
+  BridgePreviewResponse,
+  UIChangeSession,
+} from "@clickspex/shared";
 
 const roots: string[] = [];
 const EXTENSION_ID = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -15,7 +19,7 @@ const EXTENSION_ORIGIN = `chrome-extension://${EXTENSION_ID}`;
 const side = { top: "0px", right: "0px", bottom: "0px", left: "0px" };
 
 const makeProject = async (): Promise<string> => {
-  const root = await mkdtemp(join(tmpdir(), "ui-buddy-bridge-"));
+  const root = await mkdtemp(join(tmpdir(), "clickspex-bridge-"));
   roots.push(root);
   await mkdir(join(root, "src"));
   await writeFile(join(root, "package.json"), JSON.stringify({ name: "demo" }), "utf8");
@@ -256,7 +260,7 @@ describe("bridge preview/apply/rollback", () => {
 
       const manifest = JSON.parse(
         await readFile(
-          join(root, ".ui-buddy", "backups", appliedBody.backupId!, "manifest.json"),
+          join(root, ".clickspex", "backups", appliedBody.backupId!, "manifest.json"),
           "utf8",
         ),
       ) as {
@@ -273,7 +277,7 @@ describe("bridge preview/apply/rollback", () => {
       expect(manifest.files[0]).toMatchObject({ path: "src/styles.css" });
       expect(manifest.files[0]?.beforeHash).not.toBe(manifest.files[0]?.appliedHash);
       expect(manifest.files[0]?.backupPath).toContain(
-        `.ui-buddy/backups/${appliedBody.backupId}/src/styles.css`,
+        `.clickspex/backups/${appliedBody.backupId}/src/styles.css`,
       );
 
       const rolledBack = await rollbackViaBridge(base, token, appliedBody.backupId!);

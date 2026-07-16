@@ -1,4 +1,4 @@
-import { generateUniqueSelector } from "@ui-buddy/core";
+import { generateUniqueSelector } from "@clickspex/core";
 
 export type ElementCssExtraction = {
   css: string;
@@ -274,10 +274,10 @@ const relativeSelector = (root: Element, element: Element): string => {
 const cleanedOuterHtml = (element: Element): string => {
   const clone = element.cloneNode(true) as Element;
   clone.querySelectorAll("script, style").forEach((node) => node.remove());
-  clone.removeAttribute("data-ub-source-target");
+  clone.removeAttribute("data-cs-source-target");
   clone
-    .querySelectorAll("[data-ub-source-target]")
-    .forEach((node) => node.removeAttribute("data-ub-source-target"));
+    .querySelectorAll("[data-cs-source-target]")
+    .forEach((node) => node.removeAttribute("data-cs-source-target"));
   return clone.outerHTML;
 };
 

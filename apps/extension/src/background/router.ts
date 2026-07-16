@@ -1,4 +1,4 @@
-import type { ExtensionMessage } from "@ui-buddy/shared";
+import type { ExtensionMessage } from "@clickspex/shared";
 
 const CONTENT_TO_PANEL_MESSAGES = new Set<ExtensionMessage["type"]>([
   "ELEMENT_HOVERED",

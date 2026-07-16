@@ -1,4 +1,4 @@
-import type { RectSnapshot } from "@ui-buddy/shared";
+import type { RectSnapshot } from "@clickspex/shared";
 
 export type AlignmentName = "left" | "right" | "center-x" | "top" | "bottom" | "center-y";
 

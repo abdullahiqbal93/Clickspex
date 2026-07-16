@@ -10,7 +10,7 @@ import {
   type StyleResponsiveTarget,
   type StyleTargetState,
   type SupportedStyleProperty,
-} from "@ui-buddy/shared";
+} from "@clickspex/shared";
 import {
   Braces,
   Check,
@@ -184,7 +184,7 @@ export const buildLiveOverrideRule = (
     selector: targetState === "base" ? selector : `${selector}:${targetState}`,
     specificity: [1000, 0, 0],
     origin: "inspector",
-    source: { label: "UI Buddy live override", url: null },
+    source: { label: "Clickspex live override", url: null },
     declarations: Array.from(declarations, ([property, value]) => ({
       property,
       value,
@@ -543,7 +543,7 @@ const RuleCard = ({
             {rule.origin === "inspector" ? (
               <span
                 className="flex h-4 w-4 shrink-0 items-center justify-center rounded-md bg-violet-100 text-violet-600"
-                title="Live override created in UI Buddy"
+                title="Live override created in Clickspex"
               >
                 <Sparkles aria-hidden="true" size={9} />
               </span>
@@ -834,7 +834,7 @@ export const CascadeExplorer = ({
   let previousInheritedSelector: string | null = null;
 
   return (
-    <section className="ub-card overflow-hidden">
+    <section className="cs-card overflow-hidden">
       <div className="border-b border-line bg-gradient-to-b from-white to-panel-soft/70 px-3 pb-2.5 pt-3">
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2.5">
@@ -854,7 +854,7 @@ export const CascadeExplorer = ({
             </div>
           </div>
           <button
-            className="ub-icon-btn h-8 w-8 rounded-xl"
+            className="cs-icon-btn h-8 w-8 rounded-xl"
             onClick={() => void refresh()}
             title="Refresh styles from the page"
             type="button"
@@ -903,7 +903,7 @@ export const CascadeExplorer = ({
               size={12}
             />
             <input
-              className="ub-input h-8 rounded-xl bg-panel-soft py-1.5 pl-7 pr-7 text-[10px]"
+              className="cs-input h-8 rounded-xl bg-panel-soft py-1.5 pl-7 pr-7 text-[10px]"
               id="cascade-search"
               onChange={(event) => setQuery(event.target.value)}
               placeholder={

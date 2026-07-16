@@ -1,4 +1,4 @@
-import baseConfig from "@ui-buddy/config/vitest";
+import baseConfig from "@clickspex/config/vitest";
 import { mergeConfig } from "vitest/config";
 
 export default mergeConfig(baseConfig, {

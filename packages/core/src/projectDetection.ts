@@ -6,7 +6,7 @@ import type {
   ProjectFileKind,
   ProjectFileSummary,
   ProjectIndexSkippedPath,
-} from "@ui-buddy/shared";
+} from "@clickspex/shared";
 import type { Dirent } from "node:fs";
 
 export type DetectedItem = {

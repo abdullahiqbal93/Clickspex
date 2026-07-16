@@ -68,16 +68,16 @@ importers:
         specifier: ^3.23.0
         version: 3.25.76
     devDependencies:
-      "@ui-buddy/adapters":
+      "@clickspex/adapters":
         specifier: workspace:*
         version: link:../../packages/adapters
-      "@ui-buddy/config":
+      "@clickspex/config":
         specifier: workspace:*
         version: link:../../packages/config
-      "@ui-buddy/core":
+      "@clickspex/core":
         specifier: workspace:*
         version: link:../../packages/core
-      "@ui-buddy/shared":
+      "@clickspex/shared":
         specifier: workspace:*
         version: link:../../packages/shared
       tsup:
@@ -89,13 +89,13 @@ importers:
 
   apps/extension:
     dependencies:
-      "@ui-buddy/adapters":
+      "@clickspex/adapters":
         specifier: workspace:*
         version: link:../../packages/adapters
-      "@ui-buddy/core":
+      "@clickspex/core":
         specifier: workspace:*
         version: link:../../packages/core
-      "@ui-buddy/shared":
+      "@clickspex/shared":
         specifier: workspace:*
         version: link:../../packages/shared
       lucide-react:
@@ -120,7 +120,7 @@ importers:
       "@types/react-dom":
         specifier: ^18.3.0
         version: 18.3.7(@types/react@18.3.31)
-      "@ui-buddy/config":
+      "@clickspex/config":
         specifier: workspace:*
         version: link:../../packages/config
       "@vitejs/plugin-react":
@@ -147,20 +147,20 @@ importers:
       "@modelcontextprotocol/sdk":
         specifier: ^1.0.0
         version: 1.29.0(zod@3.25.76)
-      "@ui-buddy/adapters":
+      "@clickspex/adapters":
         specifier: workspace:*
         version: link:../../packages/adapters
-      "@ui-buddy/core":
+      "@clickspex/core":
         specifier: workspace:*
         version: link:../../packages/core
-      "@ui-buddy/shared":
+      "@clickspex/shared":
         specifier: workspace:*
         version: link:../../packages/shared
       zod:
         specifier: ^3.23.0
         version: 3.25.76
     devDependencies:
-      "@ui-buddy/config":
+      "@clickspex/config":
         specifier: workspace:*
         version: link:../../packages/config
       vitest:
@@ -169,17 +169,17 @@ importers:
 
   packages/adapters:
     dependencies:
-      "@ui-buddy/core":
+      "@clickspex/core":
         specifier: workspace:*
         version: link:../core
-      "@ui-buddy/shared":
+      "@clickspex/shared":
         specifier: workspace:*
         version: link:../shared
       postcss:
         specifier: ^8.4.0
         version: 8.5.16
     devDependencies:
-      "@ui-buddy/config":
+      "@clickspex/config":
         specifier: workspace:*
         version: link:../config
       vitest:
@@ -190,11 +190,11 @@ importers:
 
   packages/core:
     dependencies:
-      "@ui-buddy/shared":
+      "@clickspex/shared":
         specifier: workspace:*
         version: link:../shared
     devDependencies:
-      "@ui-buddy/config":
+      "@clickspex/config":
         specifier: workspace:*
         version: link:../config
       vitest:
@@ -207,7 +207,7 @@ importers:
         specifier: ^3.23.0
         version: 3.25.76
     devDependencies:
-      "@ui-buddy/config":
+      "@clickspex/config":
         specifier: workspace:*
         version: link:../config
       vitest:

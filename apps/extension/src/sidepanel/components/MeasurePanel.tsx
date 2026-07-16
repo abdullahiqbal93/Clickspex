@@ -269,7 +269,7 @@ export const MeasurePanel = () => {
 
   return (
     <div className="space-y-3">
-      <section className="ub-card p-4">
+      <section className="cs-card p-4">
         <div className="flex items-center gap-2.5">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent">
             <Ruler aria-hidden="true" size={16} />
@@ -281,7 +281,7 @@ export const MeasurePanel = () => {
         </div>
         <div className="mt-3 grid grid-cols-2 gap-2 border-t border-line pt-3">
           <button
-            className="ub-btn"
+            className="cs-btn"
             disabled={selectedElement === null}
             onClick={() => void startElementMeasure()}
             type="button"
@@ -293,7 +293,7 @@ export const MeasurePanel = () => {
             className={
               rulerActive
                 ? "inline-flex items-center justify-center gap-1.5 rounded-xl bg-measure px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-teal-600"
-                : "ub-btn"
+                : "cs-btn"
             }
             onClick={() => void toggleRuler()}
             type="button"
@@ -304,7 +304,7 @@ export const MeasurePanel = () => {
         </div>
       </section>
 
-      <section className="ub-card p-4">
+      <section className="cs-card p-4">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h3 className="text-sm font-semibold tracking-tight">Viewport presets</h3>
@@ -318,7 +318,7 @@ export const MeasurePanel = () => {
             </p>
           </div>
           <button
-            className="ub-btn shrink-0 px-2.5"
+            className="cs-btn shrink-0 px-2.5"
             onClick={() => void refreshViewportStatus()}
             type="button"
           >
@@ -328,7 +328,7 @@ export const MeasurePanel = () => {
         <div className="mt-3 space-y-3.5">
           {VIEWPORT_PRESET_GROUPS.map((group) => (
             <div key={group.label}>
-              <p className="ub-heading mb-1.5">{group.label}</p>
+              <p className="cs-heading mb-1.5">{group.label}</p>
               <div className="grid grid-cols-2 gap-1.5">
                 {group.presets.map((preset) => {
                   const Icon = preset.icon;
@@ -377,14 +377,14 @@ export const MeasurePanel = () => {
 
       {selectedElement !== null && (
         <section className="grid grid-cols-2 gap-2.5">
-          <div className="ub-card p-3.5">
-            <p className="ub-heading">Width</p>
+          <div className="cs-card p-3.5">
+            <p className="cs-heading">Width</p>
             <p className="mt-1 font-mono text-lg font-semibold tabular-nums text-ink">
               {formatPixels(selectedElement.rect.width)}
             </p>
           </div>
-          <div className="ub-card p-3.5">
-            <p className="ub-heading">Height</p>
+          <div className="cs-card p-3.5">
+            <p className="cs-heading">Height</p>
             <p className="mt-1 font-mono text-lg font-semibold tabular-nums text-ink">
               {formatPixels(selectedElement.rect.height)}
             </p>

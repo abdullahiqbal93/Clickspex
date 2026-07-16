@@ -7,7 +7,7 @@ import "./styles.css";
 const rootElement = document.getElementById("root");
 
 if (rootElement === null) {
-  throw new Error("ui-buddy side panel root element was not found.");
+  throw new Error("Clickspex side panel root element was not found.");
 }
 
 createRoot(rootElement).render(

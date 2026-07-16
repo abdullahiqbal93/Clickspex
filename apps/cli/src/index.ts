@@ -3,8 +3,8 @@ import { spawn } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import { cssAdapter, scaffoldAdapters, tailwindAdapter } from "@ui-buddy/adapters";
-import { detectProject, scanProjectContext } from "@ui-buddy/core/project";
+import { cssAdapter, scaffoldAdapters, tailwindAdapter } from "@clickspex/adapters";
+import { detectProject, scanProjectContext } from "@clickspex/core/project";
 import chalk from "chalk";
 import { Command } from "commander";
 
@@ -26,7 +26,7 @@ const openBrowser = (url: string): void => {
   }
 };
 
-import type { PatchSuggestion, UIChangeIntent, UIChangeSession } from "@ui-buddy/shared";
+import type { PatchSuggestion, UIChangeIntent, UIChangeSession } from "@clickspex/shared";
 
 const program = new Command();
 
@@ -122,15 +122,15 @@ const previewPatchSuggestions = async (
 
 const PRODUCT_VERSION = "0.1.0";
 
-program.name("ui-buddy").description("ui-buddy local project utility").version(PRODUCT_VERSION);
+program.name("clickspex").description("Clickspex local project utility").version(PRODUCT_VERSION);
 
 program
   .command("init")
-  .description("initialize a .ui-buddy capability policy in the project")
+  .description("initialize a .clickspex capability policy in the project")
   .option("--path <path>", "project path", process.cwd())
   .action(async (options: { path: string }) => {
     const rootPath = resolve(options.path);
-    const configDir = resolve(rootPath, ".ui-buddy");
+    const configDir = resolve(rootPath, ".clickspex");
     await mkdir(configDir, { recursive: true });
     await writeFile(
       resolve(configDir, "config.json"),
@@ -237,14 +237,14 @@ program
 
 program
   .command("connect")
-  .description("start a paired localhost bridge so the ui-buddy extension can preview changes")
+  .description("start a paired localhost bridge so the Clickspex extension can preview changes")
   .option("--path <path>", "project path", process.cwd())
   .option("--port <port>", "port to listen on", "7317")
   .option("--open <url>", "open this URL (your running app) in the browser after starting")
   .option(
     "--extension-id <id>",
     "Chrome extension ID allowed to pair with this bridge",
-    process.env.UI_BUDDY_EXTENSION_ID,
+    process.env.CLICKSPEX_EXTENSION_ID,
   )
   .option(
     "--allow-any-extension-origin",
@@ -320,7 +320,7 @@ program
       const url = `http://127.0.0.1:${bridge.port}`;
 
       process.stdout.write("\n");
-      process.stdout.write(`${chalk.green("*")} ${chalk.bold("ui-buddy bridge")}  ${url}\n`);
+      process.stdout.write(`${chalk.green("*")} ${chalk.bold("clickspex bridge")}  ${url}\n`);
       process.stdout.write(`  ${chalk.bold("project")}  ${bridge.projectName}\n`);
       process.stdout.write(`  ${chalk.bold("root")}     ${bridge.canonicalRoot}\n`);
       process.stdout.write(`  ${chalk.bold("port")}     ${bridge.port}\n`);
@@ -342,7 +342,7 @@ program
       );
       process.stdout.write("  Next steps:\n");
       process.stdout.write(
-        "   1. Start the installed UI Buddy extension for the configured extension ID\n",
+        "   1. Start the installed Clickspex extension for the configured extension ID\n",
       );
       process.stdout.write("   2. Enter the pairing code shown above in Code sync\n");
       process.stdout.write("   3. Open your running app in Chrome and edit elements\n");

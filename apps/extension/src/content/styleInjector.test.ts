@@ -2,10 +2,10 @@ import { describe, expect, it, beforeEach } from "vitest";
 
 import { StyleInjector } from "./styleInjector";
 
-import type { StyleChange } from "@ui-buddy/shared";
+import type { StyleChange } from "@clickspex/shared";
 
 const styleElement = (): HTMLStyleElement | null =>
-  document.getElementById("__ui-buddy-styles__") as HTMLStyleElement | null;
+  document.getElementById("__clickspex-styles__") as HTMLStyleElement | null;
 
 const createChange = (
   property: StyleChange["property"],
@@ -35,7 +35,7 @@ describe("StyleInjector", () => {
     injector.applyChange(createChange("color", "black", "white"));
     injector.applyChange(createChange("font-size", "14px", "16px"));
 
-    expect(document.querySelectorAll("#__ui-buddy-styles__")).toHaveLength(1);
+    expect(document.querySelectorAll("#__clickspex-styles__")).toHaveLength(1);
     expect(styleElement()?.textContent).toBe(
       ["#save {", "  color: white !important;", "  font-size: 16px !important;", "}"].join("\n"),
     );
@@ -124,12 +124,12 @@ describe("StyleInjector", () => {
   it("adds keyframes for built-in animation presets", () => {
     const injector = new StyleInjector();
 
-    injector.applyChange(createChange("animation", "", "ui-buddy-fade-in 300ms ease-out both"));
+    injector.applyChange(createChange("animation", "", "clickspex-fade-in 300ms ease-out both"));
 
     expect(styleElement()?.textContent).toContain(
-      "animation: ui-buddy-fade-in 300ms ease-out both !important;",
+      "animation: clickspex-fade-in 300ms ease-out both !important;",
     );
-    expect(styleElement()?.textContent).toContain("@keyframes ui-buddy-fade-in");
+    expect(styleElement()?.textContent).toContain("@keyframes clickspex-fade-in");
   });
   it("reset clears style output and history", () => {
     const injector = new StyleInjector();

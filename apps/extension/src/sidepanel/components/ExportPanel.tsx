@@ -1,10 +1,10 @@
-import { cssAdapter, tailwindAdapter } from "@ui-buddy/adapters";
+import { cssAdapter, tailwindAdapter } from "@clickspex/adapters";
 import {
   createUIChangeSession,
   summarizeSessionAsAgentPrompt,
   summarizeSessionAsMarkdown,
   type SessionElementInput,
-} from "@ui-buddy/core";
+} from "@clickspex/core";
 import {
   AlertTriangle,
   Boxes,
@@ -23,7 +23,7 @@ import { usePanelStore } from "../store";
 
 import { CodeSyncPanel } from "./CodeSyncPanel";
 
-import type { ElementSnapshot, PageTechInfo } from "@ui-buddy/shared";
+import type { ElementSnapshot, PageTechInfo } from "@clickspex/shared";
 
 const fallbackPageContext = (): PageContext => ({
   pageUrl: "about:blank",
@@ -89,13 +89,13 @@ const ExportBlock = ({ title, content, warnings = [], filename }: ExportBlockPro
   };
 
   return (
-    <section className="ub-card p-4">
+    <section className="cs-card p-4">
       <div className="flex items-center justify-between gap-3">
         <h3 className="text-sm font-semibold tracking-tight">{title}</h3>
         <div className="flex items-center gap-1">
           {filename !== undefined && content.length > 0 ? (
             <button
-              className="ub-icon-btn"
+              className="cs-icon-btn"
               onClick={() => downloadContent(content, filename)}
               title={`Download ${filename}`}
               type="button"
@@ -103,7 +103,7 @@ const ExportBlock = ({ title, content, warnings = [], filename }: ExportBlockPro
               <Download aria-hidden="true" size={14} />
             </button>
           ) : null}
-          <button className="ub-icon-btn" onClick={() => void copy()} title="Copy" type="button">
+          <button className="cs-icon-btn" onClick={() => void copy()} title="Copy" type="button">
             <Clipboard aria-hidden="true" size={14} />
           </button>
         </div>
@@ -211,7 +211,7 @@ export const ExportPanel = () => {
 
   if (!hasContent) {
     return (
-      <div className="ub-card p-4">
+      <div className="cs-card p-4">
         <div className="flex items-center gap-2.5">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent">
             <Code2 aria-hidden="true" size={16} />
@@ -256,7 +256,7 @@ export const ExportPanel = () => {
 
   return (
     <div className="space-y-3">
-      <section className="ub-card p-4">
+      <section className="cs-card p-4">
         <div className="flex items-center gap-2.5">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent">
             <Layers aria-hidden="true" size={16} />
@@ -308,7 +308,7 @@ export const ExportPanel = () => {
       ) : null}
 
       {session.structuralEdits.length > 0 ? (
-        <section className="ub-card p-4">
+        <section className="cs-card p-4">
           <h3 className="flex items-center gap-2 text-sm font-semibold tracking-tight">
             <Boxes aria-hidden="true" className="text-accent" size={15} />
             Structural edits
@@ -331,9 +331,9 @@ export const ExportPanel = () => {
         </section>
       ) : null}
 
-      <ExportBlock content={sessionCss} filename="ui-buddy-session.css" title="CSS" />
+      <ExportBlock content={sessionCss} filename="clickspex-session.css" title="CSS" />
 
-      <section className="ub-card p-4">
+      <section className="cs-card p-4">
         <div className="flex items-center gap-2 text-sm font-semibold tracking-tight">
           <Sparkles aria-hidden="true" className="text-accent" size={15} />
           Copy for AI agent
@@ -343,7 +343,7 @@ export const ExportPanel = () => {
         </p>
         <div className="mt-2">
           <button
-            className="ub-btn-primary"
+            className="cs-btn-primary"
             onClick={() => void navigator.clipboard.writeText(agentPrompt).catch(() => undefined)}
             type="button"
           >
@@ -359,12 +359,12 @@ export const ExportPanel = () => {
       {tailwindDetected ? (
         <ExportBlock
           content={sessionTailwind}
-          filename="ui-buddy-session-tailwind.txt"
+          filename="clickspex-session-tailwind.txt"
           title="Tailwind"
         />
       ) : null}
 
-      <section className="ub-card p-3">
+      <section className="cs-card p-3">
         <button
           className="flex w-full items-center gap-2 text-left text-sm font-semibold tracking-tight text-ink"
           onClick={() => setShowAdvanced((current) => !current)}
@@ -386,7 +386,7 @@ export const ExportPanel = () => {
             />
             <ExportBlock
               content={markdownExport}
-              filename="ui-buddy-session.md"
+              filename="clickspex-session.md"
               title="Markdown summary"
             />
           </div>

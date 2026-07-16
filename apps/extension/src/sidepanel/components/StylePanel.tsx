@@ -1,4 +1,4 @@
-import { buildCssRulesFromChanges, buildScopedCssRule, escapeCssIdentifier } from "@ui-buddy/core";
+import { buildCssRulesFromChanges, buildScopedCssRule, escapeCssIdentifier } from "@clickspex/core";
 import {
   STYLE_RESPONSIVE_TARGET_DEFINITIONS,
   type StyleChange,
@@ -7,7 +7,7 @@ import {
   type StyleResponsiveTargetDefinition,
   type StyleTargetState,
   type SupportedStyleProperty,
-} from "@ui-buddy/shared";
+} from "@clickspex/shared";
 import {
   ChevronDown,
   CircleAlert,
@@ -189,17 +189,17 @@ const TIMING_FUNCTION_SUGGESTIONS = [
 ] as const;
 
 const ANIMATION_PRESET_NAMES = [
-  "ui-buddy-fade-in",
-  "ui-buddy-slide-up",
-  "ui-buddy-pop",
-  "ui-buddy-pulse",
+  "clickspex-fade-in",
+  "clickspex-slide-up",
+  "clickspex-pop",
+  "clickspex-pulse",
 ] as const;
 
 const ANIMATION_PRESET_SUGGESTIONS = [
-  "ui-buddy-fade-in 300ms ease-out both",
-  "ui-buddy-slide-up 300ms ease-out both",
-  "ui-buddy-pop 220ms ease-out both",
-  "ui-buddy-pulse 1s ease-in-out infinite",
+  "clickspex-fade-in 300ms ease-out both",
+  "clickspex-slide-up 300ms ease-out both",
+  "clickspex-pop 220ms ease-out both",
+  "clickspex-pulse 1s ease-in-out infinite",
 ] as const;
 
 const preset = (label: string, value: string, title?: string): StylePreset => ({
@@ -492,17 +492,17 @@ const TRANSITION_PRESETS = [
   preset("Slow", "all 500ms ease-in-out"),
 ];
 const ANIMATION_PRESETS = [
-  preset("Fade", "ui-buddy-fade-in 300ms ease-out both"),
-  preset("Slide", "ui-buddy-slide-up 300ms ease-out both"),
-  preset("Pop", "ui-buddy-pop 220ms ease-out both"),
-  preset("Pulse", "ui-buddy-pulse 1s ease-in-out infinite"),
+  preset("Fade", "clickspex-fade-in 300ms ease-out both"),
+  preset("Slide", "clickspex-slide-up 300ms ease-out both"),
+  preset("Pop", "clickspex-pop 220ms ease-out both"),
+  preset("Pulse", "clickspex-pulse 1s ease-in-out infinite"),
 ];
 const ANIMATION_NAME_PRESETS = [
   preset("None", "none"),
-  preset("Fade", "ui-buddy-fade-in"),
-  preset("Slide", "ui-buddy-slide-up"),
-  preset("Pop", "ui-buddy-pop"),
-  preset("Pulse", "ui-buddy-pulse"),
+  preset("Fade", "clickspex-fade-in"),
+  preset("Slide", "clickspex-slide-up"),
+  preset("Pop", "clickspex-pop"),
+  preset("Pulse", "clickspex-pulse"),
 ];
 
 const getFieldGuidance = (property: SupportedStyleProperty): StyleGuidance => {
@@ -713,13 +713,13 @@ const getFieldGuidance = (property: SupportedStyleProperty): StyleGuidance => {
       };
     case "animation":
       return {
-        placeholder: "ui-buddy-fade-in 300ms ease-out both",
+        placeholder: "clickspex-fade-in 300ms ease-out both",
         presets: ANIMATION_PRESETS,
         suggestions: ["none", ...ANIMATION_PRESET_SUGGESTIONS],
       };
     case "animation-name":
       return {
-        placeholder: "ui-buddy-fade-in",
+        placeholder: "clickspex-fade-in",
         presets: ANIMATION_NAME_PRESETS,
         suggestions: ["none", ...ANIMATION_PRESET_NAMES],
       };
@@ -1189,7 +1189,7 @@ export const StylePanel = () => {
 
   if (selectedElement === null) {
     return (
-      <div className="ub-card p-4">
+      <div className="cs-card p-4">
         <div className="flex items-center gap-2.5">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent">
             <SlidersHorizontal aria-hidden="true" size={16} />
@@ -1344,7 +1344,7 @@ export const StylePanel = () => {
 
   return (
     <div className="space-y-3">
-      <div className="ub-card overflow-hidden">
+      <div className="cs-card overflow-hidden">
         <div className="flex items-start justify-between gap-3 border-b border-line px-3.5 py-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
@@ -1362,7 +1362,7 @@ export const StylePanel = () => {
           </div>
           <div className="flex shrink-0 items-center gap-0.5">
             <button
-              className="ub-icon-btn h-8 w-8 rounded-xl"
+              className="cs-icon-btn h-8 w-8 rounded-xl"
               disabled={historyUndoDepth === 0}
               onClick={() => void undoChange()}
               title="Undo last change"
@@ -1371,7 +1371,7 @@ export const StylePanel = () => {
               <Undo2 aria-hidden="true" size={14} />
             </button>
             <button
-              className="ub-icon-btn h-8 w-8 rounded-xl"
+              className="cs-icon-btn h-8 w-8 rounded-xl"
               disabled={historyRedoDepth === 0}
               onClick={() => void redoChange()}
               title="Redo last change"
@@ -1380,7 +1380,7 @@ export const StylePanel = () => {
               <Redo2 aria-hidden="true" size={14} />
             </button>
             <button
-              className="ub-btn ml-1 h-8 rounded-xl px-2.5 py-0 text-[10px]"
+              className="cs-btn ml-1 h-8 rounded-xl px-2.5 py-0 text-[10px]"
               onClick={() => void copyAllCss()}
               title="Copy all modified CSS"
               type="button"
@@ -1390,7 +1390,7 @@ export const StylePanel = () => {
             </button>
             <button
               aria-label="Reset all style changes"
-              className="ub-icon-btn h-8 w-8 rounded-xl text-rose-500 hover:bg-rose-50 hover:text-rose-600"
+              className="cs-icon-btn h-8 w-8 rounded-xl text-rose-500 hover:bg-rose-50 hover:text-rose-600"
               onClick={() => void resetChanges()}
               title="Reset every style change in this session"
               type="button"
@@ -1507,7 +1507,7 @@ export const StylePanel = () => {
         targetState={styleTargetState}
       />
 
-      <section className="ub-card overflow-hidden">
+      <section className="cs-card overflow-hidden">
         <div className="border-b border-line px-3.5 py-3">
           <div className="flex items-center gap-2">
             <SlidersHorizontal aria-hidden="true" className="text-accent" size={14} />
@@ -1522,7 +1522,7 @@ export const StylePanel = () => {
             Property
           </label>
           <select
-            className="ub-input h-9 w-full font-mono text-xs"
+            className="cs-input h-9 w-full font-mono text-xs"
             id="quick-style-property"
             onChange={(event) => selectQuickProperty(event.target.value as SupportedStyleProperty)}
             value={quickProperty}
@@ -1551,7 +1551,7 @@ export const StylePanel = () => {
               <>
                 <input
                   aria-invalid={!quickValid}
-                  className="ub-input h-9 min-w-0 flex-1 font-mono text-xs"
+                  className="cs-input h-9 min-w-0 flex-1 font-mono text-xs"
                   id="quick-style-value"
                   list={quickSuggestions.length === 0 ? undefined : "quick-style-suggestions"}
                   onChange={(event) => previewQuickValue(event.target.value)}
@@ -1569,7 +1569,7 @@ export const StylePanel = () => {
               </>
             ) : (
               <select
-                className="ub-input h-9 min-w-0 flex-1"
+                className="cs-input h-9 min-w-0 flex-1"
                 id="quick-style-value"
                 onChange={(event) => previewQuickValue(event.target.value)}
                 value={quickDraft}
@@ -1583,7 +1583,7 @@ export const StylePanel = () => {
             )}
             <button
               aria-label={"Clear " + quickField.label}
-              className="ub-icon-btn"
+              className="cs-icon-btn"
               onClick={() => previewQuickValue("")}
               title={"Clear " + quickField.label}
               type="button"
@@ -1616,7 +1616,7 @@ export const StylePanel = () => {
       </section>
 
       {modifiedDeclarations.length === 0 ? null : (
-        <section className="ub-card overflow-hidden">
+        <section className="cs-card overflow-hidden">
           <div className="flex items-center justify-between border-b border-line px-3.5 py-2.5">
             <div>
               <h3 className="text-sm font-semibold tracking-tight">Modified</h3>
@@ -1625,7 +1625,7 @@ export const StylePanel = () => {
               </p>
             </div>
             <button
-              className="ub-icon-btn h-7 w-7"
+              className="cs-icon-btn h-7 w-7"
               onClick={() => void copyCurrentRule()}
               title="Copy the current scoped rule"
               type="button"
@@ -1657,7 +1657,7 @@ export const StylePanel = () => {
                 </code>
                 <button
                   aria-label={"Remove " + change.property}
-                  className="ub-icon-btn h-7 w-7"
+                  className="cs-icon-btn h-7 w-7"
                   onClick={() => void commitChange(change.property, "")}
                   title={"Remove " + change.property}
                   type="button"
@@ -1670,7 +1670,7 @@ export const StylePanel = () => {
         </section>
       )}
 
-      <div className="ub-card p-3">
+      <div className="cs-card p-3">
         <label className="relative block" htmlFor="style-property-search">
           <Search
             aria-hidden="true"
@@ -1678,7 +1678,7 @@ export const StylePanel = () => {
             size={13}
           />
           <input
-            className="ub-input h-9 w-full pl-8 pr-8 text-xs"
+            className="cs-input h-9 w-full pl-8 pr-8 text-xs"
             id="style-property-search"
             onChange={(event) => setStyleFilter(event.target.value)}
             placeholder="Find a CSS property..."
@@ -1699,7 +1699,7 @@ export const StylePanel = () => {
       </div>
 
       {filteredStyleFieldGroups.length === 0 ? (
-        <div className="ub-card px-4 py-6 text-center text-xs text-muted">
+        <div className="cs-card px-4 py-6 text-center text-xs text-muted">
           No CSS properties match <code>{styleFilter.trim()}</code>.
         </div>
       ) : null}
@@ -1709,7 +1709,7 @@ export const StylePanel = () => {
         const contentId = `style-group-${group.toLowerCase().replace(/\s+/g, "-")}`;
 
         return (
-          <section className="ub-card overflow-hidden" key={group}>
+          <section className="cs-card overflow-hidden" key={group}>
             <div
               className={`flex items-center justify-between gap-2 p-3 transition-colors ${
                 isExpanded ? "bg-accent-softer/60" : "hover:bg-slate-50"
@@ -1779,7 +1779,7 @@ export const StylePanel = () => {
                           {selectOptionsSource === undefined ? (
                             <>
                               <CommitInput
-                                className="ub-input h-8 min-w-0 flex-1 font-mono"
+                                className="cs-input h-8 min-w-0 flex-1 font-mono"
                                 id={inputId}
                                 list={suggestionListId}
                                 onCommit={(nextValue) =>
@@ -1798,7 +1798,7 @@ export const StylePanel = () => {
                             </>
                           ) : (
                             <select
-                              className="ub-input h-8 min-w-0 flex-1"
+                              className="cs-input h-8 min-w-0 flex-1"
                               id={inputId}
                               onChange={(event) =>
                                 void commitChange(field.property, event.target.value)

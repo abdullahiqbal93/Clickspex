@@ -39,7 +39,7 @@ export const AssetsPanel = () => {
 
   if (loading || !scan) {
     return (
-      <div className="ub-card p-4">
+      <div className="cs-card p-4">
         <div className="flex items-center gap-2.5">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent">
             <ImageIcon aria-hidden="true" size={16} />
@@ -78,7 +78,7 @@ export const AssetsPanel = () => {
 
   return (
     <div className="space-y-3">
-      <section className="ub-card p-4">
+      <section className="cs-card p-4">
         <div className="flex items-center gap-2.5">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent">
             <ImageIcon aria-hidden="true" size={16} />
@@ -93,11 +93,11 @@ export const AssetsPanel = () => {
       </section>
 
       {scan.assets.length === 0 ? (
-        <section className="ub-card p-6 text-center text-xs text-muted">No assets found</section>
+        <section className="cs-card p-6 text-center text-xs text-muted">No assets found</section>
       ) : (
         <div className="grid grid-cols-2 gap-2.5">
           {scan.assets.map((asset, i) => (
-            <div key={i} className="ub-card flex flex-col overflow-hidden">
+            <div key={i} className="cs-card flex flex-col overflow-hidden">
               <div className="group relative flex h-24 items-center justify-center bg-[repeating-conic-gradient(#f1f5f9_0%_25%,#ffffff_0%_50%)] bg-[length:16px_16px] p-2">
                 <img
                   src={asset.src}

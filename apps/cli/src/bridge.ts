@@ -3,15 +3,15 @@ import { chmod, mkdir, open, readFile, realpath, rename, stat, unlink } from "no
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 
-import { computeCssFileEdit, createUnifiedDiff } from "@ui-buddy/adapters";
-import { scanProjectContext } from "@ui-buddy/core/project";
+import { computeCssFileEdit, createUnifiedDiff } from "@clickspex/adapters";
+import { scanProjectContext } from "@clickspex/core/project";
 import {
   BRIDGE_PROTOCOL_VERSION,
   bridgeApplyRequestSchema,
   bridgePairRequestSchema,
   bridgePreviewRequestSchema,
   bridgeRollbackRequestSchema,
-} from "@ui-buddy/shared";
+} from "@clickspex/shared";
 
 import type {
   BridgeApplyResponse,
@@ -23,9 +23,9 @@ import type {
   BridgeStructuredError,
   ProjectContext,
   UIChangeSession,
-} from "@ui-buddy/shared";
+} from "@clickspex/shared";
 
-const UI_BUDDY_DIR = ".ui-buddy";
+const CLICKSPEX_DIR = ".clickspex";
 const DEFAULT_BODY_LIMIT_BYTES = 1024 * 1024;
 const BACKUP_ID_PATTERN = /^[A-Za-z0-9_-]{1,80}$/;
 const EXTENSION_ID_PATTERN = /^[a-p]{32}$/;
@@ -33,7 +33,7 @@ const REQUEST_TIMEOUT_MS = 15_000;
 const HEADERS_TIMEOUT_MS = 5_000;
 const PREVIEW_TTL_MS = 10 * 60 * 1000;
 const MAX_PREVIEW_ARTIFACTS = 25;
-const TRANSACTION_TEMP_PREFIX = `.ui-buddy-tmp-${process.pid}-`;
+const TRANSACTION_TEMP_PREFIX = `.clickspex-tmp-${process.pid}-`;
 
 type BridgeLogLevel = "debug" | "info" | "warn" | "error";
 
@@ -75,7 +75,7 @@ const createBridgeLogger = (options: { verbose?: boolean; json?: boolean } = {})
     const suffix =
       Object.keys(redactedFields).length === 0 ? "" : ` ${JSON.stringify(redactedFields)}`;
     (level === "error" ? process.stderr : process.stdout).write(
-      `[ui-buddy] ${level} ${event}${suffix}\n`,
+      `[clickspex] ${level} ${event}${suffix}\n`,
     );
   },
 });
@@ -107,7 +107,7 @@ const writeDisabledError = (): BridgeStructuredError =>
   bridgeError(
     403,
     "CODE_SYNC_WRITES_DISABLED",
-    "Source writes are disabled. Restart ui-buddy connect with --enable-code-sync-writes to apply or roll back source changes.",
+    "Source writes are disabled. Restart clickspex connect with --enable-code-sync-writes to apply or roll back source changes.",
   );
 
 /** True when `target` resolves to a path inside `root` (blocks path traversal). */
@@ -615,7 +615,7 @@ const prepareTransactionFiles = async (
     const absPath = resolve(config.canonicalRoot, file.path);
     const info = await stat(absPath);
     const originalContent = currentByPath.get(file.path) ?? file.beforeContent;
-    const backupRelativePath = `${UI_BUDDY_DIR}/backups/${backupId}/${file.path.replace(/\\/g, "/")}`;
+    const backupRelativePath = `${CLICKSPEX_DIR}/backups/${backupId}/${file.path.replace(/\\/g, "/")}`;
     const backupPath = join(config.canonicalRoot, backupRelativePath);
 
     await mkdir(dirname(backupPath), { recursive: true });
@@ -689,11 +689,11 @@ const applyPreviewArtifact = async (
     }
 
     const backupId = new Date().toISOString().replace(/[:.]/g, "-");
-    const backupRoot = join(config.canonicalRoot, UI_BUDDY_DIR, "backups", backupId);
+    const backupRoot = join(config.canonicalRoot, CLICKSPEX_DIR, "backups", backupId);
 
-    await mkdir(join(config.canonicalRoot, UI_BUDDY_DIR), { recursive: true });
+    await mkdir(join(config.canonicalRoot, CLICKSPEX_DIR), { recursive: true });
     await writeFileDurably(
-      join(config.canonicalRoot, UI_BUDDY_DIR, ".gitignore"),
+      join(config.canonicalRoot, CLICKSPEX_DIR, ".gitignore"),
       "backups/\nlast-backup.json\n",
     );
     await mkdir(backupRoot, { recursive: true });
@@ -773,7 +773,7 @@ const applyPreviewArtifact = async (
     }
 
     await writeFileDurably(
-      join(config.canonicalRoot, UI_BUDDY_DIR, "last-backup.json"),
+      join(config.canonicalRoot, CLICKSPEX_DIR, "last-backup.json"),
       `${JSON.stringify({ backupId }, null, 2)}\n`,
     );
 
@@ -801,13 +801,13 @@ const rollback = async (
   let id = backupId;
 
   if (id === undefined) {
-    const raw = await readFile(join(canonicalRoot, UI_BUDDY_DIR, "last-backup.json"), "utf8");
+    const raw = await readFile(join(canonicalRoot, CLICKSPEX_DIR, "last-backup.json"), "utf8");
     id = (JSON.parse(raw) as { backupId: string }).backupId;
   }
 
   validateBackupId(id);
 
-  const backupRoot = join(canonicalRoot, UI_BUDDY_DIR, "backups", id);
+  const backupRoot = join(canonicalRoot, CLICKSPEX_DIR, "backups", id);
   const manifest = await readBackupManifest(backupRoot);
 
   if (manifest.backupId !== id) {

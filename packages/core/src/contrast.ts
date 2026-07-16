@@ -1,4 +1,4 @@
-import type { AccessibilityNote, ElementSnapshot } from "@ui-buddy/shared";
+import type { AccessibilityNote, ElementSnapshot } from "@clickspex/shared";
 
 export type RgbaColor = {
   r: number;

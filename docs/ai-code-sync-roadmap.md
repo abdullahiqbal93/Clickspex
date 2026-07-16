@@ -33,8 +33,8 @@ Implemented:
 - Generate file-specific Tailwind class attribute previews when an indexed component or route is available.
 - Show changed files, diff previews, confidence, warnings, and manual review steps.
 - Capture the full multi-element session (styles, raw CSS, and structural edits), not just the last-selected element.
-- Guarded apply for CSS: `ui-buddy connect` runs a localhost bridge; the extension's Code Sync panel previews the diff and writes matched stylesheet files on explicit confirmation.
-- Rollback: every apply writes originals to `.ui-buddy/backups/<id>/` with a manifest, and the bridge exposes a one-click Undo that restores them.
+- Guarded apply for CSS: `clickspex connect` runs a localhost bridge; the extension's Code Sync panel previews the diff and writes matched stylesheet files on explicit confirmation.
+- Rollback: every apply writes originals to `.clickspex/backups/<id>/` with a manifest, and the bridge exposes a one-click Undo that restores them.
 - Cumulative edits: multiple elements mapping to the same stylesheet stack instead of overwriting.
 
 Still future work:

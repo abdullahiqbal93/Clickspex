@@ -1,4 +1,4 @@
-import { captureElementSnapshot, generateUniqueSelector, getDomPath } from "@ui-buddy/core";
+import { captureElementSnapshot, generateUniqueSelector, getDomPath } from "@clickspex/core";
 
 import { sendRuntimeMessage } from "../chrome/messaging";
 import { writePageContext } from "../chrome/session";
@@ -21,7 +21,7 @@ import type {
   StructuralEdit,
   StructuralEditKind,
   StructuralEditTarget,
-} from "@ui-buddy/shared";
+} from "@clickspex/shared";
 
 const DOM_TREE_CHILD_LIMIT = 100;
 
@@ -710,7 +710,7 @@ export class ElementPickerController {
   }
 
   public markSelectedForSource(): void {
-    this.selectedElementNode?.setAttribute("data-ub-source-target", "1");
+    this.selectedElementNode?.setAttribute("data-cs-source-target", "1");
   }
 
   public undoDeleteElement(): void {

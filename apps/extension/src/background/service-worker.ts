@@ -1,10 +1,10 @@
-import { isExtensionMessage, isInspectionContext } from "@ui-buddy/shared";
+import { isExtensionMessage, isInspectionContext } from "@clickspex/shared";
 
 import { SIDE_PANEL_PORT_NAME, isSidePanelContextMessage } from "../chrome/messaging";
 
 import { shouldForwardToSidePanel } from "./router";
 
-import type { ComponentSourceInfo, InspectionContext, PageTechInfo } from "@ui-buddy/shared";
+import type { ComponentSourceInfo, InspectionContext, PageTechInfo } from "@clickspex/shared";
 
 const sidePanelPorts = new Map<chrome.runtime.Port, InspectionContext | null>();
 
@@ -264,17 +264,17 @@ const detectTechInPage = (): PageTechInfo[] => {
 
 /**
  * Runs in the page's MAIN world: resolve the component source of the element
- * marked with data-ub-source-target (React _debugSource, Vue __file).
+ * marked with data-cs-source-target (React _debugSource, Vue __file).
  * Must stay self-contained (it is serialized).
  */
 const lookupSourceInPage = (): ComponentSourceInfo | null => {
-  const element = document.querySelector("[data-ub-source-target]");
+  const element = document.querySelector("[data-cs-source-target]");
 
   if (element === null) {
     return null;
   }
 
-  element.removeAttribute("data-ub-source-target");
+  element.removeAttribute("data-cs-source-target");
 
   let result: ComponentSourceInfo | null = null;
   const record = element as unknown as Record<string, unknown>;

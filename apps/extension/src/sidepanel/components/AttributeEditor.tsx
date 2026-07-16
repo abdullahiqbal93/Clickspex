@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { sendMessageToActiveTab } from "../../chrome/messaging";
 import { usePanelStore } from "../store";
 
-import type { ElementSnapshot } from "@ui-buddy/shared";
+import type { ElementSnapshot } from "@clickspex/shared";
 
 type AttributeEditorProps = {
   element: ElementSnapshot;
@@ -58,7 +58,7 @@ export const AttributeEditor = ({ element }: AttributeEditorProps) => {
   const entries = Object.entries(element.attributes);
 
   return (
-    <section className="ub-card overflow-hidden">
+    <section className="cs-card overflow-hidden">
       <div className="flex items-center justify-between border-b border-line px-3 py-2.5">
         <div>
           <h3 className="text-sm font-semibold tracking-tight">Attributes</h3>
@@ -66,7 +66,7 @@ export const AttributeEditor = ({ element }: AttributeEditorProps) => {
             Edit values inline. Changes support undo and export.
           </p>
         </div>
-        <span className="ub-chip">{entries.length}</span>
+        <span className="cs-chip">{entries.length}</span>
       </div>
       <div className="max-h-64 overflow-auto">
         {entries.length === 0 ? (

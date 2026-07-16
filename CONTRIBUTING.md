@@ -1,9 +1,9 @@
-# Contributing to ui-buddy
+# Contributing to Clickspex
 
-Thanks for your interest in improving ui-buddy! This guide covers how to set up
+Thanks for your interest in improving Clickspex! This guide covers how to set up
 the project, the day-to-day workflow, and the conventions we follow.
 
-ui-buddy is a Chrome extension plus a local CLI/bridge and a read-only MCP
+Clickspex is a Chrome extension plus a local CLI/bridge and a read-only MCP
 server. The extension lets you inspect and edit UI in the browser; the CLI maps
 those edits to your source files and can apply them (CSS today).
 
@@ -16,8 +16,8 @@ those edits to your source files and can apply them (CSS today).
 ## Setup
 
 ```bash
-git clone https://github.com/abdullahiqbal93/dev-buddy.git
-cd dev-buddy
+git clone https://github.com/abdullahiqbal93/clickspex.git
+cd clickspex
 pnpm install
 pnpm build
 ```
@@ -26,7 +26,7 @@ pnpm build
 
 ```text
 apps/extension      Chrome MV3 extension + side panel UI (React)
-apps/cli            The `ui-buddy` CLI: source indexer, patch previews, Code Sync bridge
+apps/cli            The `clickspex` CLI: source indexer, patch previews, Code Sync bridge
 apps/mcp-server     Read-only MCP stdio server
 packages/shared     Types, message contracts + runtime guards
 packages/core       Pure utilities: selectors, snapshots, style diffs, a11y, project scan
@@ -56,8 +56,8 @@ pnpm build         # build every package
 ## Working on the extension
 
 ```bash
-pnpm --filter @ui-buddy/extension dev     # watch build
-# or: pnpm --filter @ui-buddy/extension build
+pnpm --filter @clickspex/extension dev     # watch build
+# or: pnpm --filter @clickspex/extension build
 ```
 
 Load it in Chrome: `chrome://extensions` → enable Developer mode → **Load
@@ -67,7 +67,7 @@ after each rebuild.
 ## Working on the CLI / Code Sync bridge
 
 ```bash
-pnpm --filter ui-buddy build
+pnpm --filter clickspex build
 pnpm connect --path .          # builds + starts the bridge for this repo
 # or target another project:
 node apps/cli/dist/index.js connect --path /path/to/app
@@ -78,12 +78,12 @@ origin, e.g. curl). Keep that check intact — it is what stops arbitrary websit
 from reading or writing source through the local server. Any new endpoint that
 reads or writes files must go through the same guard and stay inside the project
 root (see `isInsideRoot`), and writes must back up originals to
-`.ui-buddy/backups/`.
+`.clickspex/backups/`.
 
 ## Working on the MCP server
 
 ```bash
-pnpm --filter @ui-buddy/mcp-server build
+pnpm --filter @clickspex/mcp-server build
 node apps/mcp-server/dist/index.js
 ```
 

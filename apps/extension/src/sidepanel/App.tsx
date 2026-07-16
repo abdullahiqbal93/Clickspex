@@ -1,4 +1,4 @@
-import { isExtensionMessage, type InspectionContext } from "@ui-buddy/shared";
+import { isExtensionMessage, type InspectionContext } from "@clickspex/shared";
 import {
   Accessibility,
   Box,
@@ -478,14 +478,14 @@ export const App = () => {
               <SquareMousePointer size={17} />
             </span>
             <div className="min-w-0 leading-tight">
-              <h1 className="truncate text-sm font-bold tracking-tight">UI Buddy</h1>
+              <h1 className="truncate text-sm font-bold tracking-tight">Clickspex</h1>
               <p className="truncate text-[10px] font-medium text-muted">Inspect &amp; refine UI</p>
             </div>
           </div>
 
           <div className="relative flex shrink-0 items-center gap-0.5">
             <button
-              className="ub-icon-btn"
+              className="cs-icon-btn"
               disabled={historyUndoDepth === 0}
               onClick={() => void undoAll()}
               title="Undo last change (styles, moves, deletes) - Ctrl+Z"
@@ -494,7 +494,7 @@ export const App = () => {
               <Undo2 aria-hidden="true" size={15} />
             </button>
             <button
-              className="ub-icon-btn"
+              className="cs-icon-btn"
               disabled={historyRedoDepth === 0}
               onClick={() => void redoAll()}
               title="Redo - Ctrl+Shift+Z"
@@ -507,7 +507,7 @@ export const App = () => {
 
             {["palette", "typography", "assets"].includes(activeTab) && (
               <button
-                className="ub-icon-btn"
+                className="cs-icon-btn"
                 onClick={() => void handleRescan()}
                 title="Rescan Page"
                 type="button"
@@ -519,7 +519,7 @@ export const App = () => {
               className={
                 eyedropperFeedback
                   ? "inline-flex h-9 items-center gap-1.5 rounded-2xl bg-emerald-50 px-2.5 text-emerald-700 ring-1 ring-inset ring-emerald-200"
-                  : "ub-icon-btn"
+                  : "cs-icon-btn"
               }
               onClick={() => void handleEyedropper()}
               title="Global Eyedropper"
@@ -537,7 +537,7 @@ export const App = () => {
               )}
             </button>
             <button
-              className={`ub-icon-btn ${gridActive ? "ub-icon-btn-active" : ""}`}
+              className={`cs-icon-btn ${gridActive ? "cs-icon-btn-active" : ""}`}
               onClick={() => void toggleGrid()}
               title="Toggle Layout Grid"
               type="button"
@@ -545,7 +545,7 @@ export const App = () => {
               <Grid3X3 aria-hidden="true" size={15} />
             </button>
             <button
-              className={`ub-icon-btn ${showHelp ? "ub-icon-btn-active" : ""}`}
+              className={`cs-icon-btn ${showHelp ? "cs-icon-btn-active" : ""}`}
               onClick={() => setShowHelp((current) => !current)}
               title="Keyboard shortcuts"
               type="button"
@@ -558,7 +558,7 @@ export const App = () => {
                 <dl className="mt-2.5 space-y-2">
                   {hotkeys.map(([keys, description]) => (
                     <div className="flex items-start justify-between gap-3" key={keys}>
-                      <dt className="ub-kbd shrink-0">{keys}</dt>
+                      <dt className="cs-kbd shrink-0">{keys}</dt>
                       <dd className="text-right text-2xs leading-4 text-muted">{description}</dd>
                     </div>
                   ))}
@@ -692,7 +692,7 @@ export const App = () => {
 
         {activeTab === "elements" ? (
           selectedElement === null ? (
-            <section className="ub-card flex min-h-72 flex-col items-center justify-center px-6 text-center">
+            <section className="cs-card flex min-h-72 flex-col items-center justify-center px-6 text-center">
               <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent-soft text-accent">
                 <Rows3 aria-hidden="true" size={22} />
               </span>
@@ -702,14 +702,14 @@ export const App = () => {
                 surrounding nodes.
               </p>
               <button
-                className="ub-btn-primary mt-4"
+                className="cs-btn-primary mt-4"
                 onClick={() => void togglePicker()}
                 type="button"
               >
                 <SquareMousePointer aria-hidden="true" size={14} />
                 Pick an element
               </button>
-              <span className="ub-kbd mt-3">Alt + Shift + P</span>
+              <span className="cs-kbd mt-3">Alt + Shift + P</span>
             </section>
           ) : (
             <DomTreePanel selectedDomPath={selectedElement.domPath} />

@@ -1,6 +1,6 @@
 # Product Spec
 
-ui-buddy is a Chrome Manifest V3 extension for inspecting a live page, making temporary visual edits, measuring layout, and exporting the result as structured intent that another tool can review.
+Clickspex is a Chrome Manifest V3 extension for inspecting a live page, making temporary visual edits, measuring layout, and exporting the result as structured intent that another tool can review.
 
 ## Goals
 

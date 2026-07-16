@@ -1,4 +1,4 @@
-import { SUPPORTED_STYLE_PROPERTIES } from "@ui-buddy/shared";
+import { SUPPORTED_STYLE_PROPERTIES } from "@clickspex/shared";
 import { Check, Clipboard, Plus, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 

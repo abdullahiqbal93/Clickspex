@@ -6,7 +6,7 @@ import { getCurrentStyleRecord, usePanelStore } from "../store";
 
 import { CommitInput } from "./CommitInput";
 
-import type { StyleChange, SupportedStyleProperty } from "@ui-buddy/shared";
+import type { StyleChange, SupportedStyleProperty } from "@clickspex/shared";
 
 type BoxGroup = "margin" | "padding";
 type Side = "top" | "right" | "bottom" | "left";
@@ -98,7 +98,7 @@ export const BoxModelPanel = () => {
 
   if (selectedElement === null) {
     return (
-      <div className="ub-card p-4">
+      <div className="cs-card p-4">
         <h2 className="text-sm font-semibold tracking-tight">Box model</h2>
         <p className="mt-1.5 text-2xs text-muted">Select an element to inspect its box model.</p>
       </div>
@@ -114,11 +114,11 @@ export const BoxModelPanel = () => {
     linked: boolean,
     setLinked: (linked: boolean) => void,
   ) => (
-    <section className="ub-card p-4">
+    <section className="cs-card p-4">
       <div className="flex items-center justify-between gap-3">
         <h3 className="text-sm font-semibold capitalize tracking-tight">{group}</h3>
         <button
-          className={`ub-icon-btn ${linked ? "ub-icon-btn-active" : ""}`}
+          className={`cs-icon-btn ${linked ? "cs-icon-btn-active" : ""}`}
           onClick={() => setLinked(!linked)}
           title={linked ? "Unlink sides" : "Link sides"}
           type="button"
@@ -137,9 +137,9 @@ export const BoxModelPanel = () => {
 
           return (
             <label className="space-y-1" key={property}>
-              <span className="ub-heading">{side}</span>
+              <span className="cs-heading">{side}</span>
               <CommitInput
-                className="ub-input h-8 font-mono"
+                className="cs-input h-8 font-mono"
                 onCommit={(nextValue) => void commitSide(group, side, nextValue, linked)}
                 value={value}
               />
@@ -152,7 +152,7 @@ export const BoxModelPanel = () => {
 
   return (
     <div className="space-y-3">
-      <section className="ub-card p-4">
+      <section className="cs-card p-4">
         <h2 className="text-sm font-semibold tracking-tight">Box model</h2>
         <div className="mt-3.5 grid grid-cols-[44px_1fr_44px] grid-rows-[32px_32px_1fr_32px_32px] overflow-hidden rounded-xl border border-line text-center font-mono text-[10px] font-semibold tabular-nums text-slate-600">
           <div className="col-start-2 flex items-center justify-center bg-teal-50">
@@ -193,22 +193,22 @@ export const BoxModelPanel = () => {
         </div>
       </section>
 
-      <section className="ub-card p-4">
+      <section className="cs-card p-4">
         <h3 className="text-sm font-semibold tracking-tight">Spacing nudges</h3>
         <div className="mt-2.5 grid grid-cols-2 gap-1.5">
-          <button className="ub-btn" onClick={() => void nudgeGroup("margin", 4)} type="button">
+          <button className="cs-btn" onClick={() => void nudgeGroup("margin", 4)} type="button">
             <Plus aria-hidden="true" size={13} />
             Margin
           </button>
-          <button className="ub-btn" onClick={() => void nudgeGroup("margin", -4)} type="button">
+          <button className="cs-btn" onClick={() => void nudgeGroup("margin", -4)} type="button">
             <Minus aria-hidden="true" size={13} />
             Margin
           </button>
-          <button className="ub-btn" onClick={() => void nudgeGroup("padding", 4)} type="button">
+          <button className="cs-btn" onClick={() => void nudgeGroup("padding", 4)} type="button">
             <Plus aria-hidden="true" size={13} />
             Padding
           </button>
-          <button className="ub-btn" onClick={() => void nudgeGroup("padding", -4)} type="button">
+          <button className="cs-btn" onClick={() => void nudgeGroup("padding", -4)} type="button">
             <Minus aria-hidden="true" size={13} />
             Padding
           </button>
@@ -218,12 +218,12 @@ export const BoxModelPanel = () => {
       {renderEditableGroup("margin", linkedMargin, setLinkedMargin)}
       {renderEditableGroup("padding", linkedPadding, setLinkedPadding)}
 
-      <section className="ub-card p-4">
+      <section className="cs-card p-4">
         <h3 className="text-sm font-semibold tracking-tight">Border</h3>
         <div className="mt-2.5 grid grid-cols-4 gap-1.5 text-center text-xs text-ink">
           {sides.map((side) => (
             <div className="rounded-xl bg-slate-50 px-2 py-2" key={side}>
-              <div className="ub-heading">{side}</div>
+              <div className="cs-heading">{side}</div>
               <div className="mt-1 font-mono tabular-nums">{boxModel.border[side]}</div>
             </div>
           ))}

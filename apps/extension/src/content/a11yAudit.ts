@@ -2,9 +2,9 @@ import {
   contrastRatioFromCssColors,
   generateUniqueSelector,
   getEffectiveBackgroundColor,
-} from "@ui-buddy/core";
+} from "@clickspex/core";
 
-import type { A11yIssue } from "@ui-buddy/shared";
+import type { A11yIssue } from "@clickspex/shared";
 
 const MAX_ELEMENTS = 3000;
 const MAX_ISSUES = 150;

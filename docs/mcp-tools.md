@@ -5,7 +5,7 @@ The MCP server runs as a local stdio process from `apps/mcp-server`. It is read-
 Start it after building:
 
 ```bash
-pnpm --filter @ui-buddy/mcp-server build
+pnpm --filter @clickspex/mcp-server build
 node apps/mcp-server/dist/index.js
 ```
 
@@ -24,7 +24,7 @@ type ToolResult = {
 Input:
 
 ```json
-{ "path": "E:/Dev/AI Projects/ui-buddy" }
+{ "path": "E:/Dev/AI Projects/clickspex" }
 ```
 
 Returns a shallow file listing up to depth 2. It skips `node_modules`, `.git`, and filenames that look like secrets, credentials, tokens, keys, or `.env` files.
@@ -34,7 +34,7 @@ Returns a shallow file listing up to depth 2. It skips `node_modules`, `.git`, a
 Input:
 
 ```json
-{ "path": "E:/Dev/AI Projects/ui-buddy" }
+{ "path": "E:/Dev/AI Projects/clickspex" }
 ```
 
 Returns the same framework and tooling detection report used by the CLI, including package manager, config files, source directories, indexed file summaries, index stats, and confidence-scored detections.
@@ -44,7 +44,7 @@ Returns the same framework and tooling detection report used by the CLI, includi
 Input:
 
 ```json
-{ "path": "E:/Dev/AI Projects/ui-buddy" }
+{ "path": "E:/Dev/AI Projects/clickspex" }
 ```
 
 Builds a bounded source index and returns file metadata: path, kind, size, selectors, class names, ids, and imports. Source contents are not returned by this tool.
@@ -54,7 +54,7 @@ Builds a bounded source index and returns file metadata: path, kind, size, selec
 Input:
 
 ```json
-{ "path": "E:/Dev/AI Projects/ui-buddy" }
+{ "path": "E:/Dev/AI Projects/clickspex" }
 ```
 
 Returns root path, package name/version when available, dependencies, devDependencies, detected config files, source directories, indexed file summaries, and index stats.
@@ -81,7 +81,7 @@ Input with source-aware previews:
 
 ```json
 {
-  "projectPath": "E:/Dev/AI Projects/ui-buddy",
+  "projectPath": "E:/Dev/AI Projects/clickspex",
   "changeIntent": { "id": "...", "timestamp": "..." }
 }
 ```

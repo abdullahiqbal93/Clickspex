@@ -1,8 +1,8 @@
-import { contrastRatioFromCssColors } from "@ui-buddy/core";
+import { contrastRatioFromCssColors } from "@clickspex/core";
 
-import type { ElementSnapshot, PinCardKind, RectSnapshot } from "@ui-buddy/shared";
+import type { ElementSnapshot, PinCardKind, RectSnapshot } from "@clickspex/shared";
 
-const HOST_ID = "__ui-buddy-host__";
+const HOST_ID = "__clickspex-host__";
 
 // Computed values that carry no useful information on the pinned styles card.
 const PIN_STYLE_NOISE_VALUES = new Set([

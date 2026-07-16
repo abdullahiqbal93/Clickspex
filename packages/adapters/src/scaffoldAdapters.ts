@@ -1,4 +1,4 @@
-import { createUnsupportedPatchSuggestion } from "@ui-buddy/shared";
+import { createUnsupportedPatchSuggestion } from "@clickspex/shared";
 
 import type {
   AdapterDetectionResult,
@@ -8,7 +8,7 @@ import type {
   ProjectContext,
   ProjectSourceFile,
   UIChangeIntent,
-} from "@ui-buddy/shared";
+} from "@clickspex/shared";
 
 type ScaffoldDefinition = {
   id: string;

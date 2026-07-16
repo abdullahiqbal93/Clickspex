@@ -58,7 +58,7 @@ jobs:
         run: pnpm smoke:cli:pack
 
       - name: Build extension
-        run: pnpm --filter @ui-buddy/extension build
+        run: pnpm --filter @clickspex/extension build
 
       - name: Validate extension manifest
         run: pnpm validate:extension

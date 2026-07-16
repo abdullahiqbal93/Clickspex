@@ -1,5 +1,5 @@
 {
-  "name": "@ui-buddy/mcp-server",
+  "name": "@clickspex/mcp-server",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -12,13 +12,13 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
-    "@ui-buddy/adapters": "workspace:*",
-    "@ui-buddy/core": "workspace:*",
-    "@ui-buddy/shared": "workspace:*",
+    "@clickspex/adapters": "workspace:*",
+    "@clickspex/core": "workspace:*",
+    "@clickspex/shared": "workspace:*",
     "zod": "^3.23.0"
   },
   "devDependencies": {
-    "@ui-buddy/config": "workspace:*",
+    "@clickspex/config": "workspace:*",
     "vitest": "^3.0.0"
   }
 }

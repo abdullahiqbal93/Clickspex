@@ -1,14 +1,14 @@
-# ui-buddy - Competitive Analysis & Roadmap
+# Clickspex - Competitive Analysis & Roadmap
 
 Audit date: 2026-07-02. Competitors reviewed: VisBug, CSS Scan, Wappalyzer, LocatorJS, WhatFont, Dimensions, ColorZilla.
 
-## 1. Where ui-buddy stands today
+## 1. Where Clickspex stands today
 
-ui-buddy already covers, in a single extension, what most competitors do as single-purpose tools: element inspection with computed styles and box model (WhatFont/CSS Scan territory), live style editing with pseudo-states, undo/redo and animation presets (beyond VisBug's editing), measurement + alignment + manual ruler (Dimensions territory), page palette/typography/asset scanning (ColorZilla/WhatFont/CSS Scan territory), lightweight a11y checks (VisBug territory), and - uniquely - structured `UIChangeIntent` export with CSS/Tailwind adapters, a project-indexing CLI, and a read-only MCP server that turns browser edits into source-aware patch previews. No competitor has that last pipeline.
+Clickspex already covers, in a single extension, what most competitors do as single-purpose tools: element inspection with computed styles and box model (WhatFont/CSS Scan territory), live style editing with pseudo-states, undo/redo and animation presets (beyond VisBug's editing), measurement + alignment + manual ruler (Dimensions territory), page palette/typography/asset scanning (ColorZilla/WhatFont/CSS Scan territory), lightweight a11y checks (VisBug territory), and - uniquely - structured `UIChangeIntent` export with CSS/Tailwind adapters, a project-indexing CLI, and a read-only MCP server that turns browser edits into source-aware patch previews. No competitor has that last pipeline.
 
 ## 2. Feature comparison
 
-| Capability                                                  | VisBug                      | CSS Scan                | Wappalyzer | LocatorJS           | WhatFont   | Dimensions        | ColorZilla              | ui-buddy                                   |
+| Capability                                                  | VisBug                      | CSS Scan                | Wappalyzer | LocatorJS           | WhatFont   | Dimensions        | ColorZilla              | Clickspex                                  |
 | ----------------------------------------------------------- | --------------------------- | ----------------------- | ---------- | ------------------- | ---------- | ----------------- | ----------------------- | ------------------------------------------ |
 | Hover-inspect styles                                        | ✔                           | ✔✔ (instant CSS window) | -          | -                   | fonts only | -                 | -                       | ✔                                          |
 | Copy full CSS of element (+children, pseudo, media queries) | partial                     | ✔✔                      | -          | -                   | -          | -                 | -                       | partial (changed styles only)              |
@@ -28,8 +28,8 @@ ui-buddy already covers, in a single extension, what most competitors do as sing
 
 ## 3. Missing features (ranked)
 
-1. **Copy full computed/authored CSS of any element** - CSS Scan's core value. ui-buddy only exports _changed_ styles. Add "Copy element CSS" (all relevant computed styles + optionally children and matched CSS rules via `element.matchedCSSRules`-style extraction from stylesheets).
-2. **Element → component/source jump (LocatorJS)** - read React/Vue/Svelte devtools hooks (`__REACT_DEVTOOLS_GLOBAL_HOOK__`, fiber `_debugSource`) to show component name in the inspector and open `vscode://` links. This pairs perfectly with the existing CLI project index: ui-buddy could map a picked element to the indexed source file with far better confidence than class-name matching alone.
+1. **Copy full computed/authored CSS of any element** - CSS Scan's core value. Clickspex only exports _changed_ styles. Add "Copy element CSS" (all relevant computed styles + optionally children and matched CSS rules via `element.matchedCSSRules`-style extraction from stylesheets).
+2. **Element → component/source jump (LocatorJS)** - read React/Vue/Svelte devtools hooks (`__REACT_DEVTOOLS_GLOBAL_HOOK__`, fiber `_debugSource`) to show component name in the inspector and open `vscode://` links. This pairs perfectly with the existing CLI project index: Clickspex could map a picked element to the indexed source file with far better confidence than class-name matching alone.
 3. **Page tech detection (Wappalyzer-lite)** - the CLI already detects frameworks from package.json; the extension detects nothing on the live page. A lightweight detector (global variables, meta tags, script srcs) would show "React 18 + Tailwind + Next.js" in the panel and would also improve adapter confidence automatically.
 4. **Copy HTML+CSS of a component** - extract subtree markup with inlined relevant styles for handoff to a sandbox or an AI agent.
 5. **Multi-select and design-tool hotkeys (VisBug)** - VisBug's killer interaction model: arrow keys to walk siblings/parents (partially present), shift-click multi-select, batch alignment/spacing.
@@ -49,9 +49,9 @@ ui-buddy already covers, in a single extension, what most competitors do as sing
 - **Export panel**: offer file download (.json/.css/.md), not just clipboard.
 - **Onboarding**: a short interactive tour; competitors with strong ratings (CSS Scan, VisBug) invest heavily in first-run UX.
 
-## 5. What makes ui-buddy unique - and how to win
+## 5. What makes Clickspex unique - and how to win
 
-The seven competitors are all _read_ or _tweak_ tools: they end at the clipboard. ui-buddy's pipeline (browser edit → structured intent → project index → source-aware patch preview → MCP) is the only one that closes the loop from "pixel tweak in the browser" to "reviewable diff in the repo". In 2026, with Figma MCP, agentic IDEs, and design-to-code workflows going mainstream, this is exactly the seam the market is moving toward - and none of the incumbent extensions sit on it.
+The seven competitors are all _read_ or _tweak_ tools: they end at the clipboard. Clickspex's pipeline (browser edit → structured intent → project index → source-aware patch preview → MCP) is the only one that closes the loop from "pixel tweak in the browser" to "reviewable diff in the repo". In 2026, with Figma MCP, agentic IDEs, and design-to-code workflows going mainstream, this is exactly the seam the market is moving toward - and none of the incumbent extensions sit on it.
 
 Positioning: **"The inspector that ends in a pull request."**
 

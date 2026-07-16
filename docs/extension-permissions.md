@@ -9,7 +9,7 @@ This document records the shipped Chrome extension permissions for Web Store rev
    - Required for user-initiated screenshot capture and for injecting/recovering the content script in the inspected tab.
 
 2. `sidePanel`
-   - Required to provide the UI Buddy side panel UI.
+   - Required to provide the Clickspex side panel UI.
 
 3. `storage`
    - Used for session-scoped pairing tokens, inspected-page context, and temporary in-progress edit state.

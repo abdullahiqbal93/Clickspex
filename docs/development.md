@@ -27,13 +27,13 @@ pnpm build
 ## Extension Development
 
 ```bash
-pnpm --filter @ui-buddy/extension dev
+pnpm --filter @clickspex/extension dev
 ```
 
 For a production bundle:
 
 ```bash
-pnpm --filter @ui-buddy/extension build
+pnpm --filter @clickspex/extension build
 ```
 
 Load `apps/extension/dist` as an unpacked extension in Chrome:
@@ -47,7 +47,7 @@ Load `apps/extension/dist` as an unpacked extension in Chrome:
 ## CLI
 
 ```bash
-pnpm --filter ui-buddy build
+pnpm --filter clickspex build
 node apps/cli/dist/index.js init --path .
 node apps/cli/dist/index.js detect --path .
 node apps/cli/dist/index.js index --path .
@@ -55,12 +55,12 @@ node apps/cli/dist/index.js export-example --output ui-change-intent.example.jso
 node apps/cli/dist/index.js preview-patch --intent ui-change-intent.example.json --project .
 ```
 
-`init` writes `.ui-buddy/config.json` with read-only code-sync metadata. `detect` reports known frameworks, package manager, config files, common source directories, and index stats. `index` returns bounded source metadata without file contents. `preview-patch` reads a `UIChangeIntent` JSON file and prints advisory source-aware patch suggestions.
+`init` writes `.clickspex/config.json` with read-only code-sync metadata. `detect` reports known frameworks, package manager, config files, common source directories, and index stats. `index` returns bounded source metadata without file contents. `preview-patch` reads a `UIChangeIntent` JSON file and prints advisory source-aware patch suggestions.
 
 ## MCP Server
 
 ```bash
-pnpm --filter @ui-buddy/mcp-server build
+pnpm --filter @clickspex/mcp-server build
 node apps/mcp-server/dist/index.js
 ```
 

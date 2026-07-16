@@ -4,4 +4,4 @@ export {
   parseCssDeclarations,
   serializeCssDeclarations,
   type CssDeclaration,
-} from "@ui-buddy/shared";
+} from "@clickspex/shared";

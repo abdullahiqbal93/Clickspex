@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 
-import baseConfig from "@ui-buddy/config/vitest";
+import baseConfig from "@clickspex/config/vitest";
 import { mergeConfig } from "vitest/config";
 
 const adaptersSourcePath = fileURLToPath(new URL("../../packages/adapters/src", import.meta.url));
@@ -16,11 +16,11 @@ const sharedSourcePath = fileURLToPath(new URL("../../packages/shared/src", impo
 export default mergeConfig(baseConfig, {
   resolve: {
     alias: [
-      { find: "@ui-buddy/core/project", replacement: coreProjectSourcePath },
-      { find: "@ui-buddy/core/styleDiff", replacement: coreStyleDiffSourcePath },
-      { find: "@ui-buddy/adapters", replacement: adaptersSourcePath },
-      { find: "@ui-buddy/core", replacement: coreSourcePath },
-      { find: "@ui-buddy/shared", replacement: sharedSourcePath },
+      { find: "@clickspex/core/project", replacement: coreProjectSourcePath },
+      { find: "@clickspex/core/styleDiff", replacement: coreStyleDiffSourcePath },
+      { find: "@clickspex/adapters", replacement: adaptersSourcePath },
+      { find: "@clickspex/core", replacement: coreSourcePath },
+      { find: "@clickspex/shared", replacement: sharedSourcePath },
     ],
   },
   test: {
