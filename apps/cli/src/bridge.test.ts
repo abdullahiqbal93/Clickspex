@@ -9,6 +9,8 @@ import { applySession, previewSession, rollback, startBridge } from "./bridge.js
 import type { UIChangeSession } from "@ui-buddy/shared";
 
 const roots: string[] = [];
+const EXTENSION_ID = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+const EXTENSION_ORIGIN = `chrome-extension://${EXTENSION_ID}`;
 
 const side = { top: "0px", right: "0px", bottom: "0px", left: "0px" };
 
@@ -24,6 +26,19 @@ const makeProject = async (): Promise<string> => {
 afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
+
+const pairBridge = async (base: string, pairingCode: string): Promise<string> => {
+  const response = await fetch(`${base}/pair`, {
+    method: "POST",
+    headers: { "content-type": "application/json", origin: EXTENSION_ORIGIN },
+    body: JSON.stringify({ pairingCode }),
+  });
+
+  expect(response.status).toBe(200);
+  const body = (await response.json()) as { token: string };
+  expect(body.token).toEqual(expect.any(String));
+  return body.token;
+};
 
 const session = (): UIChangeSession => ({
   id: "session-1",
@@ -82,9 +97,9 @@ describe("bridge preview/apply/rollback", () => {
     expect(result.elements[0]?.diff).toContain("color: #ff0000");
   });
 
-  it("rejects requests from non-extension origins but allows the extension", async () => {
+  it("rejects non-configured origins and allows the configured extension origin", async () => {
     const root = await makeProject();
-    const bridge = await startBridge({ rootPath: root, port: 0 });
+    const bridge = await startBridge({ rootPath: root, port: 0, allowedExtensionId: EXTENSION_ID });
 
     try {
       const base = `http://127.0.0.1:${bridge.port}`;
@@ -93,12 +108,52 @@ describe("bridge preview/apply/rollback", () => {
         headers: { origin: "https://evil.example" },
       });
       expect(fromWebsite.status).toBe(403);
+      await expect(fromWebsite.json()).resolves.toMatchObject({
+        ok: false,
+        code: "FORBIDDEN_ORIGIN",
+      });
 
       const fromExtension = await fetch(`${base}/health`, {
-        headers: { origin: "chrome-extension://abcdef" },
+        headers: { origin: EXTENSION_ORIGIN },
       });
       expect(fromExtension.status).toBe(200);
-      await expect(fromExtension.json()).resolves.toMatchObject({ codeSyncWriteEnabled: false });
+      await expect(fromExtension.json()).resolves.toMatchObject({
+        ok: true,
+        codeSyncWriteEnabled: false,
+        projectName: "demo",
+        protocolVersion: 1,
+      });
+    } finally {
+      bridge.close();
+    }
+  });
+
+  it("requires pairing before preview and rejects route-prefix attacks", async () => {
+    const root = await makeProject();
+    const bridge = await startBridge({ rootPath: root, port: 0, allowedExtensionId: EXTENSION_ID });
+
+    try {
+      const base = `http://127.0.0.1:${bridge.port}`;
+      const preview = await fetch(`${base}/preview`, {
+        method: "POST",
+        headers: { "content-type": "application/json", origin: EXTENSION_ORIGIN },
+        body: JSON.stringify({ session: session() }),
+      });
+      expect(preview.status).toBe(401);
+      await expect(preview.json()).resolves.toMatchObject({ ok: false, code: "UNAUTHORIZED" });
+
+      const token = await pairBridge(base, bridge.pairingCode);
+      const prefixAttack = await fetch(`${base}/preview/anything`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${token}`,
+          origin: EXTENSION_ORIGIN,
+        },
+        body: JSON.stringify({ session: session() }),
+      });
+      expect(prefixAttack.status).toBe(404);
+      await expect(prefixAttack.json()).resolves.toMatchObject({ ok: false, code: "NOT_FOUND" });
     } finally {
       bridge.close();
     }
@@ -106,15 +161,17 @@ describe("bridge preview/apply/rollback", () => {
 
   it("keeps HTTP source writes disabled unless explicitly enabled", async () => {
     const root = await makeProject();
-    const bridge = await startBridge({ rootPath: root, port: 0 });
+    const bridge = await startBridge({ rootPath: root, port: 0, allowedExtensionId: EXTENSION_ID });
 
     try {
       const base = `http://127.0.0.1:${bridge.port}`;
+      const token = await pairBridge(base, bridge.pairingCode);
       const blocked = await fetch(`${base}/apply`, {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          origin: "chrome-extension://abcdef",
+          authorization: `Bearer ${token}`,
+          origin: EXTENSION_ORIGIN,
         },
         body: JSON.stringify({ session: session() }),
       });
@@ -135,15 +192,18 @@ describe("bridge preview/apply/rollback", () => {
       rootPath: root,
       port: 0,
       codeSyncWriteEnabled: true,
+      allowedExtensionId: EXTENSION_ID,
     });
 
     try {
       const base = `http://127.0.0.1:${writeEnabledBridge.port}`;
+      const token = await pairBridge(base, writeEnabledBridge.pairingCode);
       const applied = await fetch(`${base}/apply`, {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          origin: "chrome-extension://abcdef",
+          authorization: `Bearer ${token}`,
+          origin: EXTENSION_ORIGIN,
         },
         body: JSON.stringify({ session: session() }),
       });

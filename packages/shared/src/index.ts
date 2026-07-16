@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 export const SUPPORTED_STYLE_PROPERTIES = [
   "width",
   "min-width",
@@ -1125,3 +1127,178 @@ export const createUnsupportedPatchSuggestion = (
   warnings: ["This adapter does not generate real patches in v1."],
   manualSteps: [],
 });
+
+export const BRIDGE_PROTOCOL_VERSION = 1;
+
+export const BRIDGE_ERROR_CODES = [
+  "BAD_REQUEST",
+  "UNAUTHORIZED",
+  "FORBIDDEN_ORIGIN",
+  "NOT_FOUND",
+  "METHOD_NOT_ALLOWED",
+  "UNSUPPORTED_MEDIA_TYPE",
+  "PAYLOAD_TOO_LARGE",
+  "CODE_SYNC_WRITES_DISABLED",
+  "INVALID_PROJECT_ROOT",
+  "INVALID_BACKUP_ID",
+  "PORT_UNAVAILABLE",
+  "INTERNAL_ERROR",
+] as const;
+
+export type BridgeErrorCode = (typeof BRIDGE_ERROR_CODES)[number];
+
+const bridgeErrorCodeSchema = z.enum(BRIDGE_ERROR_CODES);
+
+export const bridgeStructuredErrorSchema = z.object({
+  ok: z.literal(false),
+  code: bridgeErrorCodeSchema,
+  error: z.string(),
+  details: z.record(z.string()).optional(),
+});
+
+export type BridgeStructuredError = z.infer<typeof bridgeStructuredErrorSchema>;
+
+export const bridgeProjectIdentitySchema = z.object({
+  projectId: z.string().min(1),
+  projectName: z.string().min(1),
+  canonicalRoot: z.string().min(1),
+  bridgeInstanceId: z.string().min(1),
+  protocolVersion: z.literal(BRIDGE_PROTOCOL_VERSION),
+});
+
+export type BridgeProjectIdentity = z.infer<typeof bridgeProjectIdentitySchema>;
+
+export const bridgeHealthResponseSchema = bridgeProjectIdentitySchema.extend({
+  ok: z.literal(true),
+  codeSyncWriteEnabled: z.boolean(),
+  // Backward-compatible aliases used by older side-panel builds.
+  name: z.string().min(1),
+  root: z.string().min(1),
+  version: z.string().min(1),
+});
+
+export type BridgeHealthResponse = z.infer<typeof bridgeHealthResponseSchema>;
+
+export const bridgePairRequestSchema = z.object({
+  pairingCode: z.string().regex(/^\d{6}$/),
+});
+
+export type BridgePairRequest = z.infer<typeof bridgePairRequestSchema>;
+
+export const bridgePairResponseSchema = z.object({
+  ok: z.literal(true),
+  token: z.string().min(32),
+  bridgeInstanceId: z.string().min(1),
+  protocolVersion: z.literal(BRIDGE_PROTOCOL_VERSION),
+});
+
+export type BridgePairResponse = z.infer<typeof bridgePairResponseSchema>;
+
+const bridgeSessionSchema = z.object({
+  id: z.string().min(1),
+  timestamp: z.string().min(1),
+  pageUrl: z.string().min(1),
+  viewport: z.object({
+    width: z.number(),
+    height: z.number(),
+    devicePixelRatio: z.number(),
+  }),
+  elements: z.array(z.unknown()),
+  structuralEdits: z.array(z.unknown()),
+  stats: z.object({
+    editedElements: z.number(),
+    styleChanges: z.number(),
+    structuralEdits: z.number(),
+  }),
+}) as z.ZodType<UIChangeSession>;
+
+export const bridgePreviewRequestSchema = z.object({
+  session: bridgeSessionSchema,
+});
+
+export type BridgePreviewRequest = z.infer<typeof bridgePreviewRequestSchema>;
+
+const bridgePreviewElementSchema = z.object({
+  selector: z.string(),
+  file: z.string().nullable(),
+  confidence: z.number(),
+  diff: z.string().nullable(),
+  applicable: z.boolean(),
+  note: z.string().optional(),
+});
+
+export const bridgePreviewResponseSchema = z.object({
+  ok: z.literal(true),
+  sessionId: z.string(),
+  root: z.string(),
+  elements: z.array(bridgePreviewElementSchema),
+  structuralEdits: z.array(
+    z.object({
+      kind: z.string(),
+      selector: z.string(),
+      summary: z.string(),
+    }),
+  ),
+});
+
+export type BridgePreviewResponse = z.infer<typeof bridgePreviewResponseSchema>;
+
+export const bridgeApplyRequestSchema = z.object({
+  session: bridgeSessionSchema,
+  selectors: z.array(z.string()).optional(),
+});
+
+export type BridgeApplyRequest = z.infer<typeof bridgeApplyRequestSchema>;
+
+export const bridgeApplyResponseSchema = z.object({
+  ok: z.literal(true),
+  backupId: z.string().nullable(),
+  applied: z.array(z.object({ selector: z.string(), file: z.string() })),
+  skipped: z.array(z.object({ selector: z.string(), reason: z.string() })),
+});
+
+export type BridgeApplyResponse = z.infer<typeof bridgeApplyResponseSchema>;
+
+export const bridgeRollbackRequestSchema = z.object({
+  backupId: z.string().optional(),
+});
+
+export type BridgeRollbackRequest = z.infer<typeof bridgeRollbackRequestSchema>;
+
+export const bridgeRollbackResponseSchema = z.object({
+  ok: z.literal(true),
+  backupId: z.string(),
+  restored: z.array(z.string()),
+});
+
+export type BridgeRollbackResponse = z.infer<typeof bridgeRollbackResponseSchema>;
+
+const parseBridgeSchema = <T>(schema: z.ZodType<T>, value: unknown, label: string): T => {
+  const parsed = schema.safeParse(value);
+
+  if (!parsed.success) {
+    throw new Error(`${label} did not match the bridge protocol schema.`);
+  }
+
+  return parsed.data;
+};
+
+export const parseBridgeStructuredError = (value: unknown): BridgeStructuredError | null => {
+  const parsed = bridgeStructuredErrorSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
+};
+
+export const parseBridgeHealthResponse = (value: unknown): BridgeHealthResponse =>
+  parseBridgeSchema(bridgeHealthResponseSchema, value, "Health response");
+
+export const parseBridgePairResponse = (value: unknown): BridgePairResponse =>
+  parseBridgeSchema(bridgePairResponseSchema, value, "Pair response");
+
+export const parseBridgePreviewResponse = (value: unknown): BridgePreviewResponse =>
+  parseBridgeSchema(bridgePreviewResponseSchema, value, "Preview response");
+
+export const parseBridgeApplyResponse = (value: unknown): BridgeApplyResponse =>
+  parseBridgeSchema(bridgeApplyResponseSchema, value, "Apply response");
+
+export const parseBridgeRollbackResponse = (value: unknown): BridgeRollbackResponse =>
+  parseBridgeSchema(bridgeRollbackResponseSchema, value, "Rollback response");

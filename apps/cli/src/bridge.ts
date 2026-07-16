@@ -1,26 +1,158 @@
-import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { timingSafeEqual, createHash, randomBytes, randomInt, randomUUID } from "node:crypto";
+import { copyFile, mkdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 
 import { computeCssFileEdit, createUnifiedDiff } from "@ui-buddy/adapters";
 import { scanProjectContext } from "@ui-buddy/core/project";
+import {
+  BRIDGE_PROTOCOL_VERSION,
+  bridgeApplyRequestSchema,
+  bridgePairRequestSchema,
+  bridgePreviewRequestSchema,
+  bridgeRollbackRequestSchema,
+} from "@ui-buddy/shared";
 
-import type { ProjectContext, UIChangeIntent, UIChangeSession } from "@ui-buddy/shared";
+import type {
+  BridgeApplyResponse,
+  BridgeErrorCode,
+  BridgeHealthResponse,
+  BridgePairResponse,
+  BridgePreviewResponse,
+  BridgeRollbackResponse,
+  BridgeStructuredError,
+  ProjectContext,
+  UIChangeIntent,
+  UIChangeSession,
+} from "@ui-buddy/shared";
 
 const UI_BUDDY_DIR = ".ui-buddy";
+const DEFAULT_BODY_LIMIT_BYTES = 1024 * 1024;
+const BACKUP_ID_PATTERN = /^[A-Za-z0-9_-]{1,80}$/;
+const EXTENSION_ID_PATTERN = /^[a-p]{32}$/;
+const REQUEST_TIMEOUT_MS = 15_000;
+const HEADERS_TIMEOUT_MS = 5_000;
 
-const WRITE_DISABLED_ERROR = {
+class BridgeHttpError extends Error {
+  constructor(
+    readonly status: number,
+    readonly code: BridgeErrorCode,
+    message: string,
+    readonly details?: Record<string, string>,
+  ) {
+    super(message);
+  }
+}
+
+const bridgeError = (
+  status: number,
+  code: BridgeErrorCode,
+  error: string,
+  details?: Record<string, string>,
+): BridgeStructuredError => ({
   ok: false,
-  code: "CODE_SYNC_WRITES_DISABLED",
-  error:
+  code,
+  error,
+  ...(details === undefined ? {} : { details }),
+});
+
+const writeDisabledError = (): BridgeStructuredError =>
+  bridgeError(
+    403,
+    "CODE_SYNC_WRITES_DISABLED",
     "Source writes are disabled. Restart ui-buddy connect with --enable-code-sync-writes to apply or roll back source changes.",
-} as const;
+  );
 
 /** True when `target` resolves to a path inside `root` (blocks path traversal). */
 const isInsideRoot = (root: string, target: string): boolean => {
   const rel = relative(root, target);
   return rel.length > 0 && !rel.startsWith("..") && !isAbsolute(rel);
 };
+
+const safeEqual = (left: string, right: string): boolean => {
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
+
+  return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
+};
+
+const bearerTokenFrom = (req: IncomingMessage): string | null => {
+  const header = req.headers.authorization;
+
+  if (typeof header !== "string") {
+    return null;
+  }
+
+  const [scheme, token] = header.split(" ");
+  return scheme?.toLowerCase() === "bearer" && token !== undefined ? token : null;
+};
+
+const validatePort = (port: number): void => {
+  if (!Number.isInteger(port) || port < 0 || port > 65_535) {
+    throw new BridgeHttpError(
+      400,
+      "BAD_REQUEST",
+      "Bridge port must be between 1 and 65535, or 0 for an ephemeral test port.",
+    );
+  }
+};
+
+const validateExtensionId = (extensionId: string | undefined): string | undefined => {
+  if (extensionId === undefined || extensionId.length === 0) {
+    return undefined;
+  }
+
+  if (!EXTENSION_ID_PATTERN.test(extensionId)) {
+    throw new BridgeHttpError(
+      400,
+      "BAD_REQUEST",
+      "Extension ID must be a 32-character Chrome extension ID.",
+    );
+  }
+
+  return extensionId;
+};
+
+const validateProjectRoot = async (rootPath: string): Promise<string> => {
+  const canonicalRoot = await realpath(resolve(rootPath)).catch(() => {
+    throw new BridgeHttpError(400, "INVALID_PROJECT_ROOT", "Project root does not exist.");
+  });
+  const info = await stat(canonicalRoot).catch(() => {
+    throw new BridgeHttpError(400, "INVALID_PROJECT_ROOT", "Project root cannot be read.");
+  });
+
+  if (!info.isDirectory()) {
+    throw new BridgeHttpError(400, "INVALID_PROJECT_ROOT", "Project root must be a directory.");
+  }
+
+  return canonicalRoot;
+};
+
+const validateBackupId = (backupId: string): void => {
+  if (!BACKUP_ID_PATTERN.test(backupId)) {
+    throw new BridgeHttpError(400, "INVALID_BACKUP_ID", "Backup ID is invalid.");
+  }
+};
+
+const validateSafeExistingPath = async (
+  canonicalRoot: string,
+  absolutePath: string,
+): Promise<void> => {
+  const realTarget = await realpath(absolutePath).catch(async () =>
+    realpath(dirname(absolutePath)),
+  );
+
+  if (!isInsideRoot(canonicalRoot, realTarget) && realTarget !== canonicalRoot) {
+    throw new BridgeHttpError(400, "BAD_REQUEST", "Resolved path escapes the project root.");
+  }
+};
+
+const stableProjectId = (canonicalRoot: string): string =>
+  createHash("sha256").update(canonicalRoot).digest("hex").slice(0, 32);
+
+const generatePairingCode = (): string => randomInt(0, 1_000_000).toString().padStart(6, "0");
+
+const generateToken = (): string => randomBytes(32).toString("base64url");
 
 export type PreviewElement = {
   selector: string;
@@ -31,13 +163,7 @@ export type PreviewElement = {
   note?: string;
 };
 
-export type PreviewResult = {
-  ok: true;
-  sessionId: string;
-  root: string;
-  elements: PreviewElement[];
-  structuralEdits: Array<{ kind: string; selector: string; summary: string }>;
-};
+export type PreviewResult = BridgePreviewResponse;
 
 const previewSession = async (
   session: UIChangeSession,
@@ -81,12 +207,7 @@ const previewSession = async (
   };
 };
 
-export type ApplyResult = {
-  ok: true;
-  backupId: string | null;
-  applied: Array<{ selector: string; file: string }>;
-  skipped: Array<{ selector: string; reason: string }>;
-};
+export type ApplyResult = BridgeApplyResponse;
 
 const applySession = async (
   session: UIChangeSession,
@@ -162,6 +283,8 @@ const applySession = async (
       continue;
     }
 
+    await validateSafeExistingPath(rootPath, absPath);
+
     const finalContent =
       projectContext.sourceFiles?.find((file) => file.path === relPath)?.content ?? null;
 
@@ -191,11 +314,7 @@ const applySession = async (
   return { ok: true, backupId, applied, skipped };
 };
 
-export type RollbackResult = {
-  ok: true;
-  backupId: string;
-  restored: string[];
-};
+export type RollbackResult = BridgeRollbackResponse;
 
 const rollback = async (rootPath: string, backupId?: string): Promise<RollbackResult> => {
   let id = backupId;
@@ -204,6 +323,8 @@ const rollback = async (rootPath: string, backupId?: string): Promise<RollbackRe
     const raw = await readFile(join(rootPath, UI_BUDDY_DIR, "last-backup.json"), "utf8");
     id = (JSON.parse(raw) as { backupId: string }).backupId;
   }
+
+  validateBackupId(id);
 
   const backupRoot = join(rootPath, UI_BUDDY_DIR, "backups", id);
   const manifest = JSON.parse(await readFile(join(backupRoot, "manifest.json"), "utf8")) as {
@@ -218,6 +339,7 @@ const rollback = async (rootPath: string, backupId?: string): Promise<RollbackRe
       continue;
     }
 
+    await validateSafeExistingPath(rootPath, absTarget);
     await copyFile(join(backupRoot, relPath), absTarget);
     restored.push(relPath);
   }
@@ -225,21 +347,97 @@ const rollback = async (rootPath: string, backupId?: string): Promise<RollbackRe
   return { ok: true, backupId: id, restored };
 };
 
-/**
- * Only the extension (chrome-extension://) may talk to the bridge. This blocks
- * drive-by websites: without it, any page the user has open could POST to the
- * bridge and read source (via /preview) or overwrite files (via /apply), since
- * the browser sends the page's real Origin and cannot spoof it. Requests with no
- * Origin (curl/native tooling, not a browser threat) are allowed for debugging.
- */
-const isAllowedOrigin = (origin: string | undefined): boolean =>
-  origin === undefined || origin.startsWith("chrome-extension://");
+type BridgeRuntimeConfig = {
+  canonicalRoot: string;
+  projectId: string;
+  projectName: string;
+  bridgeInstanceId: string;
+  pairingCode: string;
+  sessionToken: string;
+  codeSyncWriteEnabled: boolean;
+  allowedExtensionId: string | undefined;
+  allowAnyExtensionOrigin: boolean;
+  allowUnauthenticatedLocalAccess: boolean;
+  bodyLimitBytes: number;
+};
 
-const setCors = (res: ServerResponse, origin: string | undefined): void => {
-  res.setHeader("Access-Control-Allow-Origin", origin ?? "*");
+const expectedOrigin = (config: BridgeRuntimeConfig): string | null =>
+  config.allowedExtensionId === undefined
+    ? null
+    : `chrome-extension://${config.allowedExtensionId}`;
+
+const isAllowedBrowserOrigin = (
+  origin: string | undefined,
+  config: BridgeRuntimeConfig,
+): boolean => {
+  if (origin === undefined) {
+    return false;
+  }
+
+  const exactOrigin = expectedOrigin(config);
+
+  if (exactOrigin !== null) {
+    return origin === exactOrigin;
+  }
+
+  return config.allowAnyExtensionOrigin && origin.startsWith("chrome-extension://");
+};
+
+const isAuthenticated = (req: IncomingMessage, config: BridgeRuntimeConfig): boolean => {
+  const token = bearerTokenFrom(req);
+  return token !== null && safeEqual(token, config.sessionToken);
+};
+
+const assertRequestAllowed = (
+  req: IncomingMessage,
+  config: BridgeRuntimeConfig,
+  options: { allowPairing?: boolean } = {},
+): void => {
+  const origin = req.headers.origin;
+
+  if (isAllowedBrowserOrigin(origin, config)) {
+    return;
+  }
+
+  if (origin === undefined) {
+    if (config.allowUnauthenticatedLocalAccess) {
+      return;
+    }
+
+    if (!options.allowPairing && isAuthenticated(req, config)) {
+      return;
+    }
+  }
+
+  throw new BridgeHttpError(
+    403,
+    "FORBIDDEN_ORIGIN",
+    "Request origin is not allowed for this bridge.",
+  );
+};
+
+const assertAuthenticated = (req: IncomingMessage, config: BridgeRuntimeConfig): void => {
+  if (!isAuthenticated(req, config)) {
+    throw new BridgeHttpError(
+      401,
+      "UNAUTHORIZED",
+      "Pair with the bridge and send Authorization: Bearer <token>.",
+    );
+  }
+};
+
+const setCors = (
+  res: ServerResponse,
+  origin: string | undefined,
+  config: BridgeRuntimeConfig,
+): void => {
+  if (origin !== undefined && isAllowedBrowserOrigin(origin, config)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  }
+
   res.setHeader("Vary", "Origin");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "content-type");
+  res.setHeader("Access-Control-Allow-Headers", "authorization, content-type");
 };
 
 const sendJson = (
@@ -247,19 +445,60 @@ const sendJson = (
   status: number,
   data: unknown,
   origin: string | undefined,
+  config: BridgeRuntimeConfig,
 ): void => {
-  setCors(res, origin);
+  setCors(res, origin, config);
   res.writeHead(status, { "content-type": "application/json" });
   res.end(JSON.stringify(data));
 };
 
-const readJsonBody = async <T>(req: IncomingMessage): Promise<T> => {
-  const chunks: Buffer[] = [];
-  for await (const chunk of req) {
-    chunks.push(chunk as Buffer);
+const readJsonBody = async (
+  req: IncomingMessage,
+  config: BridgeRuntimeConfig,
+): Promise<unknown> => {
+  const contentType = req.headers["content-type"];
+
+  if (typeof contentType !== "string" || !contentType.toLowerCase().includes("application/json")) {
+    throw new BridgeHttpError(
+      415,
+      "UNSUPPORTED_MEDIA_TYPE",
+      "Bridge POST requests must use application/json.",
+    );
   }
+
+  const chunks: Buffer[] = [];
+  let totalBytes = 0;
+
+  for await (const chunk of req) {
+    const buffer = chunk as Buffer;
+    totalBytes += buffer.byteLength;
+
+    if (totalBytes > config.bodyLimitBytes) {
+      throw new BridgeHttpError(413, "PAYLOAD_TOO_LARGE", "Bridge request body is too large.");
+    }
+
+    chunks.push(buffer);
+  }
+
   const raw = Buffer.concat(chunks).toString("utf8");
-  return (raw.length === 0 ? {} : JSON.parse(raw)) as T;
+
+  try {
+    return raw.length === 0 ? {} : JSON.parse(raw);
+  } catch {
+    throw new BridgeHttpError(400, "BAD_REQUEST", "Request body must be valid JSON.");
+  }
+};
+
+const parseBody = <T>(schema: { parse: (value: unknown) => T }, value: unknown): T => {
+  try {
+    return schema.parse(value);
+  } catch {
+    throw new BridgeHttpError(
+      400,
+      "BAD_REQUEST",
+      "Request body does not match the bridge protocol.",
+    );
+  }
 };
 
 const projectName = async (rootPath: string): Promise<string> => {
@@ -271,8 +510,27 @@ const projectName = async (rootPath: string): Promise<string> => {
   }
 };
 
+const healthResponse = (config: BridgeRuntimeConfig): BridgeHealthResponse => ({
+  ok: true,
+  projectId: config.projectId,
+  projectName: config.projectName,
+  canonicalRoot: config.canonicalRoot,
+  bridgeInstanceId: config.bridgeInstanceId,
+  protocolVersion: BRIDGE_PROTOCOL_VERSION,
+  codeSyncWriteEnabled: config.codeSyncWriteEnabled,
+  name: config.projectName,
+  root: config.canonicalRoot,
+  version: "0.1.0",
+});
+
 type BridgeHandle = {
   port: number;
+  pairingCode: string;
+  projectId: string;
+  projectName: string;
+  canonicalRoot: string;
+  bridgeInstanceId: string;
+  allowedExtensionId: string | undefined;
   close: () => void;
 };
 
@@ -280,93 +538,181 @@ export const startBridge = async (options: {
   rootPath: string;
   port: number;
   codeSyncWriteEnabled?: boolean;
+  allowedExtensionId?: string | undefined;
+  allowAnyExtensionOrigin?: boolean;
+  allowUnauthenticatedLocalAccess?: boolean;
+  bodyLimitBytes?: number;
 }): Promise<BridgeHandle> => {
-  const { rootPath, port, codeSyncWriteEnabled = false } = options;
+  validatePort(options.port);
+
+  const canonicalRoot = await validateProjectRoot(options.rootPath);
+  const allowedExtensionId = validateExtensionId(options.allowedExtensionId);
+  const config: BridgeRuntimeConfig = {
+    canonicalRoot,
+    projectId: stableProjectId(canonicalRoot),
+    projectName: await projectName(canonicalRoot),
+    bridgeInstanceId: randomUUID(),
+    pairingCode: generatePairingCode(),
+    sessionToken: generateToken(),
+    codeSyncWriteEnabled: options.codeSyncWriteEnabled === true,
+    allowedExtensionId,
+    allowAnyExtensionOrigin: options.allowAnyExtensionOrigin === true,
+    allowUnauthenticatedLocalAccess: options.allowUnauthenticatedLocalAccess === true,
+    bodyLimitBytes: options.bodyLimitBytes ?? DEFAULT_BODY_LIMIT_BYTES,
+  };
 
   const server = createServer((req, res) => {
+    req.setTimeout(REQUEST_TIMEOUT_MS);
     void (async () => {
       const origin = req.headers.origin;
 
       try {
-        if (!isAllowedOrigin(origin)) {
-          res.writeHead(403, { "content-type": "application/json" });
-          res.end(JSON.stringify({ ok: false, error: "Forbidden origin." }));
-          return;
-        }
+        const requestUrl = new URL(req.url ?? "/", "http://127.0.0.1");
+        const route = requestUrl.pathname;
 
         if (req.method === "OPTIONS") {
-          setCors(res, origin);
+          assertRequestAllowed(req, config, { allowPairing: true });
+          setCors(res, origin, config);
           res.writeHead(204);
           res.end();
           return;
         }
 
-        const url = req.url ?? "/";
+        if (route === "/health") {
+          if (req.method !== "GET") {
+            throw new BridgeHttpError(405, "METHOD_NOT_ALLOWED", "Use GET for /health.");
+          }
 
-        if (req.method === "GET" && url.startsWith("/health")) {
+          assertRequestAllowed(req, config);
+          sendJson(res, 200, healthResponse(config), origin, config);
+          return;
+        }
+
+        if (route === "/pair") {
+          if (req.method !== "POST") {
+            throw new BridgeHttpError(405, "METHOD_NOT_ALLOWED", "Use POST for /pair.");
+          }
+
+          assertRequestAllowed(req, config, { allowPairing: true });
+          const body = parseBody(bridgePairRequestSchema, await readJsonBody(req, config));
+
+          if (!safeEqual(body.pairingCode, config.pairingCode)) {
+            throw new BridgeHttpError(401, "UNAUTHORIZED", "Pairing code is incorrect.");
+          }
+
+          const response: BridgePairResponse = {
+            ok: true,
+            token: config.sessionToken,
+            bridgeInstanceId: config.bridgeInstanceId,
+            protocolVersion: BRIDGE_PROTOCOL_VERSION,
+          };
+          sendJson(res, 200, response, origin, config);
+          return;
+        }
+
+        if (route === "/preview") {
+          if (req.method !== "POST") {
+            throw new BridgeHttpError(405, "METHOD_NOT_ALLOWED", "Use POST for /preview.");
+          }
+
+          assertRequestAllowed(req, config);
+          assertAuthenticated(req, config);
+          const body = parseBody(bridgePreviewRequestSchema, await readJsonBody(req, config));
+          sendJson(res, 200, await previewSession(body.session, canonicalRoot), origin, config);
+          return;
+        }
+
+        if (route === "/apply") {
+          if (req.method !== "POST") {
+            throw new BridgeHttpError(405, "METHOD_NOT_ALLOWED", "Use POST for /apply.");
+          }
+
+          assertRequestAllowed(req, config);
+          assertAuthenticated(req, config);
+
+          if (!config.codeSyncWriteEnabled) {
+            sendJson(res, 403, writeDisabledError(), origin, config);
+            return;
+          }
+
+          const body = parseBody(bridgeApplyRequestSchema, await readJsonBody(req, config));
           sendJson(
             res,
             200,
-            {
-              ok: true,
-              name: await projectName(rootPath),
-              root: rootPath,
-              version: "0.1.0",
-              codeSyncWriteEnabled,
-            },
+            await applySession(body.session, canonicalRoot, body.selectors),
             origin,
+            config,
           );
           return;
         }
 
-        if (req.method === "POST" && url.startsWith("/preview")) {
-          const body = await readJsonBody<{ session: UIChangeSession }>(req);
-          sendJson(res, 200, await previewSession(body.session, rootPath), origin);
-          return;
-        }
+        if (route === "/rollback") {
+          if (req.method !== "POST") {
+            throw new BridgeHttpError(405, "METHOD_NOT_ALLOWED", "Use POST for /rollback.");
+          }
 
-        if (req.method === "POST" && url.startsWith("/apply")) {
-          if (!codeSyncWriteEnabled) {
-            sendJson(res, 403, WRITE_DISABLED_ERROR, origin);
+          assertRequestAllowed(req, config);
+          assertAuthenticated(req, config);
+
+          if (!config.codeSyncWriteEnabled) {
+            sendJson(res, 403, writeDisabledError(), origin, config);
             return;
           }
 
-          const body = await readJsonBody<{ session: UIChangeSession; selectors?: string[] }>(req);
-          sendJson(res, 200, await applySession(body.session, rootPath, body.selectors), origin);
+          const body = parseBody(bridgeRollbackRequestSchema, await readJsonBody(req, config));
+          sendJson(res, 200, await rollback(canonicalRoot, body.backupId), origin, config);
           return;
         }
 
-        if (req.method === "POST" && url.startsWith("/rollback")) {
-          if (!codeSyncWriteEnabled) {
-            sendJson(res, 403, WRITE_DISABLED_ERROR, origin);
-            return;
-          }
-
-          const body = await readJsonBody<{ backupId?: string }>(req);
-          sendJson(res, 200, await rollback(rootPath, body.backupId), origin);
-          return;
-        }
-
-        sendJson(res, 404, { ok: false, error: "Unknown endpoint." }, origin);
+        throw new BridgeHttpError(404, "NOT_FOUND", "Unknown bridge endpoint.");
       } catch (error) {
-        sendJson(
-          res,
-          500,
-          { ok: false, error: error instanceof Error ? error.message : "Bridge request failed." },
-          origin,
-        );
+        const normalized =
+          error instanceof BridgeHttpError
+            ? bridgeError(error.status, error.code, error.message, error.details)
+            : bridgeError(500, "INTERNAL_ERROR", "Bridge request failed.");
+        const status = error instanceof BridgeHttpError ? error.status : 500;
+        sendJson(res, status, normalized, origin, config);
       }
     })();
   });
 
-  await new Promise<void>((resolvePromise) => {
-    server.listen(port, "127.0.0.1", () => resolvePromise());
+  server.headersTimeout = HEADERS_TIMEOUT_MS;
+  server.requestTimeout = REQUEST_TIMEOUT_MS;
+  server.timeout = REQUEST_TIMEOUT_MS;
+
+  await new Promise<void>((resolvePromise, rejectPromise) => {
+    const onError = (error: NodeJS.ErrnoException) => {
+      rejectPromise(
+        new BridgeHttpError(
+          409,
+          "PORT_UNAVAILABLE",
+          error.code === "EADDRINUSE"
+            ? "Bridge port is already in use."
+            : "Bridge failed to start.",
+        ),
+      );
+    };
+
+    server.once("error", onError);
+    server.listen(options.port, "127.0.0.1", () => {
+      server.off("error", onError);
+      resolvePromise();
+    });
   });
 
   const address = server.address();
-  const actualPort = typeof address === "object" && address !== null ? address.port : port;
+  const actualPort = typeof address === "object" && address !== null ? address.port : options.port;
 
-  return { port: actualPort, close: () => server.close() };
+  return {
+    port: actualPort,
+    pairingCode: config.pairingCode,
+    projectId: config.projectId,
+    projectName: config.projectName,
+    canonicalRoot: config.canonicalRoot,
+    bridgeInstanceId: config.bridgeInstanceId,
+    allowedExtensionId: config.allowedExtensionId,
+    close: () => server.close(),
+  };
 };
 
 export { applySession, previewSession, rollback };

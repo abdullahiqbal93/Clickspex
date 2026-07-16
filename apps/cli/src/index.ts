@@ -235,10 +235,23 @@ program
 
 program
   .command("connect")
-  .description("start a localhost bridge so the ui-buddy extension can preview changes")
+  .description("start a paired localhost bridge so the ui-buddy extension can preview changes")
   .option("--path <path>", "project path", process.cwd())
   .option("--port <port>", "port to listen on", "7317")
   .option("--open <url>", "open this URL (your running app) in the browser after starting")
+  .option(
+    "--extension-id <id>",
+    "Chrome extension ID allowed to pair with this bridge",
+    process.env.UI_BUDDY_EXTENSION_ID,
+  )
+  .option(
+    "--allow-any-extension-origin",
+    "debug only: allow any chrome-extension:// origin to pair",
+  )
+  .option(
+    "--allow-unauthenticated-local-access",
+    "debug only: allow no-Origin local requests without bearer auth",
+  )
   .option(
     "--enable-code-sync-writes",
     "enable experimental source apply and rollback endpoints; disabled by default",
@@ -248,19 +261,39 @@ program
       path: string;
       port: string;
       open?: string;
+      extensionId?: string | undefined;
+      allowAnyExtensionOrigin?: boolean;
+      allowUnauthenticatedLocalAccess?: boolean;
       enableCodeSyncWrites?: boolean;
     }) => {
       const rootPath = resolve(options.path);
       const parsedPort = Number.parseInt(options.port, 10);
       const port = Number.isNaN(parsedPort) ? 7317 : parsedPort;
       const codeSyncWriteEnabled = options.enableCodeSyncWrites === true;
-      const bridge = await startBridge({ rootPath, port, codeSyncWriteEnabled });
+      const bridge = await startBridge({
+        rootPath,
+        port,
+        codeSyncWriteEnabled,
+        allowedExtensionId: options.extensionId,
+        allowAnyExtensionOrigin: options.allowAnyExtensionOrigin === true,
+        allowUnauthenticatedLocalAccess: options.allowUnauthenticatedLocalAccess === true,
+      });
       const url = `http://127.0.0.1:${bridge.port}`;
 
       process.stdout.write("\n");
       process.stdout.write(`${chalk.green("*")} ${chalk.bold("ui-buddy bridge")}  ${url}\n`);
-      process.stdout.write(`  ${chalk.bold("project")}  ${rootPath}\n`);
+      process.stdout.write(`  ${chalk.bold("project")}  ${bridge.projectName}\n`);
+      process.stdout.write(`  ${chalk.bold("root")}     ${bridge.canonicalRoot}\n`);
       process.stdout.write(`  ${chalk.bold("port")}     ${bridge.port}\n`);
+      process.stdout.write(`  ${chalk.bold("project id")} ${bridge.projectId}\n`);
+      process.stdout.write(`  ${chalk.bold("pair code")} ${chalk.yellow(bridge.pairingCode)}\n`);
+      process.stdout.write(
+        `  ${chalk.bold("origin")}   ${
+          bridge.allowedExtensionId === undefined
+            ? chalk.yellow("debug extension origin mode")
+            : `chrome-extension://${bridge.allowedExtensionId}`
+        }\n`,
+      );
       process.stdout.write(
         `  ${chalk.bold("writes")}   ${
           codeSyncWriteEnabled
@@ -269,9 +302,12 @@ program
         }\n\n`,
       );
       process.stdout.write("  Next steps:\n");
-      process.stdout.write("   1. Open your running app in Chrome\n");
-      process.stdout.write("   2. Open the ui-buddy side panel and edit elements\n");
-      process.stdout.write(`   3. Export -> Code sync (port ${bridge.port}) -> Preview diff\n`);
+      process.stdout.write(
+        "   1. Start the installed UI Buddy extension for the configured extension ID\n",
+      );
+      process.stdout.write("   2. Enter the pairing code shown above in Code sync\n");
+      process.stdout.write("   3. Open your running app in Chrome and edit elements\n");
+      process.stdout.write(`   4. Export -> Code sync (port ${bridge.port}) -> Preview diff\n`);
       if (!codeSyncWriteEnabled) {
         process.stdout.write(
           chalk.dim(
@@ -292,7 +328,6 @@ program
       });
     },
   );
-
 program
   .command("export-example")
   .description("write an example UIChangeIntent JSON to disk")

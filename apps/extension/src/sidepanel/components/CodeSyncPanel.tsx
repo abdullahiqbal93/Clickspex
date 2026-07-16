@@ -1,52 +1,48 @@
-import { AlertTriangle, Check, FileCode2, Plug, RefreshCcw, Undo2 } from "lucide-react";
+import {
+  parseBridgeApplyResponse,
+  parseBridgeHealthResponse,
+  parseBridgePairResponse,
+  parseBridgePreviewResponse,
+  parseBridgeRollbackResponse,
+  parseBridgeStructuredError,
+  type BridgeApplyResponse,
+  type BridgeHealthResponse,
+  type BridgePreviewResponse,
+  type UIChangeSession,
+} from "@ui-buddy/shared";
+import { AlertTriangle, Check, FileCode2, KeyRound, Plug, RefreshCcw, Undo2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-
-import type { UIChangeSession } from "@ui-buddy/shared";
 
 const DEFAULT_PORT = "7317";
 const PORT_STORAGE_KEY = "ubBridgePort";
-
-type HealthResponse = {
-  ok: boolean;
-  name: string;
-  root: string;
-  codeSyncWriteEnabled?: boolean;
-};
-
-type PreviewElement = {
-  selector: string;
-  file: string | null;
-  confidence: number;
-  diff: string | null;
-  applicable: boolean;
-  note?: string;
-};
-
-type PreviewResponse = {
-  ok: boolean;
-  elements: PreviewElement[];
-};
-
-type ApplyResponse = {
-  ok: boolean;
-  backupId: string | null;
-  applied: Array<{ selector: string; file: string }>;
-  skipped: Array<{ selector: string; reason: string }>;
-};
+const TOKEN_STORAGE_PREFIX = "ubBridgeToken:";
 
 type ConnectionState = "idle" | "checking" | "connected" | "disconnected";
 
-const fetchJson = async <T,>(url: string, options: RequestInit, timeoutMs: number): Promise<T> => {
+const tokenStorageKey = (health: BridgeHealthResponse): string =>
+  `${TOKEN_STORAGE_PREFIX}${health.projectId}:${health.bridgeInstanceId}`;
+
+const fetchJson = async <T,>(
+  url: string,
+  options: RequestInit,
+  timeoutMs: number,
+  parse: (value: unknown) => T,
+): Promise<T> => {
   const controller = new AbortController();
   const timer = window.setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const response = await fetch(url, { ...options, signal: controller.signal });
+    const value = (await response.json().catch(() => null)) as unknown;
+
     if (!response.ok) {
-      throw new Error(`Bridge request failed with HTTP ${response.status}`);
+      const structuredError = parseBridgeStructuredError(value);
+      throw new Error(
+        structuredError?.error ?? `Bridge request failed with HTTP ${response.status}`,
+      );
     }
 
-    return (await response.json()) as T;
+    return parse(value);
   } finally {
     window.clearTimeout(timer);
   }
@@ -59,40 +55,67 @@ type CodeSyncPanelProps = {
 export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
   const [port, setPort] = useState(DEFAULT_PORT);
   const [connection, setConnection] = useState<ConnectionState>("idle");
-  const [projectName, setProjectName] = useState<string | null>(null);
+  const [health, setHealth] = useState<BridgeHealthResponse | null>(null);
+  const [bridgeToken, setBridgeToken] = useState<string | null>(null);
+  const [pairingCode, setPairingCode] = useState("");
   const [codeSyncWriteEnabled, setCodeSyncWriteEnabled] = useState(false);
-  const [preview, setPreview] = useState<PreviewResponse | null>(null);
-  const [applyResult, setApplyResult] = useState<ApplyResponse | null>(null);
+  const [preview, setPreview] = useState<BridgePreviewResponse | null>(null);
+  const [applyResult, setApplyResult] = useState<BridgeApplyResponse | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const baseUrl = `http://127.0.0.1:${port}`;
 
+  const clearBridgeState = () => {
+    setHealth(null);
+    setBridgeToken(null);
+    setCodeSyncWriteEnabled(false);
+    setPreview(null);
+    setApplyResult(null);
+    setConfirming(false);
+  };
+
+  const authHeaders = (): HeadersInit =>
+    bridgeToken === null ? {} : { authorization: `Bearer ${bridgeToken}` };
+
   const checkHealth = useCallback(async (targetPort: string) => {
     setConnection("checking");
     setError(null);
 
     try {
-      const health = await fetchJson<HealthResponse>(
+      const nextHealth = await fetchJson<BridgeHealthResponse>(
         `http://127.0.0.1:${targetPort}/health`,
         { method: "GET" },
         1500,
+        parseBridgeHealthResponse,
       );
 
-      if (health.ok) {
-        setProjectName(health.name);
-        setCodeSyncWriteEnabled(health.codeSyncWriteEnabled === true);
-        setConnection("connected");
-        return;
-      }
+      setHealth((previous) => {
+        if (
+          previous !== null &&
+          (previous.projectId !== nextHealth.projectId ||
+            previous.bridgeInstanceId !== nextHealth.bridgeInstanceId ||
+            previous.protocolVersion !== nextHealth.protocolVersion)
+        ) {
+          setPreview(null);
+          setApplyResult(null);
+          setConfirming(false);
+        }
 
-      setCodeSyncWriteEnabled(false);
+        return nextHealth;
+      });
+      setCodeSyncWriteEnabled(nextHealth.codeSyncWriteEnabled === true);
+      setConnection("connected");
+
+      const stored = await chrome.storage.session.get(tokenStorageKey(nextHealth));
+      const storedToken = stored[tokenStorageKey(nextHealth)];
+      setBridgeToken(typeof storedToken === "string" ? storedToken : null);
+      return;
+    } catch (caughtError) {
+      clearBridgeState();
       setConnection("disconnected");
-    } catch {
-      setConnection("disconnected");
-      setProjectName(null);
-      setCodeSyncWriteEnabled(false);
+      setError(caughtError instanceof Error ? caughtError.message : null);
     }
   }, []);
 
@@ -107,28 +130,70 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
 
   const savePort = (nextPort: string) => {
     setPort(nextPort);
+    clearBridgeState();
     void chrome.storage.local.set({ [PORT_STORAGE_KEY]: nextPort });
   };
 
+  const runPair = async () => {
+    if (health === null) {
+      setError("Connect to the bridge before pairing.");
+      return;
+    }
+
+    setBusy(true);
+    setError(null);
+
+    try {
+      const result = await fetchJson(
+        `${baseUrl}/pair`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ pairingCode }),
+        },
+        5000,
+        parseBridgePairResponse,
+      );
+
+      await chrome.storage.session.set({ [tokenStorageKey(health)]: result.token });
+      setBridgeToken(result.token);
+      setPairingCode("");
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : "Pairing failed.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const runPreview = async () => {
+    if (bridgeToken === null) {
+      setError("Enter the pairing code from the ui-buddy connect terminal before previewing.");
+      return;
+    }
+
     setBusy(true);
     setError(null);
     setApplyResult(null);
     setConfirming(false);
 
     try {
-      const result = await fetchJson<PreviewResponse>(
+      const result = await fetchJson<BridgePreviewResponse>(
         `${baseUrl}/preview`,
         {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          headers: { "content-type": "application/json", ...authHeaders() },
           body: JSON.stringify({ session }),
         },
         8000,
+        parseBridgePreviewResponse,
       );
       setPreview(result);
-    } catch {
-      setError("Preview failed - is `ui-buddy connect` running in your project?");
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Preview failed - is `ui-buddy connect` running in your project?",
+      );
       setConnection("disconnected");
     } finally {
       setBusy(false);
@@ -143,23 +208,29 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
       return;
     }
 
+    if (bridgeToken === null) {
+      setError("Pair with the bridge before applying source changes.");
+      return;
+    }
+
     setBusy(true);
     setError(null);
     setConfirming(false);
 
     try {
-      const result = await fetchJson<ApplyResponse>(
+      const result = await fetchJson<BridgeApplyResponse>(
         `${baseUrl}/apply`,
         {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          headers: { "content-type": "application/json", ...authHeaders() },
           body: JSON.stringify({ session }),
         },
         15000,
+        parseBridgeApplyResponse,
       );
       setApplyResult(result);
-    } catch {
-      setError("Apply failed - check the ui-buddy connect terminal for errors.");
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : "Apply failed.");
     } finally {
       setBusy(false);
     }
@@ -171,6 +242,11 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
       return;
     }
 
+    if (bridgeToken === null) {
+      setError("Pair with the bridge before rolling back source changes.");
+      return;
+    }
+
     setBusy(true);
     setError(null);
 
@@ -179,22 +255,24 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
         `${baseUrl}/rollback`,
         {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          headers: { "content-type": "application/json", ...authHeaders() },
           body: JSON.stringify({ backupId: applyResult?.backupId ?? undefined }),
         },
         8000,
+        parseBridgeRollbackResponse,
       );
       setApplyResult(null);
       setError(null);
-    } catch {
-      setError("Rollback failed - check the ui-buddy connect terminal.");
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : "Rollback failed.");
     } finally {
       setBusy(false);
     }
   };
 
   const applicablePreviews = preview?.elements.filter((element) => element.applicable) ?? [];
-  const canWriteToCode = connection === "connected" && codeSyncWriteEnabled;
+  const isPaired = bridgeToken !== null;
+  const canWriteToCode = connection === "connected" && codeSyncWriteEnabled && isPaired;
 
   return (
     <section className="ub-card p-4">
@@ -224,9 +302,9 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
                 : "bg-slate-300"
           }`}
         />
-        {connection === "connected" ? (
-          <span className="text-ink">
-            Connected to <span className="font-semibold">{projectName}</span>
+        {connection === "connected" && health !== null ? (
+          <span className="min-w-0 truncate text-ink">
+            Connected to <span className="font-semibold">{health.projectName}</span>
           </span>
         ) : connection === "checking" ? (
           <span className="text-muted">Checking...</span>
@@ -245,6 +323,14 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
         />
       </div>
 
+      {connection === "connected" && health !== null ? (
+        <div className="mt-2 rounded-xl bg-slate-50 p-2.5 text-[10px] leading-4 text-muted">
+          <p className="truncate">Project ID: {health.projectId}</p>
+          <p className="truncate">Bridge: {health.bridgeInstanceId}</p>
+          <p className="truncate">Root: {health.canonicalRoot}</p>
+        </div>
+      ) : null}
+
       {connection === "connected" ? (
         <div
           className={`mt-3 flex items-start gap-2 rounded-xl border p-2.5 text-2xs ${
@@ -262,7 +348,36 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
         </div>
       ) : null}
 
-      {connection === "connected" ? (
+      {connection === "connected" && !isPaired ? (
+        <div className="mt-3 rounded-xl border border-indigo-100 bg-indigo-50 p-2.5">
+          <label className="block text-2xs font-semibold text-indigo-900" htmlFor="ub-pair-code">
+            Pairing code from terminal
+          </label>
+          <div className="mt-2 flex gap-2">
+            <input
+              autoComplete="one-time-code"
+              className="ub-input h-8 flex-1 text-center font-mono text-xs tracking-[0.2em]"
+              id="ub-pair-code"
+              inputMode="numeric"
+              maxLength={6}
+              onChange={(event) => setPairingCode(event.target.value.replace(/\D/g, ""))}
+              placeholder="000000"
+              value={pairingCode}
+            />
+            <button
+              className="ub-btn-primary"
+              disabled={busy || pairingCode.length !== 6}
+              onClick={() => void runPair()}
+              type="button"
+            >
+              <KeyRound aria-hidden="true" size={13} />
+              Pair
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {connection === "connected" && isPaired ? (
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <button
             className="ub-btn"
@@ -294,11 +409,13 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
               disabled={!canWriteToCode || busy || applicablePreviews.length === 0}
               onClick={() => setConfirming(true)}
               title={
-                !canWriteToCode
-                  ? "Source writes are disabled for this bridge session"
-                  : applicablePreviews.length === 0
-                    ? "Preview first to see applicable changes"
-                    : "Write these changes to your source files"
+                !isPaired
+                  ? "Pair with the bridge first"
+                  : !canWriteToCode
+                    ? "Source writes are disabled for this bridge session"
+                    : applicablePreviews.length === 0
+                      ? "Preview first to see applicable changes"
+                      : "Write these changes to your source files"
               }
               type="button"
             >
