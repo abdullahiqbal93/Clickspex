@@ -362,3 +362,137 @@ describe("framework scaffold adapters", () => {
     expect(suggestion?.manualSteps[0]).toContain("src/components/Button.tsx");
   });
 });
+
+describe("CSS adapter Phase 4 source-write guardrails", () => {
+  it("rejects CSS modules and non-plain stylesheet dialects for automatic source edits", async () => {
+    const intent = createIntent([
+      {
+        selector: "#save",
+        property: "color",
+        beforeValue: "#000000",
+        afterValue: "#ffffff",
+        timestamp: "2026-07-01T00:00:00.000Z",
+      },
+    ]);
+    const moduleOnlyContext: ProjectContext = {
+      ...projectContext,
+      files: [{ ...projectContext.files![0]!, path: "src/Button.module.css" }],
+      sourceFiles: [
+        {
+          ...projectContext.sourceFiles![0]!,
+          path: "src/Button.module.css",
+          content: "#save {\n  color: #000000;\n}\n",
+        },
+      ],
+    };
+    const scssOnlyContext: ProjectContext = {
+      ...projectContext,
+      files: [{ ...projectContext.files![0]!, path: "src/styles.scss" }],
+      sourceFiles: [
+        {
+          ...projectContext.sourceFiles![0]!,
+          path: "src/styles.scss",
+          content: "$brand: #000;\n#save {\n  color: $brand;\n}\n",
+        },
+      ],
+    };
+
+    expect(cssAdapter.generatePatch(intent, moduleOnlyContext)).toMatchObject([
+      {
+        filesToChange: [],
+        warnings: [expect.stringContaining("Only plain .css files are writable")],
+      },
+    ]);
+    expect(cssAdapter.generatePatch(intent, scssOnlyContext)).toMatchObject([
+      {
+        filesToChange: [],
+        warnings: [expect.stringContaining("Only plain .css files are writable")],
+      },
+    ]);
+  });
+
+  it("requires exactly one plain CSS owner for automatic source edits", async () => {
+    const intent = createIntent([
+      {
+        selector: "#save",
+        property: "color",
+        beforeValue: "#000000",
+        afterValue: "#ffffff",
+        timestamp: "2026-07-01T00:00:00.000Z",
+      },
+    ]);
+    const ambiguousContext: ProjectContext = {
+      ...projectContext,
+      sourceFiles: [
+        projectContext.sourceFiles![0]!,
+        { ...projectContext.sourceFiles![0]!, path: "src/other.css" },
+      ],
+    };
+
+    const [suggestion] = await cssAdapter.generatePatch(intent, ambiguousContext);
+
+    expect(suggestion).toMatchObject({ filesToChange: [] });
+    expect(suggestion?.warnings[0]).toContain("No exact single plain-CSS owner rule was found");
+  });
+
+  it("updates existing media rules idempotently instead of appending duplicates", async () => {
+    const intent = createIntent([
+      {
+        selector: "#save",
+        property: "width",
+        beforeValue: "320px",
+        afterValue: "100%",
+        timestamp: "2026-07-01T00:00:00.000Z",
+        responsiveTarget: "mobile",
+      },
+    ]);
+    const context: ProjectContext = {
+      ...projectContext,
+      sourceFiles: [
+        {
+          ...projectContext.sourceFiles![0]!,
+          content:
+            "#save {\n  color: #000000;\n}\n\n@media (max-width: 767px) {\n  #save {\n    width: 320px;\n  }\n}\n",
+        },
+      ],
+    };
+
+    const [suggestion] = await cssAdapter.generatePatch(intent, context);
+
+    expect(suggestion?.filesToChange).toEqual(["src/styles.css"]);
+    expect(suggestion?.diffPreview).toContain("-    width: 320px;");
+    expect(suggestion?.diffPreview).toContain("+    width: 100%;");
+    expect((suggestion?.diffPreview.match(/@media \(max-width: 767px\)/g) ?? []).length).toBe(1);
+  });
+
+  it("removes declarations through explicit empty-value operations", async () => {
+    const intent = createIntent([
+      {
+        selector: "#save",
+        property: "color",
+        beforeValue: "#000000",
+        afterValue: "",
+        timestamp: "2026-07-01T00:00:00.000Z",
+      },
+    ]);
+
+    const [suggestion] = await cssAdapter.generatePatch(intent, projectContext);
+
+    expect(suggestion?.diffPreview).toContain("-  color: #000000;");
+    expect(suggestion?.diffPreview).not.toContain("+  color:");
+  });
+
+  it("parses raw CSS containing quoted semicolons when patching source", async () => {
+    const intent = {
+      ...createIntent([]),
+      rawCss: 'background-image: url("data:image/svg+xml;charset=utf-8;demo"); --brand: #05f;',
+    };
+
+    const [suggestion] = await cssAdapter.generatePatch(intent, projectContext);
+
+    expect(suggestion?.diffPreview).toContain(
+      '+  background-image: url("data:image/svg+xml;charset=utf-8;demo");',
+    );
+    expect(suggestion?.diffPreview).toContain("+  --brand: #05f;");
+  });
+});

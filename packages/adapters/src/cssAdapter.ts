@@ -1,9 +1,13 @@
 import {
-  buildCssRule,
   buildCssRulesFromChanges,
+  buildMediaQueryFromResponsiveTarget,
+  buildStyleTargetSelector,
   getStyleChangeResponsiveTarget,
+  getStyleChangeState,
   styleChangesToRuleRecords,
 } from "@ui-buddy/core/styleDiff";
+import { parseCssDeclarations } from "@ui-buddy/shared";
+import postcss, { type AtRule, type Container, type Root, type Rule } from "postcss";
 
 import { createUnifiedDiff } from "./diffPreview.js";
 
@@ -14,6 +18,7 @@ import type {
   PatchSuggestion,
   ProjectContext,
   ProjectSourceFile,
+  StyleChange,
   UIChangeIntent,
 } from "@ui-buddy/shared";
 
@@ -22,6 +27,7 @@ export const generateCssFromChangeIntent = (changeIntent: UIChangeIntent): strin
 
 const detectCss = (projectContext: ProjectContext): AdapterDetectionResult => {
   const stylesheetFiles = projectContext.files?.filter((file) => file.kind === "stylesheet") ?? [];
+  const plainCssFiles = stylesheetFiles.filter((file) => isPlainWritableCssFile(file.path));
   const hasCssEvidence =
     stylesheetFiles.length > 0 || projectContext.configFiles.some((file) => file.endsWith(".css"));
 
@@ -29,13 +35,17 @@ const detectCss = (projectContext: ProjectContext): AdapterDetectionResult => {
     adapterId: "css",
     name: "CSS",
     detected: hasCssEvidence,
-    confidence: hasCssEvidence ? 0.7 : 0.3,
+    confidence: plainCssFiles.length > 0 ? 0.75 : hasCssEvidence ? 0.45 : 0.3,
     evidence:
-      stylesheetFiles.length > 0
-        ? [`${stylesheetFiles.length} stylesheet file(s) indexed.`]
-        : hasCssEvidence
-          ? ["CSS files were found in the project summary."]
-          : [],
+      plainCssFiles.length > 0
+        ? [`${plainCssFiles.length} plain CSS stylesheet file(s) indexed.`]
+        : stylesheetFiles.length > 0
+          ? [
+              `${stylesheetFiles.length} stylesheet file(s) indexed, but none are writable plain CSS.`,
+            ]
+          : hasCssEvidence
+            ? ["CSS files were found in the project summary."]
+            : [],
   };
 };
 
@@ -62,125 +72,213 @@ const standaloneCssPatch = (changeIntent: UIChangeIntent, warning?: string): Pat
   ];
 };
 
-const selectorCandidatesFor = (changeIntent: UIChangeIntent): string[] => {
-  const candidates = [changeIntent.target.selector];
+const splitSelectorList = (selector: string): string[] =>
+  selector
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
 
-  if (changeIntent.target.id !== undefined && changeIntent.target.id.length > 0) {
-    candidates.push(`#${changeIntent.target.id}`);
-  }
-
-  candidates.push(...changeIntent.target.classList.map((className) => `.${className}`));
-
-  return Array.from(new Set(candidates));
+const isPlainWritableCssFile = (path: string): boolean => {
+  const lower = path.toLowerCase();
+  return lower.endsWith(".css") && !lower.endsWith(".module.css");
 };
 
-const scoreStylesheet = (file: ProjectSourceFile, changeIntent: UIChangeIntent): number => {
-  if (file.kind !== "stylesheet") {
-    return 0;
+const ruleContainsSelector = (rule: Rule, selector: string): boolean =>
+  splitSelectorList(rule.selector).includes(selector);
+
+const parseStylesheet = (file: ProjectSourceFile): Root | null => {
+  try {
+    return postcss.parse(file.content, { from: file.path });
+  } catch {
+    return null;
   }
+};
 
-  const selectorCandidates = selectorCandidatesFor(changeIntent);
-  let score = 0.45;
-
-  if (selectorCandidates.some((selector) => file.selectors.includes(selector))) {
-    score += 0.35;
-  }
-
-  if (
-    changeIntent.target.id !== undefined &&
-    changeIntent.target.id.length > 0 &&
-    file.ids.includes(changeIntent.target.id)
-  ) {
-    score += 0.12;
-  }
-
-  const matchingClasses = changeIntent.target.classList.filter((className) =>
-    file.classNames.includes(className),
-  ).length;
-
-  return Math.min(0.95, score + matchingClasses * 0.08);
+const hasExactSelectorInAst = (root: Root, selector: string): boolean => {
+  let found = false;
+  root.walkRules((rule) => {
+    if (ruleContainsSelector(rule, selector)) {
+      found = true;
+    }
+  });
+  return found;
 };
 
 const selectStylesheet = (
   projectContext: ProjectContext | undefined,
   changeIntent: UIChangeIntent,
-): { file: ProjectSourceFile; confidence: number } | null => {
+): { file: ProjectSourceFile; root: Root; confidence: number } | null => {
   const candidates =
-    projectContext?.sourceFiles?.filter((file) => file.kind === "stylesheet") ?? [];
+    projectContext?.sourceFiles?.filter(
+      (file) => file.kind === "stylesheet" && isPlainWritableCssFile(file.path),
+    ) ?? [];
 
-  if (candidates.length === 0) {
-    return null;
-  }
+  const exactMatches = candidates.flatMap((file) => {
+    const root = parseStylesheet(file);
 
-  return (
-    candidates
-      .map((file) => ({ file, confidence: scoreStylesheet(file, changeIntent) }))
-      .sort((a, b) => b.confidence - a.confidence || a.file.path.localeCompare(b.file.path))[0] ??
-    null
-  );
+    if (root === null || !hasExactSelectorInAst(root, changeIntent.target.selector)) {
+      return [];
+    }
+
+    return [{ file, root, confidence: 0.95 }];
+  });
+
+  return exactMatches.length === 1 ? exactMatches[0]! : null;
 };
 
-const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+type CssDeclarationOperation =
+  { kind: "set"; property: string; value: string } | { kind: "remove"; property: string };
 
-const upsertCssRule = (
-  content: string,
+type CssRuleOperation = {
+  selector: string;
+  mediaQuery: string | null;
+  operations: CssDeclarationOperation[];
+};
+
+const operationsFromChanges = (
   selector: string,
-  declarations: Record<string, string>,
-): string => {
-  const selectorPattern = escapeRegExp(selector).replaceAll(/\s+/g, "\\s+");
-  const ruleRegex = new RegExp(`${selectorPattern}\\s*\\{([\\s\\S]*?)\\}`, "m");
-  const declarationLines = Object.entries(declarations).map(
-    ([property, value]) => `  ${property}: ${value};`,
-  );
-  const existingRule = ruleRegex.exec(content);
+  changes: readonly StyleChange[],
+): CssRuleOperation[] => {
+  const grouped = new Map<string, CssRuleOperation>();
 
-  if (existingRule === null || existingRule.index === undefined) {
-    return `${content.trimEnd()}\n\n${buildCssRule(selector, declarations)}\n`;
-  }
-
-  const existingBody = existingRule[1] ?? "";
-  const changedProperties = new Set(Object.keys(declarations));
-  const retainedLines = existingBody
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-    .filter((line) => {
-      const propertyMatch = /^([-_a-zA-Z0-9]+)\s*:/.exec(line);
-      return propertyMatch === null || !changedProperties.has(propertyMatch[1] ?? "");
-    })
-    .map((line) => `  ${line}`);
-  const nextRule = `${selector} {\n${[...retainedLines, ...declarationLines].join("\n")}\n}`;
-
-  return `${content.slice(0, existingRule.index)}${nextRule}${content.slice(existingRule.index + existingRule[0].length)}`;
-};
-
-/** Parse a free-form CSS declaration string into a property/value record. */
-const parseCssDeclarations = (rawCss: string): Record<string, string> => {
-  const declarations: Record<string, string> = {};
-
-  for (const part of rawCss.replace(/\/\*[\s\S]*?\*\//g, "").split(";")) {
-    const trimmed = part.trim();
-    const colon = trimmed.indexOf(":");
-
-    if (colon <= 0) {
+  for (const change of changes) {
+    if (change.selector !== selector) {
       continue;
     }
 
-    const property = trimmed.slice(0, colon).trim();
-    const value = trimmed
-      .slice(colon + 1)
-      .trim()
-      .replace(/\s*!important\s*$/i, "");
+    const state = getStyleChangeState(change);
+    const responsiveTarget = getStyleChangeResponsiveTarget(change);
+    const ruleSelector = buildStyleTargetSelector(selector, state);
+    const mediaQuery = buildMediaQueryFromResponsiveTarget(responsiveTarget);
+    const key = `${mediaQuery ?? "all"}::${ruleSelector}`;
+    const group = grouped.get(key) ?? { selector: ruleSelector, mediaQuery, operations: [] };
 
-    if (property.length > 0 && value.length > 0) {
-      declarations[property] = value;
+    group.operations.push(
+      change.afterValue.trim().length === 0
+        ? { kind: "remove", property: change.property }
+        : { kind: "set", property: change.property, value: change.afterValue },
+    );
+    grouped.set(key, group);
+  }
+
+  return Array.from(grouped.values()).filter((record) => record.operations.length > 0);
+};
+
+const rawCssOperations = (changeIntent: UIChangeIntent): CssRuleOperation[] => {
+  if (changeIntent.rawCss === undefined) {
+    return [];
+  }
+
+  const operations = parseCssDeclarations(changeIntent.rawCss)
+    .filter((declaration) => declaration.enabled && declaration.value.trim().length > 0)
+    .map<CssDeclarationOperation>((declaration) => ({
+      kind: "set",
+      property: declaration.property.trim(),
+      value: declaration.value.trim().replace(/\s*!important\s*$/i, ""),
+    }));
+
+  return operations.length === 0
+    ? []
+    : [{ selector: changeIntent.target.selector, mediaQuery: null, operations }];
+};
+
+const firstRuleMatchingSelector = (container: Container, selector: string): Rule | null => {
+  let match: Rule | null = null;
+
+  container.walkRules((rule) => {
+    if (match === null && ruleContainsSelector(rule, selector)) {
+      match = rule;
+    }
+  });
+
+  return match;
+};
+
+const findOrCreateMedia = (root: Root, mediaQuery: string): AtRule => {
+  let match: AtRule | null = null;
+
+  root.walkAtRules("media", (rule) => {
+    if (match === null && rule.params.trim() === mediaQuery) {
+      match = rule;
+    }
+  });
+
+  if (match !== null) {
+    return match;
+  }
+
+  const media = postcss.atRule({ name: "media", params: mediaQuery });
+  root.append(media);
+  return media;
+};
+
+const ensureRule = (container: Container, selector: string): Rule => {
+  const existing = firstRuleMatchingSelector(container, selector);
+
+  if (existing !== null) {
+    return existing;
+  }
+
+  const rule = postcss.rule({ selector });
+  container.append(rule);
+  return rule;
+};
+
+const applyOperationsToRule = (
+  rule: Rule,
+  operations: readonly CssDeclarationOperation[],
+): void => {
+  for (const operation of operations) {
+    const existingDeclarations = rule.nodes?.filter(
+      (node) => node.type === "decl" && node.prop === operation.property,
+    );
+
+    if (operation.kind === "remove") {
+      existingDeclarations?.forEach((declaration) => declaration.remove());
+      continue;
+    }
+
+    const [first, ...duplicates] = existingDeclarations ?? [];
+
+    if (first !== undefined && first.type === "decl") {
+      first.value = operation.value;
+      duplicates.forEach((declaration) => declaration.remove());
+    } else {
+      rule.append(postcss.decl({ prop: operation.property, value: operation.value }));
     }
   }
 
-  return declarations;
+  if ((rule.nodes ?? []).filter((node) => node.type === "decl").length === 0) {
+    rule.remove();
+  }
 };
 
-/** A concrete, writable edit to a single stylesheet file. */
+const applyRuleOperations = (root: Root, operations: readonly CssRuleOperation[]): void => {
+  for (const operation of operations) {
+    const container =
+      operation.mediaQuery === null ? root : findOrCreateMedia(root, operation.mediaQuery);
+    const rule = ensureRule(container, operation.selector);
+    applyOperationsToRule(rule, operation.operations);
+  }
+};
+
+const unsupportedSourceWarning = (projectContext: ProjectContext | undefined): string => {
+  if (projectContext === undefined) {
+    return "No project context was provided for source-aware CSS placement.";
+  }
+
+  const sourceFiles = projectContext.sourceFiles ?? [];
+  const stylesheets = sourceFiles.filter((file) => file.kind === "stylesheet");
+  const unsupported = stylesheets.filter((file) => !isPlainWritableCssFile(file.path));
+
+  if (unsupported.length > 0 && stylesheets.length === unsupported.length) {
+    return "Only plain .css files are writable. CSS modules, Sass, Less, and other dialects are preview-only.";
+  }
+
+  return "No exact single plain-CSS owner rule was found. Automatic apply requires exactly one matching selector in one .css file.";
+};
+
+/** A concrete, writable edit to a single plain CSS stylesheet file. */
 export type CssFileEdit = {
   path: string;
   previousContent: string;
@@ -189,21 +287,21 @@ export type CssFileEdit = {
 };
 
 /**
- * Resolve the exact file edit for an intent: pick the best indexed stylesheet,
- * upsert the changed declarations (and any raw CSS), and return the new content
- * so callers can preview a diff or write the file. Returns null when nothing
- * changed or no source stylesheet is available.
+ * Resolve the exact file edit for an intent. Automatic writes are intentionally
+ * limited to a single ordinary .css file containing the exact captured selector.
+ * Unsupported dialects and ambiguous ownership return null so callers keep the
+ * operation preview/manual-only.
  */
 export const computeCssFileEdit = (
   changeIntent: UIChangeIntent,
   projectContext?: ProjectContext,
 ): CssFileEdit | null => {
-  const ruleRecords = styleChangesToRuleRecords(changeIntent.target.selector, changeIntent.changes);
-  const rawDeclarations =
-    changeIntent.rawCss !== undefined ? parseCssDeclarations(changeIntent.rawCss) : {};
-  const hasRawCss = Object.keys(rawDeclarations).length > 0;
+  const operations = [
+    ...operationsFromChanges(changeIntent.target.selector, changeIntent.changes),
+    ...rawCssOperations(changeIntent),
+  ];
 
-  if (ruleRecords.length === 0 && !hasRawCss) {
+  if (operations.length === 0) {
     return null;
   }
 
@@ -213,31 +311,17 @@ export const computeCssFileEdit = (
     return null;
   }
 
-  const baseRecords = ruleRecords.filter((record) => record.responsiveTarget === "all");
-  const responsiveChanges = changeIntent.changes.filter(
-    (change) => getStyleChangeResponsiveTarget(change) !== "all",
-  );
+  applyRuleOperations(selected.root, operations);
+  const nextContent = selected.root.toString();
 
-  let content = baseRecords.reduce(
-    (current, record) => upsertCssRule(current, record.selector, record.styles),
-    selected.file.content,
-  );
-
-  if (hasRawCss) {
-    content = upsertCssRule(content, changeIntent.target.selector, rawDeclarations);
-  }
-
-  if (responsiveChanges.length > 0) {
-    content = `${content.trimEnd()}\n\n${buildCssRulesFromChanges(
-      changeIntent.target.selector,
-      responsiveChanges,
-    )}\n`;
+  if (nextContent === selected.file.content) {
+    return null;
   }
 
   return {
     path: selected.file.path,
     previousContent: selected.file.content,
-    nextContent: content,
+    nextContent,
     confidence: selected.confidence,
   };
 };
@@ -257,17 +341,8 @@ const generateCssPatch = (
       return standaloneCssPatch(changeIntent, "No style declarations were changed.");
     }
 
-    return standaloneCssPatch(
-      changeIntent,
-      projectContext === undefined
-        ? "No project context was provided for source-aware CSS placement."
-        : "No indexed stylesheet source file was available for CSS placement.",
-    );
+    return standaloneCssPatch(changeIntent, unsupportedSourceWarning(projectContext));
   }
-
-  const responsiveChanges = changeIntent.changes.filter(
-    (change) => getStyleChangeResponsiveTarget(change) !== "all",
-  );
 
   return [
     {
@@ -275,14 +350,12 @@ const generateCssPatch = (
       title: `Apply CSS rule in ${edit.path}`,
       confidence: edit.confidence,
       explanation:
-        "Selected the best indexed stylesheet by matching selectors, ids, and classes from the captured element.",
+        "Selected the single plain CSS stylesheet containing the exact captured selector and updated it with PostCSS AST operations.",
       filesToChange: [edit.path],
       diffPreview: createUnifiedDiff(edit.path, edit.previousContent, edit.nextContent),
       warnings: [
-        "Review selector stability and cascade order before applying this patch.",
-        ...(responsiveChanges.length === 0
-          ? []
-          : ["Responsive media-query rules were appended for manual placement review."]),
+        "Automatic source writes are limited to plain .css files with one exact selector owner.",
+        "CSS modules, Sass, Less, Tailwind, and framework source files remain preview-only.",
       ],
       manualSteps: ["Apply the diff after confirming this stylesheet owns the selected UI."],
     },

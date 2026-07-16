@@ -10,6 +10,7 @@ export default defineConfig({
   // self-contained: `npx ui-buddy` must not depend on any @ui-buddy/* packages
   // being on npm. chalk/commander stay external and ship as real dependencies.
   noExternal: [/@ui-buddy\//],
+  external: ["postcss"],
   clean: true,
   dts: false,
   splitting: false,

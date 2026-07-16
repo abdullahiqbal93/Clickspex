@@ -20,7 +20,8 @@
   },
   "dependencies": {
     "@ui-buddy/core": "workspace:*",
-    "@ui-buddy/shared": "workspace:*"
+    "@ui-buddy/shared": "workspace:*",
+    "postcss": "^8.4.0"
   },
   "devDependencies": {
     "@ui-buddy/config": "workspace:*",
