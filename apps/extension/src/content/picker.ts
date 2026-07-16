@@ -18,6 +18,23 @@ import type {
 
 const DOM_TREE_CHILD_LIMIT = 100;
 
+const SVG_XLINK_NAMESPACE = "http://www.w3.org/1999/xlink";
+const XML_NAMESPACE = "http://www.w3.org/XML/1998/namespace";
+const IDENTITY_ATTRIBUTES = new Set(["id", "class"]);
+const URL_ATTRIBUTES = new Set([
+  "action",
+  "cite",
+  "formaction",
+  "href",
+  "poster",
+  "src",
+  "srcset",
+  "xlink:href",
+]);
+const SAFE_HREF_PROTOCOLS = new Set(["http:", "https:", "mailto:", "tel:", "sms:"]);
+const SAFE_RESOURCE_PROTOCOLS = new Set(["http:", "https:", "blob:"]);
+const SAFE_DATA_IMAGE_PATTERN = /^data:image\/(?:avif|gif|jpeg|jpg|png|webp);/i;
+
 const createEditId = (): string =>
   typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
     ? crypto.randomUUID()
@@ -57,6 +74,8 @@ type TextEditEntry = {
   before: string;
   after: string;
 };
+
+type AttributeNamespace = "html" | "svg-xlink" | "xml";
 
 type AttributeEditEntry = {
   element: Element;
@@ -122,6 +141,7 @@ export class ElementPickerController {
   private selectedSnapshot: ElementSnapshot | null = null;
   private selectedElementNode: Element | null = null;
   private isEditingText = false;
+  private cancelActiveTextEdit: (() => void) | null = null;
   private moveMode = false;
   private movingElement: HTMLElement | null = null;
   private moveCaptureElement: Element | null = null;
@@ -193,6 +213,7 @@ export class ElementPickerController {
       return;
     }
 
+    this.cancelActiveTextEdit?.();
     this.active = false;
     this.setMoveMode(false);
     this.hoveredElement = null;
@@ -290,7 +311,7 @@ export class ElementPickerController {
       return;
     }
 
-    entry.element.textContent = entry.before;
+    this.applyPlainTextEdit(entry.element, entry.before);
     this.textRedoStack.push(entry);
     this.refreshSnapshotFor(entry.element);
   }
@@ -302,7 +323,7 @@ export class ElementPickerController {
       return;
     }
 
-    entry.element.textContent = entry.after;
+    this.applyPlainTextEdit(entry.element, entry.after);
     this.textUndoStack.push(entry);
     this.refreshSnapshotFor(entry.element);
   }
@@ -621,20 +642,121 @@ export class ElementPickerController {
     }
   }
 
+  private attributeNamespace(name: string): AttributeNamespace {
+    const lowerName = name.toLowerCase();
+
+    if (lowerName === "xlink:href") {
+      return "svg-xlink";
+    }
+
+    if (lowerName === "xml:lang" || lowerName === "xml:space") {
+      return "xml";
+    }
+
+    return "html";
+  }
+
+  private readAttributeValue(element: Element, name: string): string | null {
+    switch (this.attributeNamespace(name)) {
+      case "svg-xlink":
+        return element.getAttributeNS(SVG_XLINK_NAMESPACE, "href") ?? element.getAttribute(name);
+      case "xml":
+        return element.getAttributeNS(XML_NAMESPACE, name.slice("xml:".length));
+      case "html":
+        return element.getAttribute(name);
+    }
+  }
+
   private applyAttributeValue(element: Element, name: string, value: string | null): void {
-    if (value === null) {
-      element.removeAttribute(name);
-    } else {
-      element.setAttribute(name, value);
+    switch (this.attributeNamespace(name)) {
+      case "svg-xlink":
+        if (value === null) {
+          element.removeAttributeNS(SVG_XLINK_NAMESPACE, "href");
+          element.removeAttribute(name);
+        } else {
+          element.setAttributeNS(SVG_XLINK_NAMESPACE, name, value);
+        }
+        return;
+      case "xml": {
+        const localName = name.slice("xml:".length);
+        if (value === null) {
+          element.removeAttributeNS(XML_NAMESPACE, localName);
+          element.removeAttribute(name);
+        } else {
+          element.setAttributeNS(XML_NAMESPACE, name, value);
+        }
+        return;
+      }
+      case "html":
+        if (value === null) {
+          element.removeAttribute(name);
+        } else {
+          element.setAttribute(name, value);
+        }
+    }
+  }
+
+  private validateUrlAttributeValue(element: Element, name: string, value: string): void {
+    const trimmedValue = value.trim();
+
+    if (trimmedValue.length === 0 || trimmedValue.startsWith("#")) {
+      return;
+    }
+
+    if (name.toLowerCase() === "srcset") {
+      for (const candidate of trimmedValue.split(",")) {
+        const [urlCandidate] = candidate.trim().split(/\s+/, 1);
+
+        if (urlCandidate !== undefined && urlCandidate.length > 0) {
+          this.validateUrlAttributeValue(element, "src", urlCandidate);
+        }
+      }
+      return;
+    }
+
+    let parsed: URL;
+
+    try {
+      parsed = new URL(trimmedValue, element.ownerDocument.baseURI);
+    } catch {
+      throw new Error(`Enter a valid URL for ${name}.`);
+    }
+
+    const lowerName = name.toLowerCase();
+    const isLink = lowerName === "href" || lowerName === "xlink:href" || lowerName === "cite";
+
+    if (parsed.protocol === "data:") {
+      if (!SAFE_DATA_IMAGE_PATTERN.test(trimmedValue)) {
+        throw new Error(`Only safe data image URLs are allowed for ${name}.`);
+      }
+      return;
+    }
+
+    const allowedProtocols = isLink ? SAFE_HREF_PROTOCOLS : SAFE_RESOURCE_PROTOCOLS;
+
+    if (!allowedProtocols.has(parsed.protocol)) {
+      throw new Error(`The ${parsed.protocol} protocol is not allowed for ${name}.`);
+    }
+  }
+
+  private validateAttributeChange(element: Element, name: string, value: string | null): void {
+    const lowerName = name.toLowerCase();
+
+    if (name.length === 0 || /[\s"'<>/=]/.test(name)) {
+      throw new Error("Enter a valid attribute name.");
+    }
+
+    if (/^on[a-z]/i.test(name)) {
+      throw new Error("Event-handler attributes are blocked for safety.");
+    }
+
+    if (value !== null && URL_ATTRIBUTES.has(lowerName)) {
+      this.validateUrlAttributeValue(element, lowerName, value);
     }
   }
 
   public updateElementAttribute(selector: string, rawName: string, value: string | null): void {
     const name = rawName.trim();
-
-    if (name.length === 0 || /[\s"'<>/=]/.test(name)) {
-      throw new Error("Enter a valid attribute name.");
-    }
 
     let element: Element | null = null;
 
@@ -648,7 +770,9 @@ export class ElementPickerController {
       throw new Error("The selected element is no longer available.");
     }
 
-    const before = element.getAttribute(name);
+    this.validateAttributeChange(element, name, value);
+
+    const before = this.readAttributeValue(element, name);
 
     if (before === value) {
       return;
@@ -656,6 +780,7 @@ export class ElementPickerController {
 
     const target = this.buildEditTarget(element);
     this.applyAttributeValue(element, name, value);
+    const afterTarget = this.buildEditTarget(element);
     this.attributeUndoStack.push({ element, name, before, after: value });
     this.attributeRedoStack.length = 0;
     this.callbacks.onStructuralEdit?.({
@@ -668,6 +793,9 @@ export class ElementPickerController {
         name,
         before: before ?? "(absent)",
         after: value ?? "(removed)",
+        beforeSelector: target.selector,
+        afterSelector: afterTarget.selector,
+        ...(IDENTITY_ATTRIBUTES.has(name.toLowerCase()) ? { identityAttribute: "true" } : {}),
       },
     });
     this.refreshSnapshotFor(element);
@@ -1475,10 +1603,63 @@ export class ElementPickerController {
     void sendRuntimeMessage({ type: "ELEMENT_SELECTED", payload: snapshot });
   }
 
+  private canEditAsPlainText(element: HTMLElement): boolean {
+    return element.childElementCount === 0;
+  }
+
+  private applyPlainTextEdit(element: HTMLElement, value: string): void {
+    element.textContent = value;
+  }
+
+  private restoreContentEditableAttribute(
+    element: HTMLElement,
+    originalValue: string | null,
+  ): void {
+    if (originalValue === null) {
+      element.removeAttribute("contenteditable");
+    } else {
+      element.setAttribute("contenteditable", originalValue);
+    }
+  }
+
+  private insertPlainTextAtSelection(element: HTMLElement, text: string): void {
+    const selection = window.getSelection();
+
+    if (selection === null || selection.rangeCount === 0) {
+      element.textContent = `${element.textContent ?? ""}${text}`;
+      return;
+    }
+
+    const range = selection.getRangeAt(0);
+
+    if (!element.contains(range.commonAncestorContainer)) {
+      element.textContent = `${element.textContent ?? ""}${text}`;
+      return;
+    }
+
+    range.deleteContents();
+    const node = document.createTextNode(text);
+    range.insertNode(node);
+    range.setStartAfter(node);
+    range.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+
   private beginTextEdit(element: HTMLElement): void {
+    if (!this.canEditAsPlainText(element)) {
+      throw new Error(
+        "Text editing is limited to leaf elements so child markup is not overwritten.",
+      );
+    }
+
+    this.cancelActiveTextEdit?.();
     this.isEditingText = true;
     const beforeText = element.textContent ?? "";
-    element.contentEditable = "true";
+    const originalContentEditable = element.getAttribute("contenteditable");
+    let finished = false;
+
+    element.setAttribute("contenteditable", "true");
     element.focus();
 
     const selection = window.getSelection();
@@ -1487,14 +1668,26 @@ export class ElementPickerController {
     selection?.removeAllRanges();
     selection?.addRange(range);
 
-    const onBlur = () => {
-      this.isEditingText = false;
-      element.contentEditable = "false";
-      element.removeEventListener("blur", onBlur);
+    const finish = (commit: boolean) => {
+      if (finished) {
+        return;
+      }
 
+      finished = true;
+      this.isEditingText = false;
+      this.cancelActiveTextEdit = null;
+      element.removeEventListener("blur", onBlur);
+      element.removeEventListener("keydown", onKeyDown, true);
+      element.removeEventListener("paste", onPaste, true);
+
+      if (!commit) {
+        this.applyPlainTextEdit(element, beforeText);
+      }
+
+      this.restoreContentEditableAttribute(element, originalContentEditable);
       const afterText = element.textContent ?? "";
 
-      if (afterText !== beforeText) {
+      if (commit && afterText !== beforeText) {
         this.textUndoStack.push({ element, before: beforeText, after: afterText });
         this.textRedoStack.length = 0;
         this.emitStructuralEdit(element, "text", "Edited text content", {
@@ -1506,7 +1699,31 @@ export class ElementPickerController {
       this.refreshSelectedSnapshot();
     };
 
+    const onBlur = () => finish(true);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        finish(false);
+        return;
+      }
+
+      if (event.key === "Enter") {
+        event.preventDefault();
+        event.stopPropagation();
+        element.blur();
+      }
+    };
+    const onPaste = (event: ClipboardEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      this.insertPlainTextAtSelection(element, event.clipboardData?.getData("text/plain") ?? "");
+    };
+
+    this.cancelActiveTextEdit = () => finish(false);
     element.addEventListener("blur", onBlur);
+    element.addEventListener("keydown", onKeyDown, true);
+    element.addEventListener("paste", onPaste, true);
   }
 
   private rememberMoveStyle(element: HTMLElement): InlineMoveStyle {

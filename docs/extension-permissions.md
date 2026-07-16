@@ -1,40 +1,34 @@
-# Extension Permissions
+# Extension permission justification
 
-The extension uses a small Manifest V3 permission set and avoids broad host permissions.
+This document records the shipped Chrome extension permissions for Web Store review and future audits.
 
-## activeTab
+## Required permissions
 
-`activeTab` allows the side panel to send commands to the current active tab after the user interacts with the extension. It is used for element picking, style changes, reset, undo/redo, measurement, and export commands.
+1. `activeTab`
+   - Used only after the user opens the side panel or starts an inspection action.
+   - Required for user-initiated screenshot capture and for injecting/recovering the content script in the inspected tab.
 
-## sidePanel
+2. `sidePanel`
+   - Required to provide the UI Buddy side panel UI.
 
-`sidePanel` enables the Chrome side panel UI. The extension also calls `chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true })` so the extension action opens the panel.
+3. `storage`
+   - Used for session-scoped pairing tokens, inspected-page context, and temporary in-progress edit state.
+   - Persistent source code is not stored in extension storage.
 
-## storage
+4. `scripting`
+   - Used for user-initiated content-script recovery, technology detection, and component-source lookup in the inspected tab.
 
-`storage` is available for extension state that needs Chrome-managed persistence. Current product state is mostly session-scoped, but this permission supports future local preferences without requesting a new permission.
+## Host permissions
 
-## scripting
+The extension declares only:
 
-`scripting` powers two features that must run in the page's MAIN JavaScript world (content scripts are isolated and cannot see page globals):
+- `http://*/*`
+- `https://*/*`
 
-- **Find source**: reads React fiber `_debugSource` / Vue `__file` metadata from the element the user marked, to open the component in the editor.
-- **Page tech detection**: inspects page globals (`__REACT_DEVTOOLS_GLOBAL_HOOK__`, `__NEXT_DATA__`, `Livewire`, `Alpine`, ...) and DOM markers.
+These match the content-script surface and intentionally exclude `file://`, browser-internal pages, and the previous `<all_urls>` grant. The local Code Sync bridge uses `http://127.0.0.1` or `http://localhost`, which are covered by the HTTP host pattern.
 
-Both are one-shot, user-initiated function injections. No remote code is ever injected.
+## Permission boundaries
 
-## host_permissions (http/https)
-
-`host_permissions: ["http://*/*", "https://*/*"]` mirrors the content-script match list. It exists because `chrome.scripting.executeScript` and `chrome.tabs.captureVisibleTab` (element screenshots) require host access to the page, and the transient `activeTab` grant expires on navigation, which made those features fail intermittently. The scope granted is the same set of pages the content script already runs on.
-
-## Content Script Matches
-
-The content script is registered for `http://*/*` and `https://*/*` so the picker and overlays are available on normal web pages. This is not a host permission grant for background access; content scripts run in matching pages and communicate through validated extension messages.
-
-## Content Security Policy
-
-Extension pages use `script-src 'self'; object-src 'self';`. Remote scripts are not allowed.
-
-## Not Requested
-
-The extension does not request `tabs`, `webRequest`, `cookies`, `history`, or `downloads`.
+- Restricted browser pages are rejected before messaging.
+- Source writes remain behind the explicit experimental Code Sync write flag.
+- Broader host access must not be added without updating this document and the manifest together.

@@ -420,7 +420,15 @@ chrome.runtime.onMessage.addListener(
       return false;
     }
 
-    void handleBackgroundCommand(rawMessage.command, rawMessage.context).then(sendResponse);
+    Promise.resolve()
+      .then(() => handleBackgroundCommand(rawMessage.command, rawMessage.context))
+      .then(sendResponse)
+      .catch((error: unknown) =>
+        sendResponse({
+          ok: false,
+          error: error instanceof Error ? error.message : "Background command failed.",
+        }),
+      );
     return true;
   },
 );

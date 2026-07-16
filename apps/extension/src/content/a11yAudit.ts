@@ -1,8 +1,7 @@
 import {
-  contrastRatio,
+  contrastRatioFromCssColors,
   generateUniqueSelector,
   getEffectiveBackgroundColor,
-  parseCssColor,
 } from "@ui-buddy/core";
 
 import type { A11yIssue } from "@ui-buddy/shared";
@@ -12,6 +11,14 @@ const MAX_ISSUES = 150;
 const TIME_BUDGET_MS = 600;
 
 const LABELLABLE_SELECTOR = "button, [role='button'], a[href], select, textarea";
+
+const cssEscape = (value: string): string => {
+  if (typeof CSS !== "undefined" && typeof CSS.escape === "function") {
+    return CSS.escape(value);
+  }
+
+  return value.replace(/[^a-zA-Z0-9_-]/g, (character) => `\\${character}`);
+};
 
 const hasDirectText = (element: Element): boolean =>
   Array.from(element.childNodes).some(
@@ -39,16 +46,29 @@ const accessibleName = (element: Element): string =>
   (element.textContent ?? "").trim() ||
   (element.querySelector("img[alt]")?.getAttribute("alt") ?? "").trim();
 
+const labelsForInput = (input: HTMLInputElement): HTMLLabelElement[] => {
+  const labels = Array.from(input.ownerDocument.querySelectorAll("label"));
+
+  return labels.filter((label) => {
+    if (label.control !== null) {
+      return label.control === input;
+    }
+
+    return input.id.length > 0 && label.getAttribute("for") === input.id;
+  });
+};
+
 const inputAccessibleName = (input: HTMLInputElement): string => {
-  const document = input.ownerDocument;
-  const byFor = input.id.length > 0 ? document.querySelector(`label[for="${input.id}"]`) : null;
+  const labels = labelsForInput(input)
+    .map((label) => label.textContent?.trim() ?? "")
+    .filter((label) => label.length > 0)
+    .join(" ")
+    .trim();
 
   return (
     (input.getAttribute("aria-label") ?? "").trim() ||
     resolveLabelledBy(input) ||
-    (byFor?.textContent ?? "").trim() ||
-    (input.closest("label")?.textContent ?? "").trim() ||
-    (input.getAttribute("placeholder") ?? "").trim() ||
+    labels ||
     (input.getAttribute("title") ?? "").trim()
   );
 };
@@ -59,6 +79,18 @@ const contrastThreshold = (styles: CSSStyleDeclaration): number => {
   const isLarge = fontSize >= 24 || (fontSize >= 18.66 && fontWeight >= 700);
   return isLarge ? 3 : 4.5;
 };
+
+const isDisabled = (element: Element): boolean =>
+  "disabled" in element && (element as HTMLButtonElement | HTMLInputElement).disabled === true;
+
+const isSkippedByVisibility = (element: Element, styles: CSSStyleDeclaration): boolean =>
+  isDisabled(element) ||
+  element.closest("[hidden], [aria-hidden='true'], [inert]") !== null ||
+  styles.display === "none" ||
+  styles.visibility === "hidden" ||
+  styles.visibility === "collapse" ||
+  styles.contentVisibility === "hidden" ||
+  Number.parseFloat(styles.opacity || "1") <= 0.01;
 
 /** Lightweight whole-page accessibility sweep. Not a full WCAG audit. */
 export const runA11yAudit = (): A11yIssue[] => {
@@ -92,7 +124,7 @@ export const runA11yAudit = (): A11yIssue[] => {
       if (
         !pushIssue({
           id: `duplicate-id-${id}`,
-          selector: `[id="${id}"]`,
+          selector: `[id="${cssEscape(id)}"]`,
           severity: "warning",
           title: "Duplicate id",
           message: `The id "${id}" appears ${count} times. Duplicate ids break label and ARIA references.`,
@@ -134,7 +166,7 @@ export const runA11yAudit = (): A11yIssue[] => {
 
     const styles = window.getComputedStyle(el);
 
-    if (styles.display === "none" || styles.visibility === "hidden") {
+    if (isSkippedByVisibility(el, styles)) {
       continue;
     }
 
@@ -161,7 +193,7 @@ export const runA11yAudit = (): A11yIssue[] => {
             selector: generateUniqueSelector(el),
             severity: "warning",
             title: "Input without a label",
-            message: "This input has no label, aria-label, or placeholder.",
+            message: "This input has no label, aria-label, aria-labelledby, or title.",
           })
         ) {
           break;
@@ -177,7 +209,7 @@ export const runA11yAudit = (): A11yIssue[] => {
           selector: generateUniqueSelector(el),
           severity: "warning",
           title: "Interactive element without accessible name",
-          message: `<${el.tagName.toLowerCase()}> has no text, aria-label, or title.`,
+          message: `<${el.tagName.toLowerCase()}> has no text, aria-label, aria-labelledby, or title.`,
         })
       ) {
         break;
@@ -186,25 +218,24 @@ export const runA11yAudit = (): A11yIssue[] => {
     }
 
     if (hasDirectText(el)) {
-      const foreground = parseCssColor(styles.getPropertyValue("color"));
-      const background = parseCssColor(getEffectiveBackgroundColor(el) ?? "");
+      const backgroundForContrast = getEffectiveBackgroundColor(el) ?? "";
+      const ratio = contrastRatioFromCssColors(
+        styles.getPropertyValue("color"),
+        backgroundForContrast,
+      );
+      const threshold = contrastThreshold(styles);
 
-      if (foreground !== null && background !== null && background.a >= 1) {
-        const ratio = contrastRatio(foreground, background);
-        const threshold = contrastThreshold(styles);
-
-        if (ratio < threshold) {
-          if (
-            !pushIssue({
-              id: `contrast-${issues.length}`,
-              selector: generateUniqueSelector(el),
-              severity: "warning",
-              title: "Low text contrast",
-              message: `Contrast is ${ratio}:1 (needs ${threshold}:1).`,
-            })
-          ) {
-            break;
-          }
+      if (ratio !== null && ratio < threshold) {
+        if (
+          !pushIssue({
+            id: `contrast-${issues.length}`,
+            selector: generateUniqueSelector(el),
+            severity: "warning",
+            title: "Low text contrast",
+            message: `Contrast is ${ratio}:1 (needs ${threshold}:1).`,
+          })
+        ) {
+          break;
         }
       }
     }

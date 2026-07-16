@@ -315,7 +315,8 @@ export const addRuntimeMessageListener = (handler: MessageHandler): (() => void)
       return false;
     }
 
-    Promise.resolve(handler(rawMessage, sender))
+    Promise.resolve()
+      .then(() => handler(rawMessage, sender))
       .then(() => sendResponse({ ok: true }))
       .catch((error: unknown) =>
         sendResponse({ ok: false, error: errorMessageFromUnknown(error) }),

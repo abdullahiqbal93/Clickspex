@@ -17,6 +17,12 @@ type MockTab = { id?: number; windowId?: number; url?: string };
 
 const pickerMessage: ExtensionMessage = { type: "PICKER_ENABLE" };
 
+const flushMessageResponse = async (): Promise<void> => {
+  for (let index = 0; index < 5; index += 1) {
+    await Promise.resolve();
+  }
+};
+
 const installChromeMock = (
   activeTab: MockTab | null = { id: 42, windowId: 1, url: "https://example.test" },
 ) => {
@@ -156,7 +162,7 @@ describe("Chrome messaging helpers", () => {
     const sendResponse = vi.fn<(response: MessageResponse) => void>();
 
     const didRespondAsync = chromeMock.listener?.(pickerMessage, {}, sendResponse);
-    await Promise.resolve();
+    await flushMessageResponse();
 
     expect(didRespondAsync).toBe(true);
     expect(handler).toHaveBeenCalledWith(pickerMessage, {});
@@ -167,6 +173,20 @@ describe("Chrome messaging helpers", () => {
     expect(chromeMock.removeListener).toHaveBeenCalled();
   });
 
+  it("turns synchronous handler failures into error responses", async () => {
+    const chromeMock = installChromeMock();
+    const handler = vi.fn(() => {
+      throw new Error("sync boom");
+    });
+    addRuntimeMessageListener(handler);
+    const sendResponse = vi.fn<(response: MessageResponse) => void>();
+
+    const didRespondAsync = chromeMock.listener?.(pickerMessage, {}, sendResponse);
+    await flushMessageResponse();
+
+    expect(didRespondAsync).toBe(true);
+    expect(sendResponse).toHaveBeenCalledWith({ ok: false, error: "sync boom" });
+  });
   it("ignores invalid runtime messages", () => {
     const chromeMock = installChromeMock();
     const handler = vi.fn();

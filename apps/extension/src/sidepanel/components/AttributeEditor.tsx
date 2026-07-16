@@ -22,6 +22,18 @@ export const AttributeEditor = ({ element }: AttributeEditorProps) => {
 
   const updateAttribute = async (name: string, value: string | null) => {
     setError(null);
+
+    if (
+      ["id", "class"].includes(name.trim().toLowerCase()) &&
+      value !== element.attributes[name] &&
+      !window.confirm(
+        `${name} is an identity attribute. Changing it can affect selectors, styles, tests, and source mapping. Continue?`,
+      )
+    ) {
+      setDrafts(element.attributes);
+      return;
+    }
+
     try {
       await sendMessageToActiveTab({
         type: "UPDATE_ELEMENT_ATTRIBUTE",

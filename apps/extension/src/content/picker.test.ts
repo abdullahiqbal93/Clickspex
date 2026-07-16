@@ -639,11 +639,13 @@ describe("ElementPickerController", () => {
       expect.objectContaining({
         kind: "attribute",
         summary: "Set aria-label",
-        details: {
+        details: expect.objectContaining({
           name: "aria-label",
           before: "Profile card",
           after: "Account card",
-        },
+          beforeSelector: "#card",
+          afterSelector: "#card",
+        }),
       }),
     );
 
@@ -660,5 +662,86 @@ describe("ElementPickerController", () => {
     expect(() => picker.updateElementAttribute("#card", "bad name", "value")).toThrow(
       "Enter a valid attribute name.",
     );
+  });
+
+  it("blocks unsafe attribute edits and preserves SVG namespaces", () => {
+    document.documentElement.innerHTML =
+      "<head></head><body><a id='link' href='/home'>Home</a><svg><use id='icon'></use></svg></body>";
+    const picker = new ElementPickerController(new OverlayController());
+    const icon = document.getElementById("icon");
+    const link = document.getElementById("link");
+
+    if (icon === null || link === null) {
+      throw new Error("Expected attribute hardening fixture.");
+    }
+
+    expect(() => picker.updateElementAttribute("#link", "onclick", "alert(1)")).toThrow(
+      "Event-handler attributes are blocked for safety.",
+    );
+    expect(() => picker.updateElementAttribute("#link", "href", "javascript:alert(1)")).toThrow(
+      "javascript: protocol is not allowed for href.",
+    );
+
+    picker.updateElementAttribute("#icon", "xlink:href", "https://example.test/icon.svg#save");
+
+    expect(icon.getAttributeNS("http://www.w3.org/1999/xlink", "href")).toBe(
+      "https://example.test/icon.svg#save",
+    );
+  });
+
+  it("edits only leaf text, restores contenteditable, and cancels on Escape", () => {
+    const edits: StructuralEdit[] = [];
+    const picker = new ElementPickerController(new OverlayController(), {
+      onStructuralEdit: (edit) => edits.push(edit),
+    });
+    const button = document.getElementById("save") as HTMLElement | null;
+
+    if (button === null) {
+      throw new Error("Expected text edit fixture.");
+    }
+
+    button.setAttribute("contenteditable", "plaintext-only");
+    picker.enable("select");
+    button.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    picker.startTextEdit();
+    button.textContent = "Changed";
+    button.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+
+    expect(button.textContent).toBe("Save");
+    expect(button.getAttribute("contenteditable")).toBe("plaintext-only");
+    expect(edits).toHaveLength(0);
+
+    picker.startTextEdit();
+    button.textContent = "Saved";
+    button.blur();
+
+    expect(button.textContent).toBe("Saved");
+    expect(button.getAttribute("contenteditable")).toBe("plaintext-only");
+    expect(edits[0]).toEqual(
+      expect.objectContaining({
+        kind: "text",
+        summary: "Edited text content",
+        details: { before: "Save", after: "Saved" },
+      }),
+    );
+  });
+
+  it("refuses plain-text editing on containers with child markup", () => {
+    document.documentElement.innerHTML =
+      "<head></head><body><button id='compound'><span>Save</span><strong> now</strong></button></body>";
+    const picker = new ElementPickerController(new OverlayController());
+    const compound = document.getElementById("compound");
+
+    if (compound === null) {
+      throw new Error("Expected compound text fixture.");
+    }
+
+    picker.enable("select");
+    compound.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+
+    expect(() => picker.startTextEdit()).toThrow(
+      "Text editing is limited to leaf elements so child markup is not overwritten.",
+    );
+    expect(compound.innerHTML).toBe("<span>Save</span><strong> now</strong>");
   });
 });

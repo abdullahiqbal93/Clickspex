@@ -15,13 +15,10 @@ export default defineManifest({
     default_title: "Open ui-buddy",
   },
   permissions: ["activeTab", "sidePanel", "storage", "scripting"],
-  // `<all_urls>` is the permission chrome.tabs.captureVisibleTab explicitly
-  // checks for; the http/https patterns alone can leave it dependent on a fresh
-  // activeTab grant, which produced the "<all_urls> or activeTab required"
-  // error. It also covers source lookup / tech detection (scripting MAIN world).
-  // The explicit localhost patterns document (and guarantee) the side panel's
-  // fetch to the `ui-buddy connect` Code Sync bridge.
-  host_permissions: ["<all_urls>", "http://127.0.0.1/*", "http://localhost/*"],
+  // Content inspection is limited to HTTP(S) pages. `activeTab` grants the
+  // currently inspected page for captureVisibleTab and user-initiated scripts;
+  // localhost is covered by the HTTP pattern for the local Code Sync bridge.
+  host_permissions: ["http://*/*", "https://*/*"],
   side_panel: {
     default_path: "sidepanel.html",
   },
