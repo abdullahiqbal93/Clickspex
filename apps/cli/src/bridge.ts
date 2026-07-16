@@ -32,6 +32,8 @@ const BACKUP_ID_PATTERN = /^[A-Za-z0-9_-]{1,80}$/;
 const EXTENSION_ID_PATTERN = /^[a-p]{32}$/;
 const REQUEST_TIMEOUT_MS = 15_000;
 const HEADERS_TIMEOUT_MS = 5_000;
+const PREVIEW_TTL_MS = 10 * 60 * 1000;
+const MAX_PREVIEW_ARTIFACTS = 25;
 
 class BridgeHttpError extends Error {
   constructor(
@@ -150,6 +152,10 @@ const validateSafeExistingPath = async (
 const stableProjectId = (canonicalRoot: string): string =>
   createHash("sha256").update(canonicalRoot).digest("hex").slice(0, 32);
 
+const contentHash = (content: string): string => createHash("sha256").update(content).digest("hex");
+
+const hashSession = (session: UIChangeSession): string => contentHash(JSON.stringify(session));
+
 const generatePairingCode = (): string => randomInt(0, 1_000_000).toString().padStart(6, "0");
 
 const generateToken = (): string => randomBytes(32).toString("base64url");
@@ -165,39 +171,122 @@ export type PreviewElement = {
 
 export type PreviewResult = BridgePreviewResponse;
 
-const previewSession = async (
-  session: UIChangeSession,
-  rootPath: string,
-): Promise<PreviewResult> => {
-  const projectContext = await scanProjectContext(rootPath, { includeSource: true });
+type PreviewArtifactFile = BridgePreviewResponse["files"][number] & {
+  beforeContent: string;
+  afterContent: string;
+};
 
-  const elements: PreviewElement[] = session.elements.map((intent) => {
+type StoredPreviewArtifact = Omit<BridgePreviewResponse, "ok" | "files"> & {
+  files: PreviewArtifactFile[];
+};
+
+const previewResponseFromArtifact = (artifact: StoredPreviewArtifact): BridgePreviewResponse => ({
+  ok: true,
+  previewId: artifact.previewId,
+  sessionHash: artifact.sessionHash,
+  projectId: artifact.projectId,
+  bridgeInstanceId: artifact.bridgeInstanceId,
+  createdAt: artifact.createdAt,
+  expiresAt: artifact.expiresAt,
+  files: artifact.files.map(({ path, beforeHash, afterHash, diff }) => ({
+    path,
+    beforeHash,
+    afterHash,
+    diff,
+  })),
+  sessionId: artifact.sessionId,
+  root: artifact.root,
+  elements: artifact.elements,
+  structuralEdits: artifact.structuralEdits,
+});
+
+const createPreviewArtifact = async (
+  session: UIChangeSession,
+  config: Pick<BridgeRuntimeConfig, "canonicalRoot" | "projectId" | "bridgeInstanceId">,
+): Promise<StoredPreviewArtifact> => {
+  const projectContext: ProjectContext = await scanProjectContext(config.canonicalRoot, {
+    includeSource: true,
+  });
+  const originalByPath = new Map<string, string>();
+  for (const file of projectContext.sourceFiles ?? []) {
+    originalByPath.set(file.path, file.content);
+  }
+
+  const elements: PreviewElement[] = [];
+  const touchedPaths = new Set<string>();
+
+  for (const intent of session.elements) {
     const edit = computeCssFileEdit(intent, projectContext);
 
     if (edit === null) {
-      return {
+      elements.push({
         selector: intent.target.selector,
         file: null,
         confidence: 0,
         diff: null,
         applicable: false,
         note: "No indexed stylesheet matched this element.",
-      };
+      });
+      continue;
     }
 
-    return {
+    const applicable = edit.previousContent !== edit.nextContent;
+
+    elements.push({
       selector: intent.target.selector,
       file: edit.path,
       confidence: edit.confidence,
       diff: createUnifiedDiff(edit.path, edit.previousContent, edit.nextContent),
-      applicable: edit.previousContent !== edit.nextContent,
-    };
-  });
+      applicable,
+    });
+
+    if (!applicable) {
+      continue;
+    }
+
+    const sourceFile = projectContext.sourceFiles?.find((file) => file.path === edit.path);
+    if (sourceFile !== undefined) {
+      sourceFile.content = edit.nextContent;
+    }
+    touchedPaths.add(edit.path);
+  }
+
+  const files: PreviewArtifactFile[] = [];
+  for (const relPath of touchedPaths) {
+    const beforeContent = originalByPath.get(relPath);
+    const afterContent = projectContext.sourceFiles?.find((file) => file.path === relPath)?.content;
+
+    if (
+      beforeContent === undefined ||
+      afterContent === undefined ||
+      beforeContent === afterContent
+    ) {
+      continue;
+    }
+
+    files.push({
+      path: relPath,
+      beforeHash: contentHash(beforeContent),
+      afterHash: contentHash(afterContent),
+      diff: createUnifiedDiff(relPath, beforeContent, afterContent),
+      beforeContent,
+      afterContent,
+    });
+  }
+
+  const createdAt = new Date();
+  const expiresAt = new Date(createdAt.getTime() + PREVIEW_TTL_MS);
 
   return {
-    ok: true,
+    previewId: randomUUID(),
+    sessionHash: hashSession(session),
+    projectId: config.projectId,
+    bridgeInstanceId: config.bridgeInstanceId,
+    createdAt: createdAt.toISOString(),
+    expiresAt: expiresAt.toISOString(),
+    files,
     sessionId: session.id,
-    root: rootPath,
+    root: config.canonicalRoot,
     elements,
     structuralEdits: session.structuralEdits.map((edit) => ({
       kind: edit.kind,
@@ -205,6 +294,21 @@ const previewSession = async (
       summary: edit.summary,
     })),
   };
+};
+
+const previewSession = async (
+  session: UIChangeSession,
+  rootPath: string,
+): Promise<PreviewResult> => {
+  const canonicalRoot = await validateProjectRoot(rootPath);
+
+  return previewResponseFromArtifact(
+    await createPreviewArtifact(session, {
+      canonicalRoot,
+      projectId: stableProjectId(canonicalRoot),
+      bridgeInstanceId: "direct-preview",
+    }),
+  );
 };
 
 export type ApplyResult = BridgeApplyResponse;
@@ -314,6 +418,171 @@ const applySession = async (
   return { ok: true, backupId, applied, skipped };
 };
 
+const pruneExpiredPreviewArtifacts = (
+  config: Pick<BridgeRuntimeConfig, "previewArtifacts">,
+): void => {
+  const now = Date.now();
+
+  for (const [previewId, artifact] of config.previewArtifacts) {
+    const expiresAt = Date.parse(artifact.expiresAt);
+    if (!Number.isFinite(expiresAt) || expiresAt <= now) {
+      config.previewArtifacts.delete(previewId);
+    }
+  }
+};
+
+const storePreviewArtifact = (
+  config: Pick<BridgeRuntimeConfig, "previewArtifacts">,
+  artifact: StoredPreviewArtifact,
+): void => {
+  pruneExpiredPreviewArtifacts(config);
+  config.previewArtifacts.set(artifact.previewId, artifact);
+
+  while (config.previewArtifacts.size > MAX_PREVIEW_ARTIFACTS) {
+    const oldestPreviewId = config.previewArtifacts.keys().next().value;
+    if (oldestPreviewId === undefined) {
+      break;
+    }
+    config.previewArtifacts.delete(oldestPreviewId);
+  }
+};
+
+const verifiedPreviewSourceContents = async (
+  config: Pick<BridgeRuntimeConfig, "canonicalRoot" | "projectId" | "bridgeInstanceId">,
+  artifact: StoredPreviewArtifact,
+): Promise<Map<string, string>> => {
+  if (
+    artifact.projectId !== config.projectId ||
+    artifact.bridgeInstanceId !== config.bridgeInstanceId
+  ) {
+    throw new BridgeHttpError(
+      409,
+      "PREVIEW_STALE",
+      "Preview was created for a different bridge instance. Rerun preview.",
+    );
+  }
+
+  const expiresAt = Date.parse(artifact.expiresAt);
+  if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+    throw new BridgeHttpError(410, "PREVIEW_EXPIRED", "Preview expired. Rerun preview.");
+  }
+
+  const currentByPath = new Map<string, string>();
+
+  for (const file of artifact.files) {
+    const absPath = resolve(config.canonicalRoot, file.path);
+
+    if (!isInsideRoot(config.canonicalRoot, absPath)) {
+      throw new BridgeHttpError(
+        400,
+        "BAD_REQUEST",
+        "Preview file resolves outside the project root.",
+      );
+    }
+
+    await validateSafeExistingPath(config.canonicalRoot, absPath);
+    const currentContent = await readFile(absPath, "utf8");
+
+    if (contentHash(currentContent) !== file.beforeHash) {
+      throw new BridgeHttpError(
+        409,
+        "PREVIEW_STALE",
+        "Source changed after preview. Rerun preview before applying.",
+        { path: file.path },
+      );
+    }
+
+    currentByPath.set(file.path, currentContent);
+  }
+
+  return currentByPath;
+};
+
+const applyPreviewArtifact = async (
+  config: Pick<
+    BridgeRuntimeConfig,
+    "canonicalRoot" | "projectId" | "bridgeInstanceId" | "previewArtifacts"
+  >,
+  previewId: string,
+): Promise<ApplyResult> => {
+  const artifact = config.previewArtifacts.get(previewId);
+
+  if (artifact === undefined) {
+    pruneExpiredPreviewArtifacts(config);
+    throw new BridgeHttpError(
+      404,
+      "PREVIEW_NOT_FOUND",
+      "Preview artifact was not found. Rerun preview.",
+    );
+  }
+
+  try {
+    const currentByPath = await verifiedPreviewSourceContents(config, artifact);
+    const applied = artifact.elements
+      .filter(
+        (element): element is PreviewElement & { file: string } =>
+          element.applicable && element.file !== null,
+      )
+      .map((element) => ({ selector: element.selector, file: element.file }));
+    const skipped = artifact.elements
+      .filter((element) => !element.applicable)
+      .map((element) => ({
+        selector: element.selector,
+        reason: element.note ?? "No change to write.",
+      }));
+
+    if (artifact.files.length === 0) {
+      config.previewArtifacts.delete(previewId);
+      return { ok: true, backupId: null, applied, skipped };
+    }
+
+    const backupId = new Date().toISOString().replace(/[:.]/g, "-");
+    const backupRoot = join(config.canonicalRoot, UI_BUDDY_DIR, "backups", backupId);
+    const backedUp: string[] = [];
+
+    await mkdir(join(config.canonicalRoot, UI_BUDDY_DIR), { recursive: true });
+    await writeFile(
+      join(config.canonicalRoot, UI_BUDDY_DIR, ".gitignore"),
+      "backups/\nlast-backup.json\n",
+      "utf8",
+    );
+
+    for (const file of artifact.files) {
+      const absPath = resolve(config.canonicalRoot, file.path);
+      const original = currentByPath.get(file.path) ?? file.beforeContent;
+      const backupPath = join(backupRoot, file.path);
+
+      await mkdir(dirname(backupPath), { recursive: true });
+      await writeFile(backupPath, original, "utf8");
+      await writeFile(absPath, file.afterContent, "utf8");
+      backedUp.push(file.path);
+    }
+
+    await writeFile(
+      join(backupRoot, "manifest.json"),
+      `${JSON.stringify({ backupId, previewId, files: backedUp, createdAt: new Date().toISOString() }, null, 2)}\n`,
+      "utf8",
+    );
+    await writeFile(
+      join(config.canonicalRoot, UI_BUDDY_DIR, "last-backup.json"),
+      `${JSON.stringify({ backupId }, null, 2)}\n`,
+      "utf8",
+    );
+
+    config.previewArtifacts.delete(previewId);
+    return { ok: true, backupId, applied, skipped };
+  } catch (error) {
+    if (
+      error instanceof BridgeHttpError &&
+      (error.code === "PREVIEW_EXPIRED" || error.code === "PREVIEW_STALE")
+    ) {
+      config.previewArtifacts.delete(previewId);
+    }
+
+    throw error;
+  }
+};
+
 export type RollbackResult = BridgeRollbackResponse;
 
 const rollback = async (rootPath: string, backupId?: string): Promise<RollbackResult> => {
@@ -359,6 +628,7 @@ type BridgeRuntimeConfig = {
   allowAnyExtensionOrigin: boolean;
   allowUnauthenticatedLocalAccess: boolean;
   bodyLimitBytes: number;
+  previewArtifacts: Map<string, StoredPreviewArtifact>;
 };
 
 const expectedOrigin = (config: BridgeRuntimeConfig): string | null =>
@@ -559,6 +829,7 @@ export const startBridge = async (options: {
     allowAnyExtensionOrigin: options.allowAnyExtensionOrigin === true,
     allowUnauthenticatedLocalAccess: options.allowUnauthenticatedLocalAccess === true,
     bodyLimitBytes: options.bodyLimitBytes ?? DEFAULT_BODY_LIMIT_BYTES,
+    previewArtifacts: new Map(),
   };
 
   const server = createServer((req, res) => {
@@ -618,7 +889,9 @@ export const startBridge = async (options: {
           assertRequestAllowed(req, config);
           assertAuthenticated(req, config);
           const body = parseBody(bridgePreviewRequestSchema, await readJsonBody(req, config));
-          sendJson(res, 200, await previewSession(body.session, canonicalRoot), origin, config);
+          const artifact = await createPreviewArtifact(body.session, config);
+          storePreviewArtifact(config, artifact);
+          sendJson(res, 200, previewResponseFromArtifact(artifact), origin, config);
           return;
         }
 
@@ -636,13 +909,7 @@ export const startBridge = async (options: {
           }
 
           const body = parseBody(bridgeApplyRequestSchema, await readJsonBody(req, config));
-          sendJson(
-            res,
-            200,
-            await applySession(body.session, canonicalRoot, body.selectors),
-            origin,
-            config,
-          );
+          sendJson(res, 200, await applyPreviewArtifact(config, body.previewId), origin, config);
           return;
         }
 

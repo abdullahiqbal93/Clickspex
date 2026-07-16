@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { applySession, previewSession, rollback, startBridge } from "./bridge.js";
 
-import type { UIChangeSession } from "@ui-buddy/shared";
+import type { BridgePreviewResponse, UIChangeSession } from "@ui-buddy/shared";
 
 const roots: string[] = [];
 const EXTENSION_ID = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -39,6 +39,32 @@ const pairBridge = async (base: string, pairingCode: string): Promise<string> =>
   expect(body.token).toEqual(expect.any(String));
   return body.token;
 };
+
+const previewViaBridge = async (base: string, token: string): Promise<BridgePreviewResponse> => {
+  const response = await fetch(`${base}/preview`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${token}`,
+      origin: EXTENSION_ORIGIN,
+    },
+    body: JSON.stringify({ session: session() }),
+  });
+
+  expect(response.status).toBe(200);
+  return (await response.json()) as BridgePreviewResponse;
+};
+
+const applyPreviewViaBridge = async (base: string, token: string, previewId: string) =>
+  fetch(`${base}/apply`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${token}`,
+      origin: EXTENSION_ORIGIN,
+    },
+    body: JSON.stringify({ previewId }),
+  });
 
 const session = (): UIChangeSession => ({
   id: "session-1",
@@ -87,11 +113,21 @@ const session = (): UIChangeSession => ({
 });
 
 describe("bridge preview/apply/rollback", () => {
-  it("previews a diff for a matched stylesheet", async () => {
+  it("previews immutable artifact metadata for a matched stylesheet", async () => {
     const root = await makeProject();
 
     const result = await previewSession(session(), root);
 
+    expect(result.previewId).toEqual(expect.any(String));
+    expect(result.sessionHash).toEqual(expect.any(String));
+    expect(result.projectId).toEqual(expect.any(String));
+    expect(result.bridgeInstanceId).toBe("direct-preview");
+    expect(Date.parse(result.createdAt)).not.toBeNaN();
+    expect(Date.parse(result.expiresAt)).toBeGreaterThan(Date.parse(result.createdAt));
+    expect(result.files).toHaveLength(1);
+    expect(result.files[0]).toMatchObject({ path: "src/styles.css" });
+    expect(result.files[0]?.beforeHash).not.toBe(result.files[0]?.afterHash);
+    expect(result.files[0]?.diff).toContain("color: #ff0000");
     expect(result.elements[0]?.applicable).toBe(true);
     expect(result.elements[0]?.file).toBe("src/styles.css");
     expect(result.elements[0]?.diff).toContain("color: #ff0000");
@@ -166,15 +202,8 @@ describe("bridge preview/apply/rollback", () => {
     try {
       const base = `http://127.0.0.1:${bridge.port}`;
       const token = await pairBridge(base, bridge.pairingCode);
-      const blocked = await fetch(`${base}/apply`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${token}`,
-          origin: EXTENSION_ORIGIN,
-        },
-        body: JSON.stringify({ session: session() }),
-      });
+      const preview = await previewViaBridge(base, token);
+      const blocked = await applyPreviewViaBridge(base, token, preview.previewId);
 
       expect(blocked.status).toBe(403);
       await expect(blocked.json()).resolves.toMatchObject({
@@ -198,7 +227,32 @@ describe("bridge preview/apply/rollback", () => {
     try {
       const base = `http://127.0.0.1:${writeEnabledBridge.port}`;
       const token = await pairBridge(base, writeEnabledBridge.pairingCode);
-      const applied = await fetch(`${base}/apply`, {
+      const preview = await previewViaBridge(base, token);
+      const applied = await applyPreviewViaBridge(base, token, preview.previewId);
+
+      expect(applied.status).toBe(200);
+      await expect(applied.json()).resolves.toMatchObject({ ok: true });
+
+      const afterApply = await readFile(join(root, "src", "styles.css"), "utf8");
+      expect(afterApply).toContain("color: #ff0000");
+    } finally {
+      writeEnabledBridge.close();
+    }
+  });
+
+  it("rejects legacy mutable session apply requests", async () => {
+    const root = await makeProject();
+    const bridge = await startBridge({
+      rootPath: root,
+      port: 0,
+      codeSyncWriteEnabled: true,
+      allowedExtensionId: EXTENSION_ID,
+    });
+
+    try {
+      const base = `http://127.0.0.1:${bridge.port}`;
+      const token = await pairBridge(base, bridge.pairingCode);
+      const response = await fetch(`${base}/apply`, {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -208,13 +262,63 @@ describe("bridge preview/apply/rollback", () => {
         body: JSON.stringify({ session: session() }),
       });
 
-      expect(applied.status).toBe(200);
-      await expect(applied.json()).resolves.toMatchObject({ ok: true });
-
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toMatchObject({ ok: false, code: "BAD_REQUEST" });
       const afterApply = await readFile(join(root, "src", "styles.css"), "utf8");
-      expect(afterApply).toContain("color: #ff0000");
+      expect(afterApply).toContain("color: #000000");
     } finally {
-      writeEnabledBridge.close();
+      bridge.close();
+    }
+  });
+
+  it("rejects stale preview artifacts when source changes after preview", async () => {
+    const root = await makeProject();
+    const bridge = await startBridge({
+      rootPath: root,
+      port: 0,
+      codeSyncWriteEnabled: true,
+      allowedExtensionId: EXTENSION_ID,
+    });
+
+    try {
+      const base = `http://127.0.0.1:${bridge.port}`;
+      const token = await pairBridge(base, bridge.pairingCode);
+      const preview = await previewViaBridge(base, token);
+      await writeFile(join(root, "src", "styles.css"), "#save {\n  color: #111111;\n}\n", "utf8");
+
+      const response = await applyPreviewViaBridge(base, token, preview.previewId);
+
+      expect(response.status).toBe(409);
+      await expect(response.json()).resolves.toMatchObject({ ok: false, code: "PREVIEW_STALE" });
+      const afterApply = await readFile(join(root, "src", "styles.css"), "utf8");
+      expect(afterApply).toContain("color: #111111");
+      expect(afterApply).not.toContain("#ff0000");
+    } finally {
+      bridge.close();
+    }
+  });
+
+  it("does not allow replaying an already applied preview artifact", async () => {
+    const root = await makeProject();
+    const bridge = await startBridge({
+      rootPath: root,
+      port: 0,
+      codeSyncWriteEnabled: true,
+      allowedExtensionId: EXTENSION_ID,
+    });
+
+    try {
+      const base = `http://127.0.0.1:${bridge.port}`;
+      const token = await pairBridge(base, bridge.pairingCode);
+      const preview = await previewViaBridge(base, token);
+      const applied = await applyPreviewViaBridge(base, token, preview.previewId);
+      expect(applied.status).toBe(200);
+
+      const replay = await applyPreviewViaBridge(base, token, preview.previewId);
+      expect(replay.status).toBe(404);
+      await expect(replay.json()).resolves.toMatchObject({ ok: false, code: "PREVIEW_NOT_FOUND" });
+    } finally {
+      bridge.close();
     }
   });
 

@@ -66,6 +66,7 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
   const [error, setError] = useState<string | null>(null);
 
   const baseUrl = `http://127.0.0.1:${port}`;
+  const sessionFingerprint = JSON.stringify(session);
 
   const clearBridgeState = () => {
     setHealth(null);
@@ -127,6 +128,12 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
       void checkHealth(savedPort);
     });
   }, [checkHealth]);
+
+  useEffect(() => {
+    setPreview(null);
+    setApplyResult(null);
+    setConfirming(false);
+  }, [sessionFingerprint]);
 
   const savePort = (nextPort: string) => {
     setPort(nextPort);
@@ -213,6 +220,19 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
       return;
     }
 
+    if (preview === null) {
+      setError("Preview the diff before applying source changes.");
+      return;
+    }
+
+    const expiresAt = Date.parse(preview.expiresAt);
+    if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+      setPreview(null);
+      setConfirming(false);
+      setError("Preview expired. Run Preview diff again before applying.");
+      return;
+    }
+
     setBusy(true);
     setError(null);
     setConfirming(false);
@@ -223,13 +243,16 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
         {
           method: "POST",
           headers: { "content-type": "application/json", ...authHeaders() },
-          body: JSON.stringify({ session }),
+          body: JSON.stringify({ previewId: preview.previewId }),
         },
         15000,
         parseBridgeApplyResponse,
       );
+      setPreview(null);
       setApplyResult(result);
     } catch (caughtError) {
+      setPreview(null);
+      setConfirming(false);
       setError(caughtError instanceof Error ? caughtError.message : "Apply failed.");
     } finally {
       setBusy(false);
@@ -271,6 +294,10 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
   };
 
   const applicablePreviews = preview?.elements.filter((element) => element.applicable) ?? [];
+  const previewExpiresAtMs = preview === null ? null : Date.parse(preview.expiresAt);
+  const hasExpiredPreview =
+    previewExpiresAtMs !== null &&
+    (!Number.isFinite(previewExpiresAtMs) || previewExpiresAtMs <= Date.now());
   const isPaired = bridgeToken !== null;
   const canWriteToCode = connection === "connected" && codeSyncWriteEnabled && isPaired;
 
@@ -406,7 +433,9 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
           ) : (
             <button
               className="ub-btn-primary"
-              disabled={!canWriteToCode || busy || applicablePreviews.length === 0}
+              disabled={
+                !canWriteToCode || busy || applicablePreviews.length === 0 || hasExpiredPreview
+              }
               onClick={() => setConfirming(true)}
               title={
                 !isPaired
@@ -415,7 +444,9 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
                     ? "Source writes are disabled for this bridge session"
                     : applicablePreviews.length === 0
                       ? "Preview first to see applicable changes"
-                      : "Write these changes to your source files"
+                      : hasExpiredPreview
+                        ? "Preview expired. Run Preview diff again"
+                        : "Write these changes to your source files"
               }
               type="button"
             >
@@ -435,7 +466,9 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
       {preview !== null && applyResult === null ? (
         <div className="mt-3 space-y-2">
           <p className="text-2xs text-muted">
-            {applicablePreviews.length} of {preview.elements.length} element(s) map to a stylesheet.
+            {applicablePreviews.length} of {preview.elements.length} element(s) map to{" "}
+            {preview.files.length} stylesheet file(s). Preview expires at{" "}
+            {new Date(preview.expiresAt).toLocaleTimeString()}.
           </p>
           {preview.elements.map((element) => (
             <div className="rounded-xl bg-slate-50 p-2.5 text-xs" key={element.selector}>

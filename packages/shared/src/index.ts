@@ -1142,6 +1142,9 @@ export const BRIDGE_ERROR_CODES = [
   "INVALID_PROJECT_ROOT",
   "INVALID_BACKUP_ID",
   "PORT_UNAVAILABLE",
+  "PREVIEW_NOT_FOUND",
+  "PREVIEW_EXPIRED",
+  "PREVIEW_STALE",
   "INTERNAL_ERROR",
 ] as const;
 
@@ -1227,25 +1230,43 @@ const bridgePreviewElementSchema = z.object({
   note: z.string().optional(),
 });
 
-export const bridgePreviewResponseSchema = z.object({
+const bridgePreviewFileSchema = z.object({
+  path: z.string(),
+  beforeHash: z.string(),
+  afterHash: z.string(),
+  diff: z.string(),
+});
+
+const bridgeStructuralEditPreviewSchema = z.object({
+  kind: z.string(),
+  selector: z.string(),
+  summary: z.string(),
+});
+
+export const bridgePreviewArtifactSchema = z.object({
+  previewId: z.string().min(1),
+  sessionHash: z.string().min(1),
+  projectId: z.string().min(1),
+  bridgeInstanceId: z.string().min(1),
+  createdAt: z.string().min(1),
+  expiresAt: z.string().min(1),
+  files: z.array(bridgePreviewFileSchema),
+});
+
+export type BridgePreviewArtifact = z.infer<typeof bridgePreviewArtifactSchema>;
+
+export const bridgePreviewResponseSchema = bridgePreviewArtifactSchema.extend({
   ok: z.literal(true),
   sessionId: z.string(),
   root: z.string(),
   elements: z.array(bridgePreviewElementSchema),
-  structuralEdits: z.array(
-    z.object({
-      kind: z.string(),
-      selector: z.string(),
-      summary: z.string(),
-    }),
-  ),
+  structuralEdits: z.array(bridgeStructuralEditPreviewSchema),
 });
 
 export type BridgePreviewResponse = z.infer<typeof bridgePreviewResponseSchema>;
 
 export const bridgeApplyRequestSchema = z.object({
-  session: bridgeSessionSchema,
-  selectors: z.array(z.string()).optional(),
+  previewId: z.string().min(1),
 });
 
 export type BridgeApplyRequest = z.infer<typeof bridgeApplyRequestSchema>;
