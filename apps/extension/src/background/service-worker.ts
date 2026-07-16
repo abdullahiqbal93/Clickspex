@@ -1,12 +1,12 @@
-import { isExtensionMessage } from "@ui-buddy/shared";
+import { isExtensionMessage, isInspectionContext } from "@ui-buddy/shared";
 
-import { SIDE_PANEL_PORT_NAME } from "../chrome/messaging";
+import { SIDE_PANEL_PORT_NAME, isSidePanelContextMessage } from "../chrome/messaging";
 
 import { shouldForwardToSidePanel } from "./router";
 
-import type { ComponentSourceInfo, PageTechInfo } from "@ui-buddy/shared";
+import type { ComponentSourceInfo, InspectionContext, PageTechInfo } from "@ui-buddy/shared";
 
-const sidePanelPorts = new Set<chrome.runtime.Port>();
+const sidePanelPorts = new Map<chrome.runtime.Port, InspectionContext | null>();
 
 chrome.runtime.onInstalled.addListener(() => {
   void chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
@@ -15,32 +15,44 @@ chrome.runtime.onInstalled.addListener(() => {
 void chrome.storage.session.setAccessLevel({ accessLevel: "TRUSTED_AND_UNTRUSTED_CONTEXTS" });
 
 /**
- * When the side panel closes we tell the page's content script to stop the
- * picker and drop any selection. Otherwise the page would keep its hover/select
- * overlay live and remain clickable even though the panel is gone - the user has
- * to press "Pick" again to start a new selection.
+ * When a side panel for a specific inspected tab closes, stop only that tab's
+ * picker. This avoids the old active-tab bug where closing one panel could
+ * disable overlays in a different tab/window.
  */
-const notifyPanelClosed = (): void => {
-  void chrome.tabs
-    .query({ active: true, currentWindow: true })
-    .then(([tab]) => {
-      if (tab?.id === undefined) {
-        return;
-      }
+const notifyPanelClosed = (context: InspectionContext | null): void => {
+  if (context === null) {
+    return;
+  }
 
-      const url = tab.url ?? "";
+  void chrome.tabs.sendMessage(context.tabId, { type: "PICKER_DISABLE" }).catch(() => {
+    // The tab has no content script (navigated away / restricted page).
+  });
+};
 
-      if (!url.startsWith("http://") && !url.startsWith("https://")) {
-        return;
-      }
+const hasPortForContext = (context: InspectionContext | null): boolean =>
+  context !== null &&
+  Array.from(sidePanelPorts.values()).some(
+    (candidate) =>
+      candidate !== null &&
+      candidate.tabId === context.tabId &&
+      candidate.windowId === context.windowId &&
+      candidate.frameId === context.frameId &&
+      candidate.navigationId === context.navigationId,
+  );
 
-      void chrome.tabs.sendMessage(tab.id, { type: "PICKER_DISABLE" }).catch(() => {
-        // The tab has no content script (navigated away / restricted page).
-      });
-    })
-    .catch(() => {
-      /* no active tab */
-    });
+const senderMatchesContext = (
+  sender: chrome.runtime.MessageSender,
+  context: InspectionContext | null,
+): boolean => {
+  if (context === null || sender.tab?.id === undefined) {
+    return false;
+  }
+
+  return (
+    sender.tab.id === context.tabId &&
+    (sender.tab.windowId === undefined || sender.tab.windowId === context.windowId) &&
+    (sender.frameId ?? 0) === context.frameId
+  );
 };
 
 chrome.runtime.onConnect.addListener((port) => {
@@ -48,48 +60,59 @@ chrome.runtime.onConnect.addListener((port) => {
     return;
   }
 
-  sidePanelPorts.add(port);
+  sidePanelPorts.set(port, null);
+
+  port.onMessage.addListener((rawMessage: unknown) => {
+    if (isSidePanelContextMessage(rawMessage)) {
+      sidePanelPorts.set(port, rawMessage.payload);
+    }
+  });
+
   port.onDisconnect.addListener(() => {
+    const closedContext = sidePanelPorts.get(port) ?? null;
     sidePanelPorts.delete(port);
 
     // The panel transparently reconnects whenever the service worker is
     // recycled, so a disconnect does not necessarily mean the panel closed.
-    // Wait briefly and only stop the page picker if nothing reconnected in the
-    // meantime - otherwise a routine reconnect would cancel an in-progress pick.
-    if (sidePanelPorts.size === 0) {
-      setTimeout(() => {
-        if (sidePanelPorts.size === 0) {
-          notifyPanelClosed();
-        }
-      }, 800);
-    }
+    // Wait briefly and only stop that page's picker if no panel for the same
+    // inspected context reconnected in the meantime.
+    setTimeout(() => {
+      if (!hasPortForContext(closedContext)) {
+        notifyPanelClosed(closedContext);
+      }
+    }, 800);
   });
 });
 
-chrome.runtime.onMessage.addListener((rawMessage: unknown) => {
+chrome.runtime.onMessage.addListener((rawMessage: unknown, sender) => {
   if (!isExtensionMessage(rawMessage) || !shouldForwardToSidePanel(rawMessage)) {
     return false;
   }
 
-  for (const port of sidePanelPorts) {
-    port.postMessage(rawMessage);
+  for (const [port, context] of sidePanelPorts.entries()) {
+    if (senderMatchesContext(sender, context)) {
+      port.postMessage(rawMessage);
+    }
   }
 
   return false;
 });
 
-// ── Privileged background commands (screenshot, MAIN-world inspection) ──
+// Privileged background commands (screenshot, MAIN-world inspection)
 
 type BackgroundCommandMessage = {
   __ubBackground: true;
   command: string;
+  context?: InspectionContext;
 };
 
 const isBackgroundCommand = (value: unknown): value is BackgroundCommandMessage =>
   typeof value === "object" &&
   value !== null &&
   (value as Record<string, unknown>).__ubBackground === true &&
-  typeof (value as Record<string, unknown>).command === "string";
+  typeof (value as Record<string, unknown>).command === "string" &&
+  ((value as Record<string, unknown>).context === undefined ||
+    isInspectionContext((value as Record<string, unknown>).context));
 
 /**
  * Runs in the page's MAIN world: detect frameworks and libraries from global
@@ -314,49 +337,59 @@ const lookupSourceInPage = (): ComponentSourceInfo | null => {
   return result;
 };
 
-const activeTabId = async (): Promise<number> => {
+const activeInspectionContext = async (): Promise<InspectionContext> => {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
-  if (tab?.id === undefined) {
+  if (tab?.id === undefined || tab.windowId === undefined) {
     throw new Error("No active tab is available.");
   }
 
-  return tab.id;
+  const url = tab.url ?? tab.pendingUrl ?? "";
+
+  return {
+    tabId: tab.id,
+    windowId: tab.windowId,
+    frameId: 0,
+    navigationId: `${tab.id}:${url}`,
+    url,
+  };
 };
+
+const scriptTargetForContext = (context: InspectionContext): chrome.scripting.InjectionTarget => ({
+  tabId: context.tabId,
+  frameIds: [context.frameId],
+});
 
 const handleBackgroundCommand = async (
   command: string,
+  requestedContext?: InspectionContext,
 ): Promise<{ ok: boolean; data?: unknown; error?: string }> => {
   try {
+    const context = requestedContext ?? (await activeInspectionContext());
     if (command === "inject-content-script") {
       // Inject the manifest's declared content script into tabs that were
       // already open when the extension was installed/updated (where the
       // content script never ran). Uses the hashed filenames from the manifest
       // so it stays correct across builds.
-      const tabId = await activeTabId();
       const files = (chrome.runtime.getManifest().content_scripts ?? []).flatMap(
         (entry) => entry.js ?? [],
       );
 
       if (files.length > 0) {
-        await chrome.scripting.executeScript({ target: { tabId }, files });
+        await chrome.scripting.executeScript({ target: scriptTargetForContext(context), files });
       }
 
       return { ok: true };
     }
 
     if (command === "capture-tab") {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      const dataUrl =
-        tab?.windowId === undefined
-          ? await chrome.tabs.captureVisibleTab({ format: "png" })
-          : await chrome.tabs.captureVisibleTab(tab.windowId, { format: "png" });
+      const dataUrl = await chrome.tabs.captureVisibleTab(context.windowId, { format: "png" });
       return { ok: true, data: dataUrl };
     }
 
     if (command === "detect-tech") {
       const [execution] = await chrome.scripting.executeScript({
-        target: { tabId: await activeTabId() },
+        target: scriptTargetForContext(context),
         world: "MAIN",
         func: detectTechInPage,
       });
@@ -365,7 +398,7 @@ const handleBackgroundCommand = async (
 
     if (command === "lookup-source") {
       const [execution] = await chrome.scripting.executeScript({
-        target: { tabId: await activeTabId() },
+        target: scriptTargetForContext(context),
         world: "MAIN",
         func: lookupSourceInPage,
       });
@@ -387,7 +420,7 @@ chrome.runtime.onMessage.addListener(
       return false;
     }
 
-    void handleBackgroundCommand(rawMessage.command).then(sendResponse);
+    void handleBackgroundCommand(rawMessage.command, rawMessage.context).then(sendResponse);
     return true;
   },
 );

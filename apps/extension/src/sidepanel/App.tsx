@@ -1,4 +1,4 @@
-import { isExtensionMessage } from "@ui-buddy/shared";
+import { isExtensionMessage, type InspectionContext } from "@ui-buddy/shared";
 import {
   Accessibility,
   Box,
@@ -22,7 +22,13 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
-import { createReconnectingSidePanelPort, sendMessageToActiveTab } from "../chrome/messaging";
+import {
+  createInspectionContextFromTab,
+  createReconnectingSidePanelPort,
+  resolveActiveInspectionContext,
+  sendMessageToActiveTab,
+  setCurrentInspectionContext,
+} from "../chrome/messaging";
 
 import { AccessibilityPanel } from "./components/AccessibilityPanel";
 import { AssetsPanel } from "./components/AssetsPanel";
@@ -122,6 +128,29 @@ export const App = () => {
   const setDomContext = usePanelStore((state) => state.setDomContext);
   const setMultiSelection = usePanelStore((state) => state.setMultiSelection);
   const resetForNavigation = usePanelStore((state) => state.resetForNavigation);
+  const [inspectionContext, setInspectionContext] = useState<InspectionContext | null>(null);
+
+  const activateInspectionContext = useCallback((context: InspectionContext) => {
+    setCurrentInspectionContext(context);
+    setInspectionContext(context);
+    return context;
+  }, []);
+
+  const refreshActiveInspectionContext = useCallback(async () => {
+    const context = await resolveActiveInspectionContext();
+    return activateInspectionContext(context);
+  }, [activateInspectionContext]);
+
+  useEffect(() => {
+    if (inspectionContext !== null) {
+      return;
+    }
+
+    setPageScanLoading(true);
+    refreshActiveInspectionContext().catch(() => {
+      setPageScanLoading(false);
+    });
+  }, [inspectionContext, refreshActiveInspectionContext, setPageScanLoading]);
 
   useEffect(() => {
     const handleMessage = (rawMessage: unknown) => {
@@ -139,8 +168,8 @@ export const App = () => {
           setActiveTab("styles");
         }
 
-        void sendMessageToActiveTab({ type: "DOM_CONTEXT_REQUEST" });
-        void sendMessageToActiveTab({ type: "GET_MATCHED_STYLES" });
+        void sendMessageToActiveTab({ type: "DOM_CONTEXT_REQUEST" }, inspectionContext);
+        void sendMessageToActiveTab({ type: "GET_MATCHED_STYLES" }, inspectionContext);
       }
 
       if (rawMessage.type === "ELEMENT_UNSELECTED") {
@@ -213,10 +242,16 @@ export const App = () => {
       }
     };
 
-    const connection = createReconnectingSidePanelPort(handleMessage);
+    if (inspectionContext === null) {
+      return undefined;
+    }
+
+    setCurrentInspectionContext(inspectionContext);
+    const connection = createReconnectingSidePanelPort(handleMessage, () => inspectionContext);
+    connection.updateInspectionContext(inspectionContext);
 
     setPageScanLoading(true);
-    sendMessageToActiveTab({ type: "SCAN_PAGE" }).catch(() => {
+    sendMessageToActiveTab({ type: "SCAN_PAGE" }, inspectionContext).catch(() => {
       setPageScanLoading(false);
     });
     return () => {
@@ -238,32 +273,44 @@ export const App = () => {
     setPageScanLoading,
     setPickerActive,
     setRulerActive,
+    inspectionContext,
     setRestoredEditsCount,
     setSearchResults,
     setSelectedElement,
   ]);
 
   useEffect(() => {
-    const rescanFreshPage = () => {
+    const rescanFreshPage = (context: InspectionContext | null = inspectionContext) => {
+      if (context === null) {
+        return;
+      }
+
       setPageScanLoading(true);
-      sendMessageToActiveTab({ type: "SCAN_PAGE" }).catch(() => setPageScanLoading(false));
+      sendMessageToActiveTab({ type: "SCAN_PAGE" }, context).catch(() => setPageScanLoading(false));
     };
 
-    const handleUpdated: TabUpdatedListener = (_tabId, changeInfo, tab) => {
-      if (tab.active !== true) {
+    const handleUpdated: TabUpdatedListener = (tabId, changeInfo, tab) => {
+      if (inspectionContext === null || tabId !== inspectionContext.tabId) {
         return;
       }
 
       if (changeInfo.status === "loading") {
         resetForNavigation();
       } else if (changeInfo.status === "complete") {
-        rescanFreshPage();
+        try {
+          const nextContext = activateInspectionContext(createInspectionContextFromTab(tab));
+          rescanFreshPage(nextContext);
+        } catch {
+          setPageScanLoading(false);
+        }
       }
     };
 
     const handleActivated = () => {
       resetForNavigation();
-      rescanFreshPage();
+      refreshActiveInspectionContext()
+        .then((context) => rescanFreshPage(context))
+        .catch(() => setPageScanLoading(false));
     };
 
     chrome.tabs.onUpdated.addListener(handleUpdated);
@@ -273,7 +320,13 @@ export const App = () => {
       chrome.tabs.onUpdated.removeListener(handleUpdated);
       chrome.tabs.onActivated.removeListener(handleActivated);
     };
-  }, [resetForNavigation, setPageScanLoading]);
+  }, [
+    activateInspectionContext,
+    inspectionContext,
+    refreshActiveInspectionContext,
+    resetForNavigation,
+    setPageScanLoading,
+  ]);
 
   const togglePicker = useCallback(async () => {
     setError(null);

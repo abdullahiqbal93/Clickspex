@@ -511,6 +511,15 @@ export type ComponentSourceInfo = {
   componentName: string | null;
 };
 
+export type InspectionContext = {
+  tabId: number;
+  windowId: number;
+  frameId: number;
+  navigationId: string;
+  url: string;
+  documentId?: string;
+};
+
 export type ElementSearchResult = Pick<
   ElementSnapshot,
   "tagName" | "id" | "classList" | "textPreview" | "selector" | "rect"
@@ -667,6 +676,15 @@ const isStringRecord = (value: unknown): value is Record<string, string> =>
 
 const isStringArray = (value: unknown): value is string[] =>
   Array.isArray(value) && value.every(isString);
+
+export const isInspectionContext = (value: unknown): value is InspectionContext =>
+  isRecord(value) &&
+  isNumber(value.tabId) &&
+  isNumber(value.windowId) &&
+  isNumber(value.frameId) &&
+  isString(value.navigationId) &&
+  isString(value.url) &&
+  (value.documentId === undefined || isString(value.documentId));
 
 export const isSupportedStyleProperty = (value: unknown): value is SupportedStyleProperty =>
   isString(value) && SUPPORTED_STYLE_PROPERTIES.includes(value as SupportedStyleProperty);

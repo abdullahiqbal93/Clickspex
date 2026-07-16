@@ -1,6 +1,23 @@
-import { isExtensionMessage, isRecord, type ExtensionMessage } from "@ui-buddy/shared";
+import {
+  isExtensionMessage,
+  isInspectionContext,
+  isRecord,
+  type ExtensionMessage,
+  type InspectionContext,
+} from "@ui-buddy/shared";
 
 export const SIDE_PANEL_PORT_NAME = "ui-buddy-side-panel";
+export const SIDE_PANEL_CONTEXT_MESSAGE = "SIDE_PANEL_CONTEXT";
+
+export type SidePanelContextMessage = {
+  type: typeof SIDE_PANEL_CONTEXT_MESSAGE;
+  payload: InspectionContext;
+};
+
+export const isSidePanelContextMessage = (value: unknown): value is SidePanelContextMessage =>
+  isRecord(value) &&
+  value.type === SIDE_PANEL_CONTEXT_MESSAGE &&
+  isInspectionContext(value.payload);
 
 export type MessageHandler = (
   message: ExtensionMessage,
@@ -11,6 +28,10 @@ export type MessageResponse = {
   ok: boolean;
   error?: string;
 };
+
+const TOP_FRAME_ID = 0;
+
+let currentInspectionContext: InspectionContext | null = null;
 
 const errorMessageFromUnknown = (error: unknown): string =>
   error instanceof Error ? error.message : "Unknown extension messaging error";
@@ -42,6 +63,39 @@ const isBenignRuntimeError = (error: unknown): boolean => {
   );
 };
 
+export const createInspectionContextFromTab = (
+  tab: Partial<chrome.tabs.Tab>,
+): InspectionContext => {
+  if (tab.id === undefined) {
+    throw new Error("No active tab is available for ui-buddy messaging.");
+  }
+
+  if (tab.windowId === undefined) {
+    throw new Error("No active browser window is available for ui-buddy messaging.");
+  }
+
+  const url = tab.url ?? tab.pendingUrl ?? "";
+
+  return {
+    tabId: tab.id,
+    windowId: tab.windowId,
+    frameId: TOP_FRAME_ID,
+    navigationId: `${tab.id}:${url}`,
+    url,
+  };
+};
+
+export const resolveActiveInspectionContext = async (): Promise<InspectionContext> => {
+  const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  return createInspectionContextFromTab(activeTab ?? {});
+};
+
+export const setCurrentInspectionContext = (context: InspectionContext | null): void => {
+  currentInspectionContext = context;
+};
+
+export const getCurrentInspectionContext = (): InspectionContext | null => currentInspectionContext;
+
 export const sendRuntimeMessage = async (message: ExtensionMessage): Promise<void> => {
   try {
     assertOkMessageResponse(await chrome.runtime.sendMessage(message));
@@ -62,6 +116,22 @@ export const connectSidePanelPort = (): chrome.runtime.Port =>
 export type SidePanelPortConnection = {
   /** Tear down the connection and stop reconnecting. */
   disconnect: () => void;
+  /** Re-register the inspected tab/window identity without reopening the panel. */
+  updateInspectionContext: (context: InspectionContext | null) => void;
+};
+
+const postInspectionContext = (
+  port: chrome.runtime.Port | null,
+  context: InspectionContext | null,
+): void => {
+  if (port === null || context === null) {
+    return;
+  }
+
+  port.postMessage({
+    type: SIDE_PANEL_CONTEXT_MESSAGE,
+    payload: context,
+  } satisfies SidePanelContextMessage);
 };
 
 /**
@@ -77,6 +147,7 @@ export type SidePanelPortConnection = {
  */
 export const createReconnectingSidePanelPort = (
   onMessage: (message: unknown) => void,
+  getInspectionContext: () => InspectionContext | null = getCurrentInspectionContext,
 ): SidePanelPortConnection => {
   let stopped = false;
   let port: chrome.runtime.Port | null = null;
@@ -96,6 +167,7 @@ export const createReconnectingSidePanelPort = (
     }
 
     port.onMessage.addListener(onMessage);
+    postInspectionContext(port, getInspectionContext());
     port.onDisconnect.addListener(() => {
       // Reading lastError acknowledges the expected disconnect and prevents
       // Chrome from logging an unchecked runtime error.
@@ -130,6 +202,9 @@ export const createReconnectingSidePanelPort = (
         port = null;
       }
     },
+    updateInspectionContext: (context) => {
+      postInspectionContext(port, context);
+    },
   };
 };
 
@@ -139,13 +214,14 @@ const isMissingContentScript = (error: unknown): boolean => {
 };
 
 /**
- * Ask the service worker to inject the declared content script into the active
- * tab, then give it a moment to register its message listener. Returns false if
- * injection isn't possible (restricted page, no scripting permission, etc.).
+ * Ask the service worker to inject the declared content script into the
+ * inspected tab, then give it a moment to register its message listener.
+ * Returns false if injection isn't possible (restricted page, no scripting
+ * permission, etc.).
  */
-const ensureContentScriptInjected = async (): Promise<boolean> => {
+const ensureContentScriptInjected = async (context: InspectionContext): Promise<boolean> => {
   try {
-    await callBackground("inject-content-script");
+    await callBackground("inject-content-script", context);
     await new Promise((resolve) => setTimeout(resolve, 150));
     return true;
   } catch {
@@ -153,21 +229,23 @@ const ensureContentScriptInjected = async (): Promise<boolean> => {
   }
 };
 
-export const sendMessageToActiveTab = async (message: ExtensionMessage): Promise<void> => {
-  const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+const resolveMessageContext = async (
+  context: InspectionContext | null = currentInspectionContext,
+): Promise<InspectionContext> => context ?? resolveActiveInspectionContext();
 
-  if (activeTab?.id === undefined) {
-    throw new Error("No active tab is available for ui-buddy messaging.");
-  }
+export const sendMessageToInspectedTab = async (
+  message: ExtensionMessage,
+  context?: InspectionContext | null,
+): Promise<void> => {
+  const targetContext = await resolveMessageContext(context ?? currentInspectionContext);
+  setCurrentInspectionContext(targetContext);
 
-  if (!canReceiveContentScriptMessages(activeTab.url)) {
+  if (!canReceiveContentScriptMessages(targetContext.url)) {
     throw new Error("ui-buddy can inspect only http and https pages.");
   }
 
-  const tabId = activeTab.id;
-
   try {
-    assertOkMessageResponse(await chrome.tabs.sendMessage(tabId, message));
+    assertOkMessageResponse(await chrome.tabs.sendMessage(targetContext.tabId, message));
   } catch (error) {
     if (!isMissingContentScript(error)) {
       throw error;
@@ -177,9 +255,9 @@ export const sendMessageToActiveTab = async (message: ExtensionMessage): Promise
     // already open before the extension was installed/updated, or after the
     // extension reloaded. Inject it on demand and retry once so picking works
     // without the user having to reload the extension or refresh the tab.
-    if (await ensureContentScriptInjected()) {
+    if (await ensureContentScriptInjected(targetContext)) {
       try {
-        assertOkMessageResponse(await chrome.tabs.sendMessage(tabId, message));
+        assertOkMessageResponse(await chrome.tabs.sendMessage(targetContext.tabId, message));
         return;
       } catch (retryError) {
         if (!isMissingContentScript(retryError)) {
@@ -192,6 +270,8 @@ export const sendMessageToActiveTab = async (message: ExtensionMessage): Promise
   }
 };
 
+export const sendMessageToActiveTab = sendMessageToInspectedTab;
+
 export type BackgroundCommand =
   "capture-tab" | "detect-tech" | "lookup-source" | "inject-content-script";
 
@@ -199,12 +279,19 @@ type BackgroundCommandResponse = { ok: true; data: unknown } | { ok: false; erro
 
 /**
  * Ask the service worker to run a privileged command (screen capture,
- * MAIN-world page inspection) and return its result.
+ * MAIN-world page inspection) against the registered inspected tab.
  */
-export const callBackground = async <T>(command: BackgroundCommand): Promise<T> => {
+export const callBackground = async <T>(
+  command: BackgroundCommand,
+  context: InspectionContext | null = currentInspectionContext,
+): Promise<T> => {
+  const targetContext = await resolveMessageContext(context);
+  setCurrentInspectionContext(targetContext);
+
   const response = (await chrome.runtime.sendMessage({
     __ubBackground: true,
     command,
+    context: targetContext,
   })) as BackgroundCommandResponse | undefined;
 
   if (response === undefined || response.ok !== true) {

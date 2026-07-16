@@ -5,6 +5,7 @@ import {
   connectSidePanelPort,
   sendMessageToActiveTab,
   sendRuntimeMessage,
+  setCurrentInspectionContext,
   SIDE_PANEL_PORT_NAME,
   type MessageResponse,
 } from "./messaging";
@@ -12,11 +13,13 @@ import {
 import type { ExtensionMessage } from "@ui-buddy/shared";
 
 type RuntimeListener = Parameters<typeof chrome.runtime.onMessage.addListener>[0];
-type MockTab = { id?: number; url?: string };
+type MockTab = { id?: number; windowId?: number; url?: string };
 
 const pickerMessage: ExtensionMessage = { type: "PICKER_ENABLE" };
 
-const installChromeMock = (activeTab: MockTab | null = { id: 42, url: "https://example.test" }) => {
+const installChromeMock = (
+  activeTab: MockTab | null = { id: 42, windowId: 1, url: "https://example.test" },
+) => {
   let listener: RuntimeListener | null = null;
   const sendMessage = vi
     .fn<() => Promise<MessageResponse | undefined>>()
@@ -61,6 +64,7 @@ const installChromeMock = (activeTab: MockTab | null = { id: 42, url: "https://e
 };
 
 afterEach(() => {
+  setCurrentInspectionContext(null);
   vi.unstubAllGlobals();
 });
 
@@ -84,7 +88,7 @@ describe("Chrome messaging helpers", () => {
   });
 
   it("sends tab messages to the active tab", async () => {
-    const chromeMock = installChromeMock({ id: 99, url: "https://example.test" });
+    const chromeMock = installChromeMock({ id: 99, windowId: 2, url: "https://example.test" });
 
     await sendMessageToActiveTab(pickerMessage);
 
@@ -99,20 +103,20 @@ describe("Chrome messaging helpers", () => {
   });
 
   it("throws before messaging unsupported browser pages", async () => {
-    installChromeMock({ id: 7, url: "chrome://extensions" });
+    installChromeMock({ id: 7, windowId: 2, url: "chrome://extensions" });
 
     await expect(sendMessageToActiveTab(pickerMessage)).rejects.toThrow("http and https");
   });
 
   it("throws when a tab command returns an error response", async () => {
-    const chromeMock = installChromeMock({ id: 99, url: "https://example.test" });
+    const chromeMock = installChromeMock({ id: 99, windowId: 2, url: "https://example.test" });
     chromeMock.tabSendMessage.mockResolvedValueOnce({ ok: false, error: "content failed" });
 
     await expect(sendMessageToActiveTab(pickerMessage)).rejects.toThrow("content failed");
   });
 
   it("injects the content script and retries when the receiving end is missing", async () => {
-    const chromeMock = installChromeMock({ id: 5, url: "https://example.test" });
+    const chromeMock = installChromeMock({ id: 5, windowId: 2, url: "https://example.test" });
     chromeMock.tabSendMessage
       .mockRejectedValueOnce(
         new Error("Could not establish connection. Receiving end does not exist."),
@@ -126,12 +130,19 @@ describe("Chrome messaging helpers", () => {
     expect(chromeMock.sendMessage).toHaveBeenCalledWith({
       __ubBackground: true,
       command: "inject-content-script",
+      context: {
+        tabId: 5,
+        windowId: 2,
+        frameId: 0,
+        navigationId: "5:https://example.test",
+        url: "https://example.test",
+      },
     });
     expect(chromeMock.tabSendMessage).toHaveBeenCalledTimes(2);
   });
 
   it("asks the user to refresh when injection does not recover the content script", async () => {
-    const chromeMock = installChromeMock({ id: 5, url: "https://example.test" });
+    const chromeMock = installChromeMock({ id: 5, windowId: 2, url: "https://example.test" });
     chromeMock.tabSendMessage.mockRejectedValue(new Error("Receiving end does not exist"));
     chromeMock.sendMessage.mockResolvedValue({ ok: true });
 
