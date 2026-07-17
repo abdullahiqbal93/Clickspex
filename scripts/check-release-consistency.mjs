@@ -9,6 +9,7 @@ const rootPackage = readJson("package.json");
 const version = rootPackage.version;
 const packageFiles = [
   "apps/cli/package.json",
+  "apps/e2e/package.json",
   "apps/extension/package.json",
   "apps/mcp-server/package.json",
   "packages/adapters/package.json",

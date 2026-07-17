@@ -208,6 +208,32 @@ describe("bridge preview/apply/rollback", () => {
     }
   });
 
+  it("serves /health to origin-less local requests but keeps protected routes closed", async () => {
+    const root = await makeProject();
+    const bridge = await startBridge({ rootPath: root, port: 0, allowedExtensionId: EXTENSION_ID });
+
+    try {
+      const base = `http://127.0.0.1:${bridge.port}`;
+
+      const health = await fetch(`${base}/health`);
+      expect(health.status).toBe(200);
+      await expect(health.json()).resolves.toMatchObject({ ok: true, projectName: "demo" });
+
+      const preview = await fetch(`${base}/preview`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ session: session() }),
+      });
+      expect(preview.status).toBe(403);
+      await expect(preview.json()).resolves.toMatchObject({
+        ok: false,
+        code: "FORBIDDEN_ORIGIN",
+      });
+    } finally {
+      bridge.close();
+    }
+  });
+
   it("locks pairing after repeated failed attempts", async () => {
     const root = await makeProject();
     const bridge = await startBridge({ rootPath: root, port: 0, allowedExtensionId: EXTENSION_ID });

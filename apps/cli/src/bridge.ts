@@ -986,7 +986,7 @@ const isAuthenticated = (req: IncomingMessage, config: BridgeRuntimeConfig): boo
 const assertRequestAllowed = (
   req: IncomingMessage,
   config: BridgeRuntimeConfig,
-  options: { allowPairing?: boolean } = {},
+  options: { allowPairing?: boolean; allowUnauthenticatedNoOrigin?: boolean } = {},
 ): void => {
   const origin = req.headers.origin;
 
@@ -995,7 +995,11 @@ const assertRequestAllowed = (
   }
 
   if (origin === undefined) {
-    if (config.allowUnauthenticatedLocalAccess) {
+    // Browsers always attach an Origin header to cross-origin fetches from
+    // web pages, so an origin-less request can only come from a local process
+    // or from an extension page GET (Chromium omits Origin on GET requests to
+    // host-permitted URLs). Read-only routes may opt in to serving those.
+    if (config.allowUnauthenticatedLocalAccess || options.allowUnauthenticatedNoOrigin === true) {
       return;
     }
 
@@ -1194,7 +1198,7 @@ export const startBridge = async (options: {
             throw new BridgeHttpError(405, "METHOD_NOT_ALLOWED", "Use GET for /health.");
           }
 
-          assertRequestAllowed(req, config);
+          assertRequestAllowed(req, config, { allowUnauthenticatedNoOrigin: true });
           sendJson(res, 200, healthResponse(config), origin, config);
           return;
         }

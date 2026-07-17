@@ -22,6 +22,7 @@ The repo is intentionally conservative: the extension can prototype UI changes i
 ```text
 apps/extension      Chrome extension and side panel UI
 apps/cli            Local Clickspex CLI
+apps/e2e            Playwright end-to-end suite (real Chromium + built extension)
 apps/mcp-server     Read-only MCP stdio server
 packages/shared     Shared types, message guards, adapter contracts
 packages/core       Pure selector, style, measurement, a11y, and project-detection utilities

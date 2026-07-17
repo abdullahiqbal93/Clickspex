@@ -5,6 +5,7 @@
   "fixed": [
     [
       "clickspex",
+      "@clickspex/e2e",
       "@clickspex/extension",
       "@clickspex/mcp-server",
       "@clickspex/adapters",

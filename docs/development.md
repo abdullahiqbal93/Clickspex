@@ -24,6 +24,18 @@ pnpm build
 
 `pnpm build` compiles shared packages, the CLI, the MCP server, and the production extension bundle.
 
+## End-to-end tests
+
+The `apps/e2e` package drives the built extension inside a real Chromium instance with Playwright: it loads `apps/extension/dist`, opens the side panel, picks and edits elements on a served fixture page, exercises multi-tab and multi-window scoping, and runs the full Code Sync flow (pair, preview, apply, rollback) against a real `clickspex connect` child process.
+
+```bash
+pnpm build                                                       # e2e runs the built artifacts
+pnpm --filter @clickspex/e2e exec playwright install chromium    # one-time browser download
+pnpm test:e2e
+```
+
+The suite is serial and self-contained: each test gets a fresh browser profile, a disposable copy of `apps/e2e/fixtures/project`, and its own bridge/static-server ports. CI runs it as a dedicated `Extension E2E (Chromium)` job.
+
 ## Extension Development
 
 ```bash

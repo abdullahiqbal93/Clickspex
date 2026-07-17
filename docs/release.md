@@ -70,7 +70,7 @@ Do not enable or advertise production source writing until all of these are true
 2. All P0 security and correctness tests pass.
 3. Preview/apply hash binding is implemented and covered by tests.
 4. Writes and rollback are transactional and covered by conflict tests.
-5. Multi-tab and multi-window extension tests pass.
+5. Multi-tab and multi-window extension tests pass (`pnpm test:e2e`, which also covers the real-Chromium pair/preview/apply/rollback flow).
 6. No high-severity dependency advisories remain.
 7. Permissions, privacy notes, and documentation match shipped behavior.
 8. A real external-project beta completes without source corruption.

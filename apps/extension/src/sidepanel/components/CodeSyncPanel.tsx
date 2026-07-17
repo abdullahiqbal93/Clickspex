@@ -11,7 +11,7 @@ import {
   type UIChangeSession,
 } from "@clickspex/shared";
 import { AlertTriangle, Check, FileCode2, KeyRound, Plug, RefreshCcw, Undo2 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 const DEFAULT_PORT = "7317";
 const PORT_STORAGE_KEY = "ubBridgePort";
@@ -64,6 +64,7 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const healthRequestIdRef = useRef(0);
 
   const baseUrl = `http://127.0.0.1:${port}`;
   const sessionFingerprint = JSON.stringify(session);
@@ -81,6 +82,8 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
     bridgeToken === null ? {} : { authorization: `Bearer ${bridgeToken}` };
 
   const checkHealth = useCallback(async (targetPort: string) => {
+    const requestId = healthRequestIdRef.current + 1;
+    healthRequestIdRef.current = requestId;
     setConnection("checking");
     setError(null);
 
@@ -91,6 +94,10 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
         1500,
         parseBridgeHealthResponse,
       );
+
+      if (healthRequestIdRef.current !== requestId) {
+        return;
+      }
 
       setHealth((previous) => {
         if (
@@ -110,10 +117,19 @@ export const CodeSyncPanel = ({ session }: CodeSyncPanelProps) => {
       setConnection("connected");
 
       const stored = await chrome.storage.session.get(tokenStorageKey(nextHealth));
+
+      if (healthRequestIdRef.current !== requestId) {
+        return;
+      }
+
       const storedToken = stored[tokenStorageKey(nextHealth)];
       setBridgeToken(typeof storedToken === "string" ? storedToken : null);
       return;
     } catch (caughtError) {
+      if (healthRequestIdRef.current !== requestId) {
+        return;
+      }
+
       clearBridgeState();
       setConnection("disconnected");
       setError(caughtError instanceof Error ? caughtError.message : null);

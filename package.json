@@ -9,6 +9,7 @@
     "typecheck": "pnpm -r --workspace-concurrency=1 typecheck",
     "lint": "pnpm -r --workspace-concurrency=1 lint",
     "test": "pnpm -r --workspace-concurrency=1 test",
+    "test:e2e": "pnpm --filter @clickspex/e2e test:e2e",
     "format": "pnpm -r --workspace-concurrency=1 format && prettier --write .",
     "format:check": "prettier --check .",
     "connect": "pnpm --filter clickspex bundle && node apps/cli/dist/index.js connect",
