@@ -5,6 +5,7 @@ export default defineManifest({
   name: "Clickspex",
   description: "Inspect, measure, and prototype UI changes directly in Chrome.",
   version: "0.1.0",
+  minimum_chrome_version: "114",
   icons: {
     "16": "icons/icon_16x16.png",
     "32": "icons/icon_32x32.png",
@@ -15,9 +16,6 @@ export default defineManifest({
     default_title: "Open Clickspex",
   },
   permissions: ["activeTab", "sidePanel", "storage", "scripting"],
-  // Content inspection is limited to HTTP(S) pages. `activeTab` grants the
-  // currently inspected page for captureVisibleTab and user-initiated scripts;
-  // localhost is covered by the HTTP pattern for the local Code Sync bridge.
   host_permissions: ["http://*/*", "https://*/*"],
   side_panel: {
     default_path: "sidepanel.html",

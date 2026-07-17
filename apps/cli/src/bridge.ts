@@ -31,6 +31,7 @@ const BACKUP_ID_PATTERN = /^[A-Za-z0-9_-]{1,80}$/;
 const EXTENSION_ID_PATTERN = /^[a-p]{32}$/;
 const REQUEST_TIMEOUT_MS = 15_000;
 const HEADERS_TIMEOUT_MS = 5_000;
+const MAX_FAILED_PAIRING_ATTEMPTS = 5;
 const PREVIEW_TTL_MS = 10 * 60 * 1000;
 const MAX_PREVIEW_ARTIFACTS = 25;
 const TRANSACTION_TEMP_PREFIX = `.clickspex-tmp-${process.pid}-`;
@@ -901,8 +902,8 @@ type BridgeRuntimeConfig = {
   sessionToken: string;
   codeSyncWriteEnabled: boolean;
   allowedExtensionId: string | undefined;
-  allowAnyExtensionOrigin: boolean;
   allowUnauthenticatedLocalAccess: boolean;
+  pairingAttemptsRemaining: number;
   bodyLimitBytes: number;
   scanMaxDepth?: number;
   scanMaxFiles?: number;
@@ -974,7 +975,7 @@ const isAllowedBrowserOrigin = (
     return origin === exactOrigin;
   }
 
-  return config.allowAnyExtensionOrigin && origin.startsWith("chrome-extension://");
+  return origin.startsWith("chrome-extension://");
 };
 
 const isAuthenticated = (req: IncomingMessage, config: BridgeRuntimeConfig): boolean => {
@@ -1133,7 +1134,6 @@ export const startBridge = async (options: {
   port: number;
   codeSyncWriteEnabled?: boolean;
   allowedExtensionId?: string | undefined;
-  allowAnyExtensionOrigin?: boolean;
   allowUnauthenticatedLocalAccess?: boolean;
   bodyLimitBytes?: number;
   scanMaxDepth?: number;
@@ -1159,8 +1159,8 @@ export const startBridge = async (options: {
     sessionToken: generateToken(),
     codeSyncWriteEnabled: options.codeSyncWriteEnabled === true,
     allowedExtensionId,
-    allowAnyExtensionOrigin: options.allowAnyExtensionOrigin === true,
     allowUnauthenticatedLocalAccess: options.allowUnauthenticatedLocalAccess === true,
+    pairingAttemptsRemaining: MAX_FAILED_PAIRING_ATTEMPTS,
     bodyLimitBytes: options.bodyLimitBytes ?? DEFAULT_BODY_LIMIT_BYTES,
     ...(options.scanMaxDepth === undefined ? {} : { scanMaxDepth: options.scanMaxDepth }),
     ...(options.scanMaxFiles === undefined ? {} : { scanMaxFiles: options.scanMaxFiles }),
@@ -1205,15 +1205,27 @@ export const startBridge = async (options: {
           }
 
           assertRequestAllowed(req, config, { allowPairing: true });
+
+          if (config.pairingAttemptsRemaining <= 0) {
+            throw new BridgeHttpError(
+              429,
+              "PAIRING_LOCKED",
+              "Too many failed pairing attempts. Restart clickspex connect to get a new pairing code.",
+            );
+          }
+
           const body = parseBody(bridgePairRequestSchema, await readJsonBody(req, config));
 
           if (!safeEqual(body.pairingCode, config.pairingCode)) {
+            config.pairingAttemptsRemaining -= 1;
             config.logger.log("warn", "bridge_pairing_failed", {
               origin: typeof origin === "string" ? origin : null,
+              attemptsRemaining: config.pairingAttemptsRemaining,
             });
             throw new BridgeHttpError(401, "UNAUTHORIZED", "Pairing code is incorrect.");
           }
 
+          config.pairingAttemptsRemaining = MAX_FAILED_PAIRING_ATTEMPTS;
           config.logger.log("info", "bridge_pairing_succeeded", {
             origin: typeof origin === "string" ? origin : null,
           });

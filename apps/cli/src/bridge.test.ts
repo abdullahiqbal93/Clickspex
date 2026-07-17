@@ -180,6 +180,64 @@ describe("bridge preview/apply/rollback", () => {
     }
   });
 
+  it("accepts any extension origin by default while still rejecting website origins", async () => {
+    const root = await makeProject();
+    const bridge = await startBridge({ rootPath: root, port: 0 });
+
+    try {
+      const base = `http://127.0.0.1:${bridge.port}`;
+
+      const fromWebsite = await fetch(`${base}/health`, {
+        headers: { origin: "https://evil.example" },
+      });
+      expect(fromWebsite.status).toBe(403);
+      await expect(fromWebsite.json()).resolves.toMatchObject({
+        ok: false,
+        code: "FORBIDDEN_ORIGIN",
+      });
+
+      const fromExtension = await fetch(`${base}/health`, {
+        headers: { origin: EXTENSION_ORIGIN },
+      });
+      expect(fromExtension.status).toBe(200);
+
+      const token = await pairBridge(base, bridge.pairingCode);
+      expect(token).toEqual(expect.any(String));
+    } finally {
+      bridge.close();
+    }
+  });
+
+  it("locks pairing after repeated failed attempts", async () => {
+    const root = await makeProject();
+    const bridge = await startBridge({ rootPath: root, port: 0, allowedExtensionId: EXTENSION_ID });
+
+    try {
+      const base = `http://127.0.0.1:${bridge.port}`;
+      const wrongCode = bridge.pairingCode === "000000" ? "000001" : "000000";
+
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        const failed = await fetch(`${base}/pair`, {
+          method: "POST",
+          headers: { "content-type": "application/json", origin: EXTENSION_ORIGIN },
+          body: JSON.stringify({ pairingCode: wrongCode }),
+        });
+        expect(failed.status).toBe(401);
+      }
+
+      // Even the correct code is refused once the bridge is locked.
+      const locked = await fetch(`${base}/pair`, {
+        method: "POST",
+        headers: { "content-type": "application/json", origin: EXTENSION_ORIGIN },
+        body: JSON.stringify({ pairingCode: bridge.pairingCode }),
+      });
+      expect(locked.status).toBe(429);
+      await expect(locked.json()).resolves.toMatchObject({ ok: false, code: "PAIRING_LOCKED" });
+    } finally {
+      bridge.close();
+    }
+  });
+
   it("requires pairing before preview and rejects route-prefix attacks", async () => {
     const root = await makeProject();
     const bridge = await startBridge({ rootPath: root, port: 0, allowedExtensionId: EXTENSION_ID });

@@ -247,10 +247,6 @@ program
     process.env.CLICKSPEX_EXTENSION_ID,
   )
   .option(
-    "--allow-any-extension-origin",
-    "debug only: allow any chrome-extension:// origin to pair",
-  )
-  .option(
     "--allow-unauthenticated-local-access",
     "debug only: allow no-Origin local requests without bearer auth",
   )
@@ -272,7 +268,6 @@ program
       port: string;
       open?: string;
       extensionId?: string | undefined;
-      allowAnyExtensionOrigin?: boolean;
       allowUnauthenticatedLocalAccess?: boolean;
       enableCodeSyncWrites?: boolean;
       verbose?: boolean;
@@ -309,7 +304,6 @@ program
         port,
         codeSyncWriteEnabled,
         allowedExtensionId: options.extensionId,
-        allowAnyExtensionOrigin: options.allowAnyExtensionOrigin === true,
         allowUnauthenticatedLocalAccess: options.allowUnauthenticatedLocalAccess === true,
         verbose: options.verbose === true,
         jsonLogs: options.jsonLogs === true,
@@ -329,7 +323,7 @@ program
       process.stdout.write(
         `  ${chalk.bold("origin")}   ${
           bridge.allowedExtensionId === undefined
-            ? chalk.yellow("debug extension origin mode")
+            ? "any installed extension (pin with --extension-id)"
             : `chrome-extension://${bridge.allowedExtensionId}`
         }\n`,
       );
@@ -341,9 +335,7 @@ program
         }\n\n`,
       );
       process.stdout.write("  Next steps:\n");
-      process.stdout.write(
-        "   1. Start the installed Clickspex extension for the configured extension ID\n",
-      );
+      process.stdout.write("   1. Open the Clickspex side panel in Chrome\n");
       process.stdout.write("   2. Enter the pairing code shown above in Code sync\n");
       process.stdout.write("   3. Open your running app in Chrome and edit elements\n");
       process.stdout.write(`   4. Export -> Code sync (port ${bridge.port}) -> Preview diff\n`);
