@@ -1,34 +1,48 @@
-﻿version: 2
+version: 2
 updates:
-  - package-ecosystem: npm
-    directory: /
+  - package-ecosystem: "npm"
+    directory: "/"
     schedule:
-      interval: weekly
-      day: monday
+      interval: "weekly"
+      day: "monday"
       time: "09:00"
     open-pull-requests-limit: 10
+    versioning-strategy: "increase-if-necessary"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    labels:
+      - "dependencies"
     groups:
       vite-tooling:
         patterns:
-          - vite
-          - vitest
-          - vite-node
+          - "vite"
+          - "vitest"
+          - "vite-node"
           - "@vitejs/*"
           - "@vitest/*"
-          - esbuild
+          - "esbuild"
       eslint-tooling:
         patterns:
-          - eslint
+          - "eslint"
           - "@typescript-eslint/*"
-          - eslint-*
+          - "eslint-*"
       react:
         patterns:
-          - react
-          - react-dom
+          - "react"
+          - "react-dom"
           - "@types/react*"
-  - package-ecosystem: github-actions
-    directory: /
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
     schedule:
-      interval: weekly
-      day: monday
+      interval: "weekly"
+      day: "monday"
       time: "09:00"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "github-actions"
