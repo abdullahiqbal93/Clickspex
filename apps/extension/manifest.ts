@@ -6,10 +6,10 @@ export default defineManifest({
   description: "Inspect, measure, and prototype UI changes directly in Chrome.",
   version: "0.1.0",
   icons: {
-    "16": "icons/icon-16.png",
-    "32": "icons/icon-32.png",
-    "48": "icons/icon-48.png",
-    "128": "icons/icon-128.png",
+    "16": "icons/icon_16x16.png",
+    "32": "icons/icon_32x32.png",
+    "48": "icons/icon_48x48.png",
+    "128": "icons/icon_128x128.png",
   },
   action: {
     default_title: "Open Clickspex",
