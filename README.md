@@ -97,6 +97,12 @@ clickspex connect --path . --open http://localhost:3000   # open the app automat
 npm i -g clickspex && clickspex connect                    # global install instead of npx
 ```
 
+By default the bridge accepts any `chrome-extension://` origin (still gated by the pairing code and bearer token). To pin it to only the published extension, pass its Chrome Web Store ID:
+
+```bash
+clickspex connect --extension-id dcnamgaackjkhmegicgafmickfoeodke
+```
+
 ## CLI
 
 ```bash
@@ -154,6 +160,7 @@ Before publishing, run the production release gate in [docs/release.md](docs/rel
 - `docs/ai-code-sync-roadmap.md`
 - `docs/git-workflow.md`
 - `docs/release.md`
+- [`PRIVACY.md`](PRIVACY.md) - privacy policy (no data collected, all processing local)
 
 ## Security And Safety
 

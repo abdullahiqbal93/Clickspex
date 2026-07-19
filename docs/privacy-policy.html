@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Clickspex - Privacy Policy</title>
+    <meta
+      name="description"
+      content="Clickspex privacy policy: no data collection, no transmission, all processing local."
+    />
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #ffffff;
+        --panel: #f7f7fb;
+        --ink: #1c1b2e;
+        --muted: #5a5773;
+        --line: #e6e4f0;
+        --accent: #5b48d6;
+        --accent-soft: #ece9fd;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #14131f;
+          --panel: #1d1b2b;
+          --ink: #ececf3;
+          --muted: #a09dba;
+          --line: #2c2a40;
+          --accent: #a996ff;
+          --accent-soft: #241f3d;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 0 20px 80px;
+        background: var(--bg);
+        color: var(--ink);
+        font-family:
+          "Segoe UI",
+          system-ui,
+          -apple-system,
+          sans-serif;
+        line-height: 1.65;
+        font-size: 16px;
+      }
+      main {
+        max-width: 760px;
+        margin: 0 auto;
+      }
+      header.doc {
+        padding: 48px 0 24px;
+        border-bottom: 1px solid var(--line);
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-weight: 700;
+        font-size: 20px;
+        letter-spacing: -0.02em;
+      }
+      .logo {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        background: linear-gradient(135deg, #6d5ae8, #a855f7);
+        color: #fff;
+        font-size: 16px;
+      }
+      h1 {
+        font-size: 30px;
+        letter-spacing: -0.03em;
+        margin: 22px 0 6px;
+      }
+      .updated {
+        color: var(--muted);
+        font-size: 14px;
+        margin: 0;
+      }
+      h2 {
+        font-size: 20px;
+        letter-spacing: -0.02em;
+        margin: 40px 0 10px;
+      }
+      p,
+      li {
+        color: var(--ink);
+      }
+      a {
+        color: var(--accent);
+      }
+      .tldr {
+        margin: 26px 0 0;
+        padding: 18px 20px;
+        background: var(--accent-soft);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+      }
+      .tldr strong {
+        display: block;
+        margin-bottom: 6px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 14px 0;
+        font-size: 15px;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 10px 12px;
+        border: 1px solid var(--line);
+        vertical-align: top;
+      }
+      th {
+        background: var(--panel);
+        font-weight: 600;
+      }
+      code {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 1px 6px;
+        font-size: 0.9em;
+      }
+      footer.doc {
+        margin-top: 48px;
+        padding-top: 20px;
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 14px;
+      }
+      .overflow {
+        overflow-x: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header class="doc">
+        <div class="brand"><span class="logo">◆</span> Clickspex</div>
+        <h1>Privacy Policy</h1>
+        <p class="updated">Last updated: July 19, 2026</p>
+      </header>
+
+      <div class="tldr">
+        <strong>In short</strong>
+        Clickspex does not collect, transmit, sell, or share any personal data. There are no
+        accounts, no analytics, no trackers, and no advertising. Everything the extension does runs
+        locally in your browser, and no information is ever sent to the developer or to any third
+        party.
+      </div>
+
+      <h2>1. Who this policy covers</h2>
+      <p>
+        This policy applies to the Clickspex browser extension ("Clickspex", "the extension", "we")
+        and its optional companion command-line tool, the local Code Sync bridge. It explains what
+        information the extension handles and, more importantly, what it does not.
+      </p>
+
+      <h2>2. Information we collect</h2>
+      <p>
+        <strong>None.</strong> Clickspex does not collect any personal or sensitive user data. We do
+        not operate any server that receives your data, we do not use analytics or telemetry, we set
+        no cookies, and we do not track your browsing. The extension has no sign-in and no account.
+      </p>
+
+      <h2>3. Information processed locally on your device</h2>
+      <p>
+        To do its job - inspecting and editing the page you are viewing - Clickspex reads and
+        processes page content directly in your browser. This information is used only to display
+        the inspector and your edits, and it never leaves your device. Specifically:
+      </p>
+      <div class="overflow">
+        <table>
+          <thead>
+            <tr>
+              <th>What</th>
+              <th>Why</th>
+              <th>Where it lives</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Selected element data (styles, box model, DOM structure, attributes)</td>
+              <td>To show you the inspector and let you edit styles</td>
+              <td>In-memory in the side panel; never stored or sent</td>
+            </tr>
+            <tr>
+              <td>In-progress edits for the current page</td>
+              <td>So your temporary edits survive a page reload while you work</td>
+              <td><code>chrome.storage.session</code> (cleared when the browser closes)</td>
+            </tr>
+            <tr>
+              <td>Recent colors from the palette / eyedropper tool</td>
+              <td>Convenience history in the Palette panel</td>
+              <td><code>chrome.storage.local</code> on your device</td>
+            </tr>
+            <tr>
+              <td>Screenshots of the active tab (only when you trigger a capture)</td>
+              <td>To display and export a visual reference of your edits</td>
+              <td>Held locally in the panel; never uploaded</td>
+            </tr>
+            <tr>
+              <td>Code Sync pairing token</td>
+              <td>To authenticate to your own local bridge (see section 5)</td>
+              <td><code>chrome.storage.session</code> (cleared when the browser closes)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        None of this data is transmitted to the developer or any third party. It stays on your
+        machine.
+      </p>
+
+      <h2>4. Permissions and how they are used</h2>
+      <div class="overflow">
+        <table>
+          <thead>
+            <tr>
+              <th>Permission</th>
+              <th>Use</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>activeTab</code></td>
+              <td>
+                Grants temporary access to the tab you are inspecting, only after you start an
+                inspection action, for user-initiated screenshots and helper scripts.
+              </td>
+            </tr>
+            <tr>
+              <td><code>sidePanel</code></td>
+              <td>Displays the Clickspex user interface in Chrome's side panel.</td>
+            </tr>
+            <tr>
+              <td><code>storage</code></td>
+              <td>
+                Stores the local, session-scoped state described in section 3. No personal data is
+                stored.
+              </td>
+            </tr>
+            <tr>
+              <td><code>scripting</code></td>
+              <td>
+                Runs the extension's own bundled inspection code in the page you choose to inspect
+                (framework detection, component-source lookup, content-script recovery).
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <code>host_permissions</code> (<code>http://*/*</code>, <code>https://*/*</code>)
+              </td>
+              <td>
+                Lets you inspect any standard web page you choose, including your own localhost
+                development servers. Excludes <code>file://</code> and browser-internal pages. No
+                page data is transmitted anywhere.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2>5. Code Sync (optional local bridge)</h2>
+      <p>
+        Clickspex includes an optional feature that can preview and apply your visual edits to your
+        own source files. This works only if you separately install and run the open-source
+        <code>clickspex connect</code> command-line tool inside your own project, on your own
+        machine. When you use it:
+      </p>
+      <ul>
+        <li>
+          The bridge listens only on <code>127.0.0.1</code> (your local machine). It is never
+          exposed to the internet, and arbitrary websites cannot reach it.
+        </li>
+        <li>
+          You explicitly connect by entering a one-time pairing code shown in your own terminal.
+        </li>
+        <li>
+          The extension sends your edits (such as selectors and CSS changes) to that local bridge so
+          it can show a diff and, only if you explicitly enable writes, update your local files.
+        </li>
+        <li>
+          This data travels only between the extension and your own machine. It is never sent to the
+          developer or any third party.
+        </li>
+      </ul>
+
+      <h2>6. Third parties, advertising, and analytics</h2>
+      <p>
+        Clickspex contains no advertising, no analytics, and no third-party tracking SDKs. It loads
+        no remote code; all executable code ships inside the extension package. We do not sell or
+        transfer any user data to third parties.
+      </p>
+
+      <h2>7. Data retention and deletion</h2>
+      <p>
+        Because nothing is collected or sent anywhere, there is no server-side data to retain or
+        delete. Local state stored via <code>chrome.storage.session</code> is cleared when you close
+        the browser. Palette history in <code>chrome.storage.local</code> remains until you clear it
+        in the extension or uninstall Clickspex. Uninstalling the extension removes all of its local
+        data.
+      </p>
+
+      <h2>8. Children's privacy</h2>
+      <p>
+        Clickspex is a developer tool intended for general audiences and is not directed to children
+        under 13. It does not knowingly collect any information from anyone, including children.
+      </p>
+
+      <h2>9. Changes to this policy</h2>
+      <p>
+        If this policy changes, we will update the "Last updated" date above and publish the revised
+        version at this URL. Material changes will be reflected here before they take effect.
+      </p>
+
+      <h2>10. Contact</h2>
+      <p>
+        Questions about this policy or Clickspex's privacy practices can be raised via the project's
+        issue tracker:
+        <a href="https://github.com/abdullahiqbal93/Clickspex/issues"
+          >github.com/abdullahiqbal93/Clickspex/issues</a
+        >.
+      </p>
+
+      <footer class="doc">
+        Clickspex is open source. This policy reflects the shipped behavior of the extension.
+      </footer>
+    </main>
+  </body>
+</html>

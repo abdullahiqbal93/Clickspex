@@ -32,3 +32,9 @@ These match the content-script surface and intentionally exclude `file://`, brow
 - Restricted browser pages are rejected before messaging.
 - Source writes remain behind the explicit experimental Code Sync write flag.
 - Broader host access must not be added without updating this document and the manifest together.
+
+## Store listing
+
+- Chrome Web Store extension ID: `dcnamgaackjkhmegicgafmickfoeodke`.
+- Remote code: **No** — the manifest CSP is `script-src 'self'` and all executable code ships inside the package.
+- Data collection: **None** — no data is collected or transmitted; all processing is local. See [PRIVACY.md](../PRIVACY.md) (published at `docs/privacy-policy.html`).
